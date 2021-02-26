@@ -1,0 +1,129 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-1998 ТОО "Банковские информационные системы"
+     Filename: pp-new.chk
+      Comment: Начальные проверки
+   Parameters:
+         Uses:
+      Used by:
+      Created: 09.11.1999 Kostik
+     Modified: 30/12/2005 kraw (0052869) При частичной постановке на картотеку - проверка ДР amt-rub
+     Modified: 20/07/2007 kraw (0026826) многопроводочное конверсионное ПТ
+     Modified: 09/09/2009 kraw (0113315) &IF DEFINED(NewCorr)
+*/
+Form "~n@(#) pp-new.chk 1.0 Kostik 09/11/1999 Kostik 09/11/1999" with frame sccs-id width 250.
+
+FIND op WHERE RECID(op) = rid NO-LOCK NO-ERROR.
+IF NOT AVAIL(op) THEN {pp-error.i {&ppMissingOp}}
+
+FIND op-entry OF op NO-LOCK NO-ERROR.
+
+&IF DEFINED(multy-op-ontry) EQ 0 &THEN
+IF AMBIG(op-entry) THEN {pp-error.i {&ppAmbigOpEntry}}
+&ELSE
+FIND FIRST op-entry OF op WHERE op-entry.acct-db NE ? NO-LOCK NO-ERROR.
+&ENDIF
+
+&IF DEFINED(tt-op-entry) &THEN
+IF NOT AVAIL op-entry OR (op-entry.amt-rub EQ 0.00 AND op.op-status BEGINS "А") THEN DO: /* проверяем на аннулированный документ постановки на карт-ку 2 */
+
+   IF    op.op-status EQ "А"
+      OR CAN-DO(op.op-status, FGetSetting("СтандТр","КартСтат", "А"))
+      OR op.op-date = ?
+   THEN DO TRANSACTION:
+      FOR EACH bo-op
+         WHERE bo-op.op-transaction EQ op.op-transaction
+           AND bo-op.acct-cat       EQ "o"
+      NO-LOCK:
+         IF GetXattrValue("op",STRING(bo-op.op),"op-bal") EQ STRING(op.op) THEN
+         LEAVE.
+      END.
+      IF NOT AVAIL bo-op THEN
+      FIND FIRST bo-op
+           WHERE bo-op.op-transaction EQ op.op-transaction
+             AND bo-op.acct-cat       EQ "o"
+      NO-LOCK NO-ERROR.
+
+      IF NOT AVAIL bo-op THEN DO:
+         MESSAGE "Не найден связанный внебалансовый документ"
+         VIEW-AS ALERT-BOX ERROR.
+         RETURN.
+      END.
+
+      FIND FIRST bop-entry OF bo-op NO-LOCK.
+      CREATE tt-op-entry.
+      ASSIGN
+        tt-op-entry.op          = op.op
+        tt-op-entry.Class-Code  = op.class-code
+        tt-op-entry.acct-cat    = op.acct-cat
+        tt-op-entry.amt-cur     = bop-entry.amt-cur
+        tt-op-entry.amt-rub     = bop-entry.amt-rub
+        tt-op-entry.currency    = bop-entry.currency
+        tt-op-entry.op-cod      = "000000"
+        tt-op-entry.op-date     = bo-op.op-date
+        tt-op-entry.op-entry    = 1
+        tt-op-entry.op-status   = op.op-status
+        tt-op-entry.type        = bop-entry.type
+        tt-op-entry.user-id     = bop-entry.user-id.
+        tt-op-entry.acct-cr     = GetXattrValue("op", string(op.op), "acctcorr").
+        tt-op-entry.acct-db     = GetXattrValue("op", string(op.op), "acctbal").
+      .
+
+      IF DECIMAL(GetXAttrValueEx("op", STRING(op.op), "amt-rub", "0")) NE 0 THEN
+      ASSIGN
+        tt-op-entry.amt-cur     = DECIMAL(GetXAttrValueEx("op", STRING(op.op), "amt-cur", ""))
+        tt-op-entry.amt-rub     = DECIMAL(GetXAttrValueEx("op", STRING(op.op), "amt-rub", ""))
+      .
+   END.
+END.
+ELSE DO TRANSACTION:
+   CREATE tt-op-entry.
+   BUFFER-COPY op-entry TO tt-op-entry.
+
+   IF op-entry.acct-cr EQ ? THEN
+   DO:
+      FIND FIRST op-entry OF op WHERE op-entry.acct-cr NE ? NO-LOCK NO-ERROR.
+      tt-op-entry.acct-cr = op-entry.acct-cr.
+   END.
+END.
+&ENDIF
+
+&IF DEFINED(allcur) EQ 0 &THEN
+IF
+   &IF DEFINED(tt-op-entry) &THEN
+   tt-op-entry.currency
+   &ELSE
+   op-entry.currency
+   &ENDIF
+   = ""
+   THEN {pp-error.i {&ppBadCurrency}}
+&ENDIF
+
+FIND op-bank  OF op NO-LOCK NO-ERROR.
+IF AMBIG(op-bank) THEN
+  FIND op-bank OF op WHERE op-bank.op-bank-type = "" NO-LOCK NO-ERROR.
+
+FIND doc-type OF op NO-LOCK NO-ERROR.
+
+&IF DEFINED(NewCorr) NE 0 &THEN
+/*
+   определяем по op-transaction документ с категорией acct-cat = "b",
+   для заполнения tt-op-entry.acct-cr используем счет кредита проводки
+   найденного документа
+*/
+DEFINE BUFFER ncop FOR op.
+
+FIND FIRST ncop WHERE ncop.op-transaction EQ op.op-transaction
+                  AND ncop.op             NE op.op
+                  AND ncop.acct-cat       EQ "b"
+   NO-LOCK NO-ERROR.
+
+IF AVAILABLE ncop THEN
+DO:
+   FIND FIRST op-entry OF ncop NO-LOCK NO-ERROR.
+
+   IF AVAILABLE op-entry THEN
+      tt-op-entry.acct-cr = op-entry.acct-cr.
+END.
+&ENDIF
+

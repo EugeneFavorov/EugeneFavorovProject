@@ -1,0 +1,53 @@
+IF FRAME-FIELD =  "misc" AND FRAME-INDEX =  2 THEN
+DO:
+   pick-value = "".
+   CASE code.misc[1]:SCREEN-VALUE IN FRAME edit:
+      WHEN "ó" THEN 
+         RUN browseld.p("person","crClass-Code","*","",4 ).
+      WHEN "û" THEN 
+         RUN browseld.p("cust-corp","crClass-Code","*","",4 ).
+      WHEN "Å" THEN 
+         RUN browseld.p("banks","","","",4 ).
+   END CASE.
+   IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+      DISPLAY pick-value @ code.misc[2] WITH FRAME edit.
+END.
+ELSE IF FRAME-FIELD =  "misc"  AND FRAME-INDEX =  2 THEN
+DO:
+   pick-value = "".
+   RUN browseld ("country", "", "", "",4).
+IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+   code.misc[4]:SCREEN-VALUE = pick-value.
+END.
+
+ELSE IF FRAME-FIELD =  "mDataRez" THEN
+DO:
+   RUN calend.p.
+   IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+      DISPLAY pick-value @ mDataRez WITH FRAME edit.
+END.
+ELSE IF FRAME-FIELD =  "mDataAdd" THEN
+DO:
+   RUN calend.p.
+   IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+      DISPLAY pick-value @ mDataAdd WITH FRAME edit.
+END.
+ELSE IF FRAME-FIELD =  "mDataCls" THEN
+DO:
+   RUN calend.p.
+   IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+      DISPLAY pick-value @ mDataCls WITH FRAME edit.
+END.
+ELSE IF FRAME-FIELD =  "mBirthDay" THEN
+DO:
+   RUN calend.p.
+   IF KEY-FUNCTION(LAST-KEY) <> "END-ERROR" THEN
+      mBirthDay:SCREEN-VALUE = pick-value.
+END.
+/* $LINTFILE='cl-stoplst-frm.nau' */
+/* $LINTMODE='11,-9,6,3' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTUSER='soav' */
+/* $LINTDATE='07/03/2017 11:27:36.370+03:00' */
+/*prosignYbBzVAcL4XaX7OaWV3FEIw*/

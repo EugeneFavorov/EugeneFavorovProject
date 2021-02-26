@@ -1,0 +1,130 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 01/06/2015 12:22:37 БД "-db /home2/bis/quit41d/db-spb/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+e-rapree:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// EXCH-PSYS.EXCH-RAPID.e-rapree
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Рапида: Экспорт возвратного реестра
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// EXCH-RAPID
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   /// <tr_SETClass>
+   /// ExchSET-CRD
+   /// </tr_SETClass>
+
+   // Библиотека системных функций обмена.
+   LIBRARY pexch.
+
+   DO BEFORE:
+      CASH_INTERFACE("pays");
+      IF DEFINED(ReeSeance) == NO THEN
+      @ReeSeance = ОБЪЕКТ(ДА,'op-kind' + CHR(1) + 'SeanceDate','i-rapree' + CHR(1) + ДАТА(),'op-kind',',,seance');
+      ELSE
+      1;
+      ENDIF;
+   END BEFORE.
+
+   5:
+   DO TEMPLATE CLASS ExchSET-CRD ACTION Инициализация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+
+   END TEMPLATE. // ШАБЛОН:   5  - КОНЕЦ
+
+   10:
+   DO TEMPLATE CLASS Seance ACTION Создание ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: Direct (константа)
+      @Direct = [Экспорт]
+      // РЕКВИЗИТ: SeanceMode (константа)
+      @SeanceMode = [AUTO]
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS EXCHRapidRee ACTION ЭкспортНабор ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: SeanceId (формула)
+      @SeanceId = @SeanceId(10)
+
+      // РЕКВИЗИТ: mail-format (константа)
+      @mail-format = [SepRapidOutDT]
+      // РЕКВИЗИТ: $ImpSeanceID (формула)
+      @$ImpSeanceID = @ReeSeance
+
+      // РЕКВИЗИТ: $NonError (константа)
+      @$NonError = [0800,0810]
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS FileExch ACTION Экспорт ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: SeanceID (формула)
+      @SeanceID = @SeanceId(10)
+
+      // РЕКВИЗИТ: State (константа)
+      @State = [СОЗД,ОТПР]
+      // РЕКВИЗИТ: $OS-COMMAND (константа)
+      @$OS-COMMAND = [ux2dos Ш^]
+      // РЕКВИЗИТ: CodePage (константа)
+      @CodePage = [1251]
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ e-rapree - КОНЕЦ 
+// ***************************************************************************
+
+
+
+
+// ПРАВИЛА ОБМЕНА (транзакция e-rapree): 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//   |НОМЕР  | N   | КОД     | НАИМЕНОВАНИЕ                                  |                         | ЭЛ.АДРЕС             | РЕЖ.ЭКСП | РЕЖ.ИМП  | ФИЛ.  | КОД ТРАНЗ.ЭКС | КОД ТРАНЗ.ИМП | 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//   |   941 |     |       0 |                                               | SepRapidOutDT           |                      | автомат  |          | 0000  | e-rapree      |               | 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//       КАТАЛОГИ (правило № 941): 
+//          --------------------------------------------------------------------------------- 
+//         |ТИП      | КАТАЛОГ                                                  | МАСКА      | 
+//         |---------------------------------------------------------------------------------|
+//         |Экспорт  | ./out                                                    | *          | 
+//          --------------------------------------------------------------------------------- 
+

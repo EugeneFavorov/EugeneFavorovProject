@@ -1,0 +1,27 @@
+IF FRAME-FIELD EQ "misc" AND FRAME-INDEX EQ 4 THEN DO: 
+   RUN browseld.p("ПроцедурыКонтр",
+                  "class" + CHR(1) + "parent",
+                  "ПроцедурыКонтр" + CHR(1) + "ПроцедурыКонтр",
+                  "",
+                  3).
+   IF pick-value NE ? AND LASTKEY EQ 10 THEN 
+   DISPLAY pick-value @ code.misc[4].
+END.
+ELSE IF FRAME-FIELD EQ "misc" AND FRAME-INDEX EQ 8 THEN DO: 
+   RUN browseld.p("ПроцедурыКонтр",
+                  "class" + CHR(1) + "parent",
+                  "ПроцедурыКонтр" + CHR(1) + "ПроцедурыКонтр",
+                  "",
+                  3).
+   IF pick-value NE ? AND LASTKEY EQ 10 THEN 
+   DISPLAY pick-value @ code.misc[8].
+END.
+ELSE IF FRAME-FIELD EQ "description" AND FRAME-INDEX EQ 2 THEN DO: 
+   RUN browseld.p("ПроцедурыКонтр",
+                  "class" + CHR(1) + "parent",
+                  "ПроцедурыКонтр" + CHR(1) + "ПроцедурыКонтр",
+                  "",
+                  3).
+   IF pick-value NE ? AND LASTKEY EQ 10 THEN 
+   DISPLAY pick-value @ code.description[2].
+END.

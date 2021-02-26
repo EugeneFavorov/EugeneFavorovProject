@@ -1,0 +1,49 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: dopcnclb.uf
+      Comment: Собственная форма просмотра классификатора 
+               "ДопКонтрКЛБ"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 06.08.2015 IT    
+*/
+
+code.code {&noupdate}
+   LABEL  "Код параметра"
+   FORMAT "x(13)"
+   HELP "Уникальный идентификатор записи"
+code.name
+   LABEL  "Имя процедуры"
+   FORMAT "x(60)"
+   VIEW-AS FILL-IN SIZE 60 BY 1
+   HELP "Имя процедуры контроля"
+code.misc[1]
+   LABEL  "Параметры"
+   FORMAT "x(60)"
+   VIEW-AS FILL-IN SIZE 60 BY 1
+   HELP "Параметры процедуры контроля"
+code.misc[2]
+   LABEL "Фильтр"
+   FORMAT "x(60)"
+   VIEW-AS FILL-IN SIZE 60 BY 1
+   HELP "Стандартная настройка фильтра документов дня "
+code.misc[3]
+   LABEL "Код ошибки"
+   FORMAT "x(8)"
+   VIEW-AS FILL-IN SIZE 8 BY 1
+   HELP "Код из классификатора 'mess-error'"
+code.description[1]
+   LABEL "Сообщение"
+   FORMAT "x(300)"
+   VIEW-AS EDITOR SIZE 60 BY 3
+   HELP "Текст сообщения об ошибке"
+code.val
+   LABEL "Состояние"
+   FORMAT "x(12)"
+   VIEW-AS FILL-IN SIZE 12 BY 1
+   HELP "Исполняется при автозапуске - действует/не действует"
+   VALIDATE(LOOKUP(code.val,"действует,не действует") > 0,'Значение может быть только "действует" или "не действует".')
+                     
+                     

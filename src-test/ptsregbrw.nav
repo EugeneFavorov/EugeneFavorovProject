@@ -1,0 +1,50 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ptsregbrw.NAV
+      Comment: Получатели страховых премий - просмотр по F1
+   Parameters:
+         Uses:
+      Used by:
+      Created: 
+     Modified:  
+*/
+
+IF FRAME-FIELD EQ "Branch_" THEN DO: 
+    RUN formld.p("branch",
+                   Branch_,
+                   "",
+                   3,
+                   4).
+
+END.
+
+ELSE IF FRAME-FIELD EQ "User_Id" THEN DO:
+   RUN _user#.p (
+      User_Id,
+      4
+   ).
+END.
+
+ELSE IF FRAME-FIELD EQ "Descriptions" THEN DO:
+   RUN _user#.p (
+      Descriptions,
+      4
+   ).
+END.
+
+ELSE DO:
+    RUN viewform.
+END.
+
+PROCEDURE viewform:
+   PAUSE 0.
+   DISPLAY
+      {ptsregbrw.uf}
+   WITH FRAME edit WIDTH 78.
+   PAUSE.
+   HIDE FRAME edit.
+END PROCEDURE.
+    
+    
+    

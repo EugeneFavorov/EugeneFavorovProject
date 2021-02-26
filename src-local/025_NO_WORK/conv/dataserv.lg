@@ -1,0 +1,8 @@
+[16/08/04@13:56:59.664+0300] P-030410 T-3114956576 1 ORA    -- Executable was compiled on Nov  8 2013 at 19:21:08 (5067)
+[16/08/04@13:56:59.664+0300] P-030410 T-3114956576 1 ORA    -- Login to dataserver db as user qbis. (2689)
+[16/08/04@13:56:59.675+0300] P-030410 T-3114956576 1 ORA    -- Using shared library /opt/oracle/product/11gR1/lib/libclntsh.so (oci 8.1) (14874)
+[16/08/04@13:56:59.675+0300] P-030410 T-3114956576 1 ORA    -- ORACLE_HOME set to '/opt/oracle/product/11gR1' (14875)
+[16/08/04@13:56:59.890+0300] P-030410 T-3114956576 1 ORA    -- -Dsrv qt_debug: 0 (0x0 None) (6489)
+[16/08/04@13:56:59.890+0300] P-030410 T-3114956576 1 ORA    --   Cursor limit: 4000 (-c setting) (6490)
+[16/08/04@14:55:32.642+0300] P-030410 T-3114956576 1 ORA    -- SYSTEM ERROR: Memory violation. (49)
+[16/08/04@14:55:32.642+0300] P-030410 T-3114956576 1 ORA    -- ** Save file named core for analysis by Progress Software Corporation. (439)

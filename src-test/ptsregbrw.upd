@@ -1,0 +1,34 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ptsregbrw.upd
+      Comment: Движение(регистрация) документов - обновление
+   Parameters:
+         Uses:
+      Used by:
+      Created:   
+     Modified:    
+*/
+
+DEF BUFFER bfpl_indocsreg FOR pl_indocsreg.
+
+FIND FIRST branch WHERE branch.branch-id = Branch_ NO-LOCK NO-ERROR.
+IF NOT AVAIL branch THEN DO:
+    MESSAGE "Нет такого подразделения " VIEW-AS ALERT-BOX INFO BUTTONS OK.
+    UNDO, RETRY.
+END.
+
+IF CheckNameEvent(NameEvent:SCREEN-VALUE IN FRAME edit) = FALSE THEN UNDO, RETRY.
+IF CheckDateValue(DATE(DateValue:SCREEN-VALUE IN FRAME edit)) = FALSE THEN UNDO, RETRY.
+IF EnableDescription(NameEvent:SCREEN-VALUE IN FRAME edit) > 0 AND CheckUser(Descriptions:SCREEN-VALUE IN FRAME edit) = FALSE THEN UNDO, RETRY.
+
+ASSIGN                
+    pl_indocsreg.create_date = NOW                            
+    pl_indocsreg.user_id = Cur_User    
+    pl_indocsreg.branch = Branch_
+    pl_indocsreg.date_value = DateValue
+    pl_indocsreg.event = NameEvent
+    pl_indocsreg.doc_type = "ПТС"
+    pl_indocsreg.details = Details
+    pl_indocsreg.descriptions = Descriptions
+.

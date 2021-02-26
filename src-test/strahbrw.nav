@@ -1,0 +1,60 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: strahbrw.NAV
+      Comment: Получатели страховых премий - просмотр по F1
+   Parameters:
+         Uses:
+      Used by:
+      Created: 
+     Modified:  
+*/
+
+IF FRAME-FIELD EQ "mCustID"  OR 
+   FRAME-FIELD EQ "name"     OR
+  (FRAME-FIELD EQ "misc" AND FRAME-INDEX EQ 6) OR
+  (FRAME-FIELD EQ "description" AND FRAME-INDEX EQ 1) THEN
+DO:
+   CASE mCustCat :
+      WHEN "Ч" THEN
+         RUN pers#.p  (mCustID, 4).
+      WHEN "Ю" THEN
+         RUN cust#.p  (mCustID, 4).
+      WHEN "Р" THEN
+         RUN viewform.
+      WHEN "О" THEN
+         RUN viewform.
+      OTHERWISE .
+   END CASE.
+END.
+ELSE IF FRAME-FIELD EQ "mRaschAcct" THEN  /* расчетный счет */
+DO:
+    FIND FIRST acct WHERE acct.number = string(mRaschAcct) NO-LOCK NO-ERROR.
+    IF AVAIL acct THEN  
+        RUN acct#.p (STRING(mRaschAcct),"",4).
+    ELSE RUN viewform.
+END.
+ELSE IF FRAME-FIELD EQ "misc" AND (FRAME-INDEX EQ 1 OR FRAME-INDEX EQ 2 OR FRAME-INDEX EQ 3) THEN  /* БИК */
+DO:
+   {getbank.i banks code.{&BankBIC} ""МФО-9""}
+   IF AVAIL banks AND TRIM(code.{&BankBIC}) <> "" THEN 
+      RUN banks#.p (banks.bank-id,4).
+   ELSE RUN viewform.
+END.
+
+ELSE
+DO:
+    RUN viewform.
+END.
+
+PROCEDURE viewform:
+   PAUSE 0.
+   DISPLAY
+      {strahbrw.uf}
+   WITH FRAME edit WIDTH 78.
+   PAUSE.
+   HIDE FRAME edit.
+END PROCEDURE.
+    
+    
+    

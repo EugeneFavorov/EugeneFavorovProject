@@ -1,0 +1,240 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 15/12/2016 12:44:18 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+РЕПОпроц:
+DO TRANSACTION:
+   /// <tr_package>
+   /// РЕПО.uРЕПО.РЕПОпроц
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Начисление процентов по одной сделке РЕПО
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// uРЕПО
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// LOAN
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   // Библиотека функций парсера для договоров
+   LIBRARY ploan.
+
+   DO BEFORE:
+      // Параметры:
+      // @__contract  - назначение договора
+      // @__num_dog   - номер договора
+      
+      // message(@__contract+"  "+@__num_dog,message);
+      @__vid = (@__contract == "Депоз");
+      
+      SetSysConf("NoProtocol","YES");
+      ПЕРЕСЧИТАТЬ_СОСТОЯНИЕ(@__contract,@__num_dog,ДАТА(),НЕТ,НЕТ);
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS loan ACTION Поиск ROLE Ввод данных:
+      /// <tm_details>
+      /// Сделка РЕПО
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: contract (формула) #1
+      @contract = SEARCH(@__contract)
+
+      // РЕКВИЗИТ: cont-code (формула) #2
+      @cont-code = SEARCH(@__num_dog)
+
+
+      DO AFTER:
+         @__cust     = @cust-cat + "_" + FORMAT(@cust-id,"9999999","INTEGER");
+         @__sec_code = @sec-code;
+         @__cur_sd   = @currency;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS sec-code ACTION Поиск ROLE Ввод данных:
+      /// <tm_details>
+      /// Цб в сделке РЕПО
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: sec-code (формула) #1
+      @sec-code = SEARCH(@__sec_code)
+
+
+      DO AFTER:
+         @__sec_cur = @currency;
+         @__sec_nam = REPLACE(@name,CHR(10)," ");
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS code ACTION Поиск ROLE Ввод данных:
+      /// <tm_details>
+      /// Контрагент по сделке РЕПО
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: class (формула) #1
+      @class = SEARCH("ОргРЕПО")
+
+      // РЕКВИЗИТ: parent (формула) #2
+      @parent = SEARCH("ОргРЕПО")
+
+      // РЕКВИЗИТ: val (формула) #3
+      @val = SEARCH(@__cust)
+
+
+      DO AFTER:
+         @__cust = @code;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   100:
+   DO TEMPLATE CLASS opb ACTION ВизСоздание ROLE Ввод данных:
+      /// <tm_details>
+      /// Начисление процентов
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__summ = ПРМ(@__contract,@__num_dog,4,ДАТА(),ДА);
+         // message(@__summ,message);
+         @__summ
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [b]
+      // РЕКВИЗИТ: op-status (константа) #2
+      @op-status = [√]
+      // РЕКВИЗИТ: doc-type (константа) #3
+      @doc-type = [09]
+      // РЕКВИЗИТ: doc-num (формула) #4
+      @doc-num = СЧЕТЧИК("мемордер")
+
+      // РЕКВИЗИТ: details (формула) #5
+      @details =
+      DO:
+         "Отражение суммы процентов по сделке РЕПО с "
+         + @__cust + ", " + @__sec_nam
+         + ", распоряжение № " + @__rasp + " от " + ДАТА()
+      END.
+
+      // РЕКВИЗИТ: op-date (формула) #6
+      @op-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = ДАТА()
+
+      // РЕКВИЗИТ: due-date (формула) #8
+      @due-date = ДАТА()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = ДАТА()
+
+      // РЕКВИЗИТ: contract-date (формула) #10
+      @contract-date = ДАТА()
+
+      // РЕКВИЗИТ: order-pay (константа) #11
+      @order-pay = [5]
+      110:
+      DO TEMPLATE CLASS op-entry ACTION ВизСоздание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-db (формула) #1
+         @acct-db =
+         DO:
+            СЧЕТ_ПО_РОЛИ(@__contract,@__num_dog,
+              _if(@__vid,"ДепПроц","КредТ"))
+         END.
+
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr =
+         DO:
+            СЧЕТ_ПО_РОЛИ(@__contract,@__num_dog,
+              _if(@__vid,"ДепТ","КредПроц"))
+         END.
+
+         // РЕКВИЗИТ: currency (формула) #3
+         @currency = @__cur_sd
+
+         // РЕКВИЗИТ: amt-rub (формула) #4
+         @amt-rub =
+         DO:
+            IF (@__cur_sd == "")
+            THEN @__summ
+            ELSE ПЕРЕСЧЕТ(@__summ,@__cur_sd,"")
+            ENDIF
+         END.
+
+         // РЕКВИЗИТ: amt-cur (формула) #5
+         @amt-cur =
+         DO:
+            IF (@__cur_sd == "")
+            THEN 0
+            ELSE @__summ
+            ENDIF
+         END.
+
+         // РЕКВИЗИТ: value-date (формула) #6
+         @value-date = ДАТА()
+
+         // РЕКВИЗИТ: op-cod (константа) #7
+         @op-cod = [000000]
+         // РЕКВИЗИТ: type (константа) #8
+         @type = [ВН]
+         // РЕКВИЗИТ: acct-cat (константа) #9
+         @acct-cat = [b]
+
+         DO AFTER:
+            ПРИВЯЗАТЬ_ПРОВОДКУ(@__contract,@__num_dog,
+              _if(@__vid,"Кр","Дб") + "_65")
+         END AFTER.
+
+      END TEMPLATE. // ШАБЛОН:   110  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   100  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ РЕПОпроц - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

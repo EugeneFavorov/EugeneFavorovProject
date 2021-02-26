@@ -1,0 +1,75 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 11/04/2016 17:06:20 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+pb-k2kbs:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// 07.07PB.pb-k2kbs
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// PB: Урегулирование К2 - КБС по всем счетам филиала
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// 07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// BASE
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core20=Продолжить,core21=Продолжить,core23=Продолжить,core55=Отменить,core59=yes
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   DO BEFORE:
+      IF (ДАТА() <> TODAY())
+      THEN MESSAGE("Можно запускать только в сегодняшнем опердне !","MESSAGE");
+      ELSE RUN("pb_k2kbs-a", "");
+      ENDIF;
+      
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS opb ACTION Нет действий ROLE Ввод данных:
+      /// <tm_details>
+      /// Заглушка
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         0
+      END BEFORE.
+
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ pb-k2kbs - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

@@ -1,0 +1,168 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 05/11/2015 12:37:34 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+pfr-omsk:
+DO TRANSACTION EXECUTABLE NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PFR.pfr-omsk
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Импорт данных файла (ПФР Омск)
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// EXCH-PFR
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_сс_выводнаэкран>
+   /// Нет
+   /// </tr_сс_выводнаэкран>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_SETClass>
+   /// ExchSET-BNK
+   /// </tr_SETClass>
+
+   // Библиотека системных функций обмена.
+   LIBRARY pexch.
+
+   DO BEFORE:
+      CASH_INTERFACE("ipfr;wchck")
+      
+      
+   END BEFORE.
+
+   5:
+   DO TEMPLATE CLASS ExchSET-BNK ACTION Инициализация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: Digital (константа)
+      @Digital = [Doc-Type]
+      // РЕКВИЗИТ: SelectFiles (константа)
+      @SelectFiles = [YES]
+      // РЕКВИЗИТ: ImportUser (константа)
+      @ImportUser = [ImportUser]
+
+   END TEMPLATE. // ШАБЛОН:   5  - КОНЕЦ
+
+   10:
+   DO TEMPLATE CLASS Seance ACTION Создание ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: Direct (константа)
+      @Direct = [Импорт]
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS ExchPFRDoc ACTION Инициализация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: ErrorClass (константа)
+      @ErrorClass = [ErrorPFR]
+      // РЕКВИЗИТ: Direct (константа)
+      @Direct = [Внутренние]
+      // РЕКВИЗИТ: SeanceID (формула)
+      @SeanceID = @SeanceId(10)
+
+      // РЕКВИЗИТ: Counter (константа)
+      @Counter = [1]
+      // РЕКВИЗИТ: mail-format (константа)
+      @mail-format = [POSPFROMSDT]
+      // РЕКВИЗИТ: op-kind (константа)
+      @op-kind = [_i-pfroms]
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   40:
+   DO TEMPLATE CLASS Packet ACTION Импорт ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      /// <tm_MethTransaction>
+      /// Нет
+      /// </tm_MethTransaction>
+
+      // РЕКВИЗИТ: SeanceID (формула)
+      @SeanceID = @SeanceId(10)
+
+      // РЕКВИЗИТ: Kind (константа)
+      @Kind = [ExchPFRDoc]
+      // РЕКВИЗИТ: $format-FH (константа)
+      @$format-FH = [POSPFROMSFH]
+      // РЕКВИЗИТ: $format-PH (константа)
+      @$format-PH = []
+      // РЕКВИЗИТ: $format-DT (константа)
+      @$format-DT = [POSPFROMSDT]
+      // РЕКВИЗИТ: $format-PF (константа)
+      @$format-PF = []
+      // РЕКВИЗИТ: $format-FF (константа)
+      @$format-FF = [POSPFROMSFF]
+      // РЕКВИЗИТ: Class-Code (константа)
+      @Class-Code = [PPFR2]
+      // РЕКВИЗИТ: $Separate (константа)
+      @$Separate = [DBF]
+      // РЕКВИЗИТ: $InitHeader (константа)
+      @$InitHeader = [Да]
+      // РЕКВИЗИТ: $NeedImpFF (константа)
+      @$NeedImpFF = [yes]
+
+   END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+   DO AFTER:
+      RUN("pfr-ved", @SeanceId(10));
+      
+   END AFTER.
+
+END TRANSACTION. // ТРАНЗАКЦИЯ pfr-omsk - КОНЕЦ 
+// ***************************************************************************
+
+
+
+
+// ПРАВИЛА ОБМЕНА (транзакция pfr-omsk): 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//   |НОМЕР  | N   | КОД     | НАИМЕНОВАНИЕ                                  |                         | ЭЛ.АДРЕС             | РЕЖ.ЭКСП | РЕЖ.ИМП  | ФИЛ.  | КОД ТРАНЗ.ЭКС | КОД ТРАНЗ.ИМП | 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//   |100271 |     |       0 |                                               | POSPFROMSDT             |                      |          | рейсы    | 0000  |               | pfr-omsk      | 
+//    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- 
+//       КАТАЛОГИ (правило № 100271): 
+//          --------------------------------------------------------------------------------- 
+//         |ТИП      | КАТАЛОГ                                                  | МАСКА      | 
+//         |---------------------------------------------------------------------------------|
+//         |Импорт   | ./in                                                     | *          | 
+//         |ImpArch  | ./arch/in                                                | *          | 
+//         |LogArch  | ./arch/log                                               | *          | 
+//          --------------------------------------------------------------------------------- 
+
+// [LOADPATCH]
+// [MailUser] // Экспорт данных произвел KMBIS 05/11/2015 12:37:35 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// "" "" 100271 "-" "BIS" "" "" 0 "" "рейсы" "pfr-omsk" "" "POSPFROMSDT" "" "" "MAIL-EXT" "" "свод"
+// .
+// [Catalog] // Экспорт данных произвел KMBIS 05/11/2015 12:37:35 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// 100271 "Импорт" "./in" "*"
+// 100271 "ImpArch" "./arch/in" "*"
+// 100271 "LogArch" "./arch/log" "*"
+// .

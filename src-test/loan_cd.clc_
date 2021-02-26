@@ -1,0 +1,181 @@
+&IF DEFINED (mSLimit) NE 0 &THEN
+{limverl.i loan end-date end-date mSLimit отчет }
+&ENDIF
+
+&IF "{&file}" = "loan" &THEN
+IF CAN-DO("1,2,7", STRING(n-frm))
+   THEN
+    IF FGetSetting("ВизНастр", "НИ_КлиентВид", "NO") EQ "NO" THEN
+     RUN RE_CLIENT (
+      {&file}.cust-cat,
+      {&file}.cust-id,
+      INPUT-OUTPUT name-klient
+     ).
+    ELSE
+     RUN RE_CLIENT_FULL (
+      {&file}.cust-cat,
+      {&file}.cust-id,
+      INPUT-OUTPUT name-klient
+     ).
+&ENDIF
+
+IF mGrRiska THEN 
+DO:
+   gr-riska = STRING(Re_History_Risk(loan.contract,
+                                     loan.cont-code,
+                                     loan.since,
+                                     ?)).
+
+END.
+
+IF       AVAIL loan-acct
+   AND   loan-acct.acct NE "0"
+   AND  (mAcctPos
+      OR mAcctCur)
+THEN DO:
+                        /* Обнуление данных. */
+   ASSIGN
+      acct-pos = 0
+      acct-cur = 0
+   .
+                        /* Поиск счета.
+                        ** Для правильного формирования знака остатка. */
+   FIND FIRST ClcAcct WHERE
+            ClcAcct.acct      EQ loan-acct.acct
+      AND   ClcAcct.currency  EQ loan-acct.currency
+   NO-LOCK NO-ERROR.
+                        /* Рассчет остатка по счету. */  
+   IF AVAIL ClcAcct
+   THEN DO:
+                        /* Рассчет остатка по счету. */
+      RUN acct-pos IN h_base (
+         ClcAcct.acct,
+         ClcAcct.currency,
+         loan.since,
+         loan.since,
+         gop-status
+      ).
+                        /* Формирвоание знака остатка. */
+      IF    (ClcAcct.side  EQ "П"
+             AND  (sh-bal  GT 0
+               OR  sh-val  GT 0))
+         OR (ClcAcct.side  EQ "А"
+             AND  (sh-bal  LT 0
+               OR  sh-val  LT 0))
+                        /* Остаток нарушен, переводим в отрицательнцю область. */
+      THEN ASSIGN
+         acct-pos = ABSOLUTE (sh-bal) * -1
+         acct-cur = ABSOLUTE (sh-val) * -1
+      .
+                        /* Остаток верен, переводим в положительную область. */
+      ELSE ASSIGN
+         acct-pos = ABSOLUTE (sh-bal)
+         acct-cur = ABSOLUTE (sh-val)
+      .
+   END.
+END.
+
+IF       mAcctUser
+   AND   AVAIL loan-acct
+   AND   loan-acct.acct NE "0"
+   THEN acct-user = GetBufferValue(
+      "acct",
+      "
+      WHERE acct.acct = '" + loan-acct.acct + "'
+        AND acct.currency = '" + loan-acct.currency + "'",
+      "user-id").
+
+IF mSumPlatClc THEN
+DO:
+   IF GetXattrValueEx("loan-cond",
+                      loan.contract + "," + loan.cont-code + "," + STRING(loan-cond.since),
+                      "СхемаПлат",
+                      "") EQ "Аннуитетная" THEN
+      mSumPlat = DEC(GetXattrValueEx("loan-cond",
+                                     loan.contract + "," + loan.cont-code + "," + STRING(loan-cond.since),
+                                     "АннуитПлат",
+                                     ""
+                                     )
+                     ) NO-ERROR.
+   ELSE
+      mSumPlat = DEC(GetXattrValueEx("loan-cond",
+                                     loan.contract + "," + loan.cont-code + "," + STRING(loan-cond.since),
+                                     "КредПлат",
+                                     ""
+                                     )
+                     ) NO-ERROR.
+END.
+
+/*Сумма договора*/
+FIND FIRST bb-term-obl WHERE 
+           bb-term-obl.contract      EQ loan.contract
+       AND bb-term-obl.cont-code     EQ loan.cont-code
+       AND bb-term-obl.idnt          EQ 2
+NO-LOCK NO-ERROR.
+IF AVAIL bb-term-obl THEN
+   msumma-Doc = bb-term-obl.amt-rub.
+ELSE msumma-Doc = ?. 
+
+
+/* Фильтрация договоров по доступности информации о владельце договора текущему пользователю */
+IF     {assigned mAvGrList}
+   AND mAvGrList NE "*"
+THEN DO:
+         /* Фильтруются только договоры физ.лиц */
+   IF loan.cust-cat EQ "Ч" THEN
+      mPersGr = GetXAttrValue("person",STRING(loan.cust-id),"ВидСотр").
+   ELSE mPersGr = "".
+END.
+
+&IF DEFINED (sc-31) NE 0 &THEN
+/* Фильтрация условий договора В loan_cd.p*/
+
+/*Проверка ДР*/
+IF mIsChSc31 THEN
+DO:
+   sc-31 = ?.
+   FOR EACH bloan-cond WHERE bloan-cond.contract  EQ loan.contract 
+                         AND bloan-cond.cont-code EQ loan.cont-code NO-LOCK:
+      sv-31 = GetXAttrValueEx("loan-cond",
+                              STRING(bloan-cond.contract) + "," 
+                                 + STRING(bloan-cond.cont-code) + "," 
+                                 + STRING(bloan-cond.since) ,
+                              mSc31,
+                              "").
+         /* нет ДР - следующее условие */
+      IF sv-31 EQ "" THEN
+         NEXT.
+      /* Если ДР равен искомому, то выходим */
+      IF sv-31 EQ mSv31 THEN 
+      DO:
+         sc-31 = mSc31.
+         LEAVE.
+      END.
+      IF mIsRange THEN
+      DO:
+         CASE mRangeType:
+         WHEN "DECIMAL" OR WHEN "INTEGER" THEN 
+            IF       (NOT mIsChSv31   OR DEC(sv-31) GE DEC(mSv31))
+               AND   (NOT mIsChSv31#2 OR DEC(sv-31) LE DEC(mSv31#2)) THEN
+            DO:
+               sc-31 = mSc31.
+               LEAVE.
+            END.
+         WHEN "DATE" THEN 
+            IF       (NOT mIsChSv31   OR DATE(sv-31) GE DATE(mSv31))
+               AND   (NOT mIsChSv31#2 OR DATE(sv-31) LE DATE(mSv31#2)) THEN
+            DO:
+               sc-31 = mSc31.
+               LEAVE.
+            END.
+         END CASE.
+      END.
+         /* если не задано конкретное значение ДР, то выходим */
+      ELSE IF NOT mIsChSv31 THEN
+         DO:
+            sc-31 = mSc31.
+            LEAVE.
+         END.
+   END.
+END.
+&ENDIF

@@ -1,0 +1,31 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2006 ТОО "Банковские информационные системы"
+     Filename: bkilapcl.nav
+      Comment: Типы кредитных договоров в НБКИ
+   Parameters:
+         Uses:
+      Used by:
+      Created: 24/04/06 ZIAL (0060494) БКИ. Разработка классификаторов для модуля 
+               Кредиты и Депозиты
+     Modified: 26/04/06 ZIAL (0060494) БКИ. Разработка классификаторов для модуля 
+               Кредиты и Депозиты
+     Modified: 
+*/
+
+
+/*IF FRAME-VALUE NE "" THEN 
+DO:*/
+   IF AVAILABLE CODE THEN 
+   DO 
+      ON ERROR UNDO, LEAVE 
+      ON ENDKEY UNDO, LEAVE:
+
+      DISPLAY 
+         {bkilapcl.uf}
+      WITH FRAME op-type OVERLAY CENTERED row 8 SIDE-LABELS 1 COL 
+         TITLE COLOR bright-white "[ ПАРАМЕТР КЛАССИФИКАТОРА ]".
+      PAUSE.
+   END.
+   HIDE FRAME op-type NO-PAUSE.
+/*END.*/

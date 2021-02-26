@@ -1,0 +1,128 @@
+/* 
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2019 ЗАО "Банковские информационные системы"
+     Filename: signs.hsw
+      Comment: (0020852) Подправлена конкатенации
+               строк с информацией об изменении
+               основных и дополнительных реквизитов.
+               Нечетный элемент списка - код
+               реквизита, четный - значение.
+   Parameters: нет
+         Uses:
+      Used by:
+     Modified: 28.11.2003 14:04 KSV      (0020852) Подправлена конкатенации
+                                         строк с информацией об изменении
+                                         основных и дополнительных реквизитов.
+                                         Нечетный элемент списка - код
+                                         реквизита, четный - значение.
+     Modified: 11.06.2004 11:32 serge    0029521 Блокировки записей при
+                                         формировании рейса в МЦИ
+     Modified: 14/01/2005 Om
+                        Ошибка: не инициализировались порядковый номер и дата.
+     Modified: 15/10/2010 Serge    оптимизация
+*/
+
+DEF SHARED VAR HistoryOn  AS LOG   NO-UNDO. /* значение НП History.HistoryEnabled (включено ли ведение истории) */
+DEF SHARED VAR FilesHist  AS CHAR  NO-UNDO. /* значение НП History.HistoryOnFiles (таблицы, по которым ведется история) */
+/* DEF        VAR mOTObjTrID AS INT64 NO-UNDO. */
+
+mOTObjTrID = INT64(DYNAMIC-FUNCTION("GetSysConf" IN h_base,"obj-transaction")) NO-ERROR. 
+
+DEFINE VARIABLE vUsr       AS CHARACTER  NO-UNDO.
+vUsr = DYNAMIC-FUNCTION("GetSysConf" IN h_base,"HistoryChangeUser") NO-ERROR. 
+IF NOT {assigned vUsr} THEN vUsr = USERID("bisquit").
+
+/* No history */
+IF mOTObjTrID = 0 OR mOTObjTrID = ? THEN          /* внутри УТ всегда пишется history */
+DO:
+   IF NOT (HistoryOn AND (FilesHist = ? OR CAN-DO(FilesHist,{&signs}.file-name))) THEN
+      RETURN.                              /* не пишется, если по основной таблице не ведется */
+   FIND FIRST xattr WHERE xattr.class-code = {&signs}.file-name AND
+      xattr.xattr-code = "HistoryFields"
+      NO-LOCK NO-ERROR.
+   IF NOT AVAILABLE xattr OR (
+      AVAILABLE xattr AND NOT CAN-DO(xattr.initial, {&signs}.code)) THEN
+      RETURN.                              /* не пишется, если допреквизит не упомянут в HistoryFields */ 
+END.     
+
+&SCOP c1 ~001
+&SCOP c2 ~002
+
+DEF VAR str-hist AS CHAR INIT '' NO-UNDO.
+DEF VAR d        AS DATE         NO-UNDO.
+DEF VAR t        AS INT64        NO-UNDO.
+d = TODAY.
+t = TIME - ( TIMEZONE  - 180) * 60.
+
+IF t < 0 THEN
+   assign
+      d = TODAY - 1
+      t =  24 * 60 * 60 + t
+   .
+
+
+&IF "{&signs}" MATCHES "*tmp*" &THEN
+   DEF BUFFER prev-tmpsigns FOR tmpsigns.
+   IF NEW {&signs} THEN
+   DO:
+      FIND LAST prev-tmpsigns WHERE prev-tmpsigns.file-name EQ {&signs}.file-name
+                                AND prev-tmpsigns.code      EQ {&signs}.code
+                                AND prev-tmpsigns.surrogate EQ {&signs}.surrogate
+                                AND prev-tmpsigns.since     LT {&signs}.since
+      NO-LOCK NO-ERROR.
+      str-hist = '*' + {&signs}.code + '{&c1}' +
+              (IF AVAIL prev-tmpsigns THEN prev-tmpsigns.code-value + prev-tmpsigns.xattr-value ELSE "") + '{&c1}'.
+   END.
+   ELSE
+&ENDIF
+str-hist = '*' + {&signs}.code + '{&c1}' +
+   {&oldsigns}.code-value + {&oldsigns}.xattr-value + '{&c1}'.
+{fromlist.i}
+
+/* ищем последнюю запись по данному объекту */
+FIND LAST history 
+   WHERE history.file-name   = {&signs}.file-name 
+     AND history.field-ref   = {&signs}.surrogate 
+   NO-LOCK NO-ERROR.
+
+/* и если она не существует, либо произошла слишком давно или была создана другим пользователем, то создаем новую запись */
+IF NOT AVAIL history OR (AVAIL HISTORY AND
+   (history.modif-time  < t - 10 OR       /* будем группировать изменения, если предыдущее изменение было не более 10 сек назад */
+    history.modify      <> 'W' OR
+    history.modif-date  <> d OR
+    history.user-id     <> USERID("bisquit")
+   ))
+THEN
+DO:
+   CREATE history.
+   ASSIGN
+      history.file-name          = {&signs}.file-name
+      history.field-name         = ''
+      history.modif-date         = d
+      history.user-id            = vUsr
+      history.field-ref          = {&signs}.surrogate
+      history.modif-time         = t
+      history.last-rec           = TRUE
+      history.modify             = 'W'
+      history.history-id         = INTERVAL(NOW, DATETIME(01/01/1900), "milliseconds":U)
+      history.obj-transaction-id = mOTObjTrID WHEN mOTObjTrID <> 0 AND mOTObjTrID <> ?
+      history.field-value        = str-hist
+      history.db-trans-id        = {dbtransid.i}
+   .
+END.
+ELSE DO:
+   FIND CURRENT history EXCLUSIVE-LOCK.
+
+   IF history.field-value <> "" AND 
+      SUBSTR(history.field-value,LENGTH(history.field-value)) <> "," THEN
+      str-hist = "," + str-hist.
+
+   history.field-value = history.field-value + str-hist.
+END.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='01/07/2015 16:39:18.008+04:00' */
+/* $LINTUSER='komi' */
+/* $LINTMODE='1' */
+/* $LINTFILE='signs.hsw' */
+/*prosignpqyqZs91KG2cISvE+5T2Gg*/

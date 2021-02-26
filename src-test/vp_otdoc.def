@@ -1,0 +1,58 @@
+
+
+DEFINE {1} SHARED VARIABLE vBalDb        AS CHARACTER  FORMAT "x(2000)" VIEW-AS FILL-IN SIZE 26 BY 1 NO-UNDO.  /* Маска балансового счета по дебету */
+DEFINE {1} SHARED VARIABLE vBalCr        AS CHARACTER  FORMAT "x(200)"  VIEW-AS FILL-IN SIZE 26 BY 1 NO-UNDO.  /* Маска лицевого счета по дебету */
+DEFINE {1} SHARED VARIABLE vTypRun       AS LOGICAL    FORMAT "И/ИЛИ"   NO-UNDO.                               /* тип обработки по дебету и кредиту в фильтре (И/ИЛИ) */
+DEFINE {1} SHARED VARIABLE vDetailReg    AS CHARACTER  FORMAT "x(1000)" VIEW-AS FILL-IN SIZE 40 BY 1 NO-UNDO . /* поле "содержание операции" учитыв. регистр */
+DEFINE {1} SHARED VARIABLE vDetailNoReg  AS CHARACTER  FORMAT "x(1000)" VIEW-AS FILL-IN SIZE 36 BY 1 NO-UNDO.  /* поле "содержание операции" не учитыв. регистр*/
+DEFINE {1} SHARED VARIABLE vSumOt    	 AS CHARACTER  FORMAT "x(20)" VIEW-AS FILL-IN SIZE 25 BY 1 NO-UNDO . /* поле Суммы От */
+DEFINE {1} SHARED VARIABLE vSumDo  	 AS CHARACTER  FORMAT "x(20)" VIEW-AS FILL-IN SIZE 25 BY 1 NO-UNDO.  /* поле Суммы До*/
+
+
+DEFINE VARIABLE mMode     AS CHARACTER NO-UNDO.
+
+FUNCTION GetEntryFromString CHAR (INPUT ipNum AS INT64, INPUT ipString AS CHAR).
+    DEFINE VARIABLE vResult AS CHARACTER  NO-UNDO.
+
+    IF NUM-ENTRIES(ipString, chr(1)) < ipNum THEN RETURN ?.
+    vResult = ENTRY(ipNum, ipString, CHR(1)).
+    IF vResult = "?" THEN RETURN ?.
+    RETURN vResult.
+
+END FUNCTION.
+
+FUNCTION GetEntryForString CHAR (INPUT ipString AS CHAR).
+
+    IF ipString EQ ? THEN RETURN "?".
+    RETURN ipString.
+
+END FUNCTION.
+
+PROCEDURE DecodeFiltrFromString.
+    DEFINE INPUT  PARAMETER ipString AS CHARACTER  NO-UNDO.
+    ASSIGN
+        vBalDb          = GetEntryFromString ( 1, ipString)
+        vBalCr          = GetEntryFromString ( 2, ipString)
+        vTypRun         = GetEntryFromString ( 3, ipString) EQ "И"
+        vDetailReg      = GetEntryFromString ( 4, ipString)
+        vDetailNoReg    = GetEntryFromString ( 5, ipString)
+        vSumOt      	 = GetEntryFromString ( 6, ipString)
+        vSumDo    	 = GetEntryFromString ( 7, ipString)
+
+    .
+END PROCEDURE.
+
+FUNCTION CodeFiltrToString CHAR.
+    DEFINE VARIABLE vResult AS CHARACTER  NO-UNDO.
+    vResult =
+        GetEntryForString (vBalDb)                   + CHR(1) +
+        GetEntryForString (vBalCr)                   + CHR(1) +
+        GetEntryForString (STRING(vTypRun, "И/ИЛИ")) + CHR(1) +
+        GetEntryForString (vDetailReg)               + CHR(1) +
+        GetEntryForString (vDetailNoReg)             + CHR(1) 
++ GetEntryForString (vSumOt)         	    	  + CHR(1) +
+        GetEntryForString (vSumDo)           	  + CHR(1) 
+
+   .
+    RETURN vResult.
+END.

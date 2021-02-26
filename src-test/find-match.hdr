@@ -1,0 +1,60 @@
+PUT UNFORMATTED   
+'<?xml version="1.0"?>~n' + 
+'<?mso-application progid="Excel.Sheet"?>~n' + 
+'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">~n' +
+' <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">~n' +
+'  <Created>2006-09-16T00:00:00Z</Created>~n' +
+'  <LastSaved>2017-07-07T08:38:15Z</LastSaved>~n' +
+'  <Version>14.00</Version>~n' +
+' </DocumentProperties>~n' +
+' <OfficeDocumentSettings xmlns="urn:schemas-microsoft-com:office:office">~n' +
+'  <AllowPNG/>~n' +
+'  <RemovePersonalInformation/>~n' +
+' </OfficeDocumentSettings>~n' + 
+' <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">~n' +
+'  <WindowHeight>8010</WindowHeight>~n' +
+'  <WindowWidth>14805</WindowWidth>~n' +
+'  <WindowTopX>240</WindowTopX>~n' +
+'  <WindowTopY>105</WindowTopY>~n' +
+'  <ProtectStructure>False</ProtectStructure>~n' +
+'  <ProtectWindows>False</ProtectWindows>~n' +
+' </ExcelWorkbook>~n' +
+' <Styles>~n' +
+'  <Style ss:ID="Default" ss:Name="Normal">~n' +
+'   <Alignment ss:Vertical="Bottom"/>~n' +
+'   <Borders/>~n' +
+'   <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>~n' +
+'   <Interior/>~n' +
+'   <NumberFormat/>~n' +
+'   <Protection/>~n' +
+'  </Style>~n' +
+'  <Style ss:ID="s64">~n' +
+'   <NumberFormat ss:Format="@"/>~n' +
+'  </Style>~n' +
+'  <Style ss:ID="s71">~n' +
+'   <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>~n' +
+'   <Borders>~n' +
+'    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>~n' +
+'    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>~n' +
+'    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>~n' +
+'    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>~n' +
+'   </Borders>~n' +
+'   <Interior ss:Color="#DCE6F1" ss:Pattern="Solid"/>~n' +
+'  </Style>~n' +
+' </Styles>~n' + 
+' <Worksheet ss:Name="550-П">~n' +
+'  <Names>~n' +
+'   <NamedRange ss:Name="_FilterDatabase" ss:RefersTo="=' + "'" + '550-П' + "'" + '!R1C1:R1C4" ss:Hidden="1"/>~n' +
+'  </Names>~n' + 
+'  <Table>~n' +
+'   <Column ss:AutoFitWidth="0" ss:Width="51"/>~n' +
+'   <Column ss:Width="565.5"/>~n' +
+'   <Column ss:AutoFitWidth="0" ss:Width="82.5"/>~n' +
+'   <Column ss:AutoFitWidth="0" ss:Width="126.75"/>~n' +
+'   <Row>~n' +
+'    <Cell ss:StyleID="s71"><Data ss:Type="String">№</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>~n' +
+'    <Cell ss:StyleID="s71"><Data ss:Type="String">Наименование ЮЛ /ФИО ИП,ФЛ</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>~n' +
+'    <Cell ss:StyleID="s71"><Data ss:Type="String">ИНН</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>~n' +
+'    <Cell ss:StyleID="s71"><Data ss:Type="String">Код клиента в БИС</Data><NamedCell ss:Name="_FilterDatabase"/></Cell>~n' +
+'   </Row>~n'
+.

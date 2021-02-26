@@ -1,0 +1,176 @@
+FUNCTION GetInnFromString RETURNS CHARACTER 
+   (vB AS CHAR)                     IN {1}.
+
+FUNCTION StrTimeToInt RETURN INT64
+   (ipStrTime AS CHAR,
+    ipDel AS CHAR)                  IN {1}.
+
+FUNCTION CliDbEqCliCr    RETURN LOG
+   (ipRecOpEntry  AS RECID,
+    ipMaskCustCat AS CHAR)          IN {1}.
+
+FUNCTION GetCNostroAcct  RETURN CHAR
+   (ipAcct        AS CHAR,
+    ipCurr        AS CHAR)          IN {1}.
+
+FUNCTION GetOpByRef      RETURN CHAR
+   (ipOpRef       AS CHAR,
+    ipOpDate      AS DATE)          IN {1}.
+
+FUNCTION GetBankCodeType RETURN LOG
+   (iBankCodeType AS CHAR)          IN {1}.
+
+FUNCTION GetBankCodeFormat RETURN CHAR 
+   (INPUT ipBankCodeType AS CHAR,
+    INPUT ipBankCode     AS CHAR)   IN {1}.
+
+FUNCTION GetStWarning    RETURN CHAR
+   (ipOpKind      AS CHAR,
+    ipOpStatus    AS CHAR)          IN {1}.
+
+FUNCTION xover           RETURN CHAR
+   (xxstr         AS CHAR)          IN {1}.
+
+FUNCTION convxdate       RETURN DATE
+   (xsource       AS CHAR,
+    xformat       AS CHAR)          IN {1}.
+
+FUNCTION convxint        RETURN INT64
+   (xsource       AS CHAR,
+    xformat       AS CHAR)          IN {1}.
+
+FUNCTION convxdec        RETURN DEC
+   (xsource       AS CHAR,
+    xformat       AS CHAR)          IN {1}.
+
+FUNCTION comp-curr       RETURN LOG
+   (curr1         AS CHAR,
+    curr2         AS CHAR)          IN {1}.
+
+FUNCTION word-wrap       RETURN CHAR
+   (in-str        AS CHAR,
+    in-n          AS CHAR,
+    in-flag-end   AS LOG)           IN {1}.
+
+FUNCTION we-have-bic     RETURN LOG
+   ()                               IN {1}.
+
+FUNCTION acctb-have-bic  RETURN LOG
+  (in-acct        AS CHAR)          IN {1}.
+
+FUNCTION sw-trans        RETURN CHAR
+   (trans-str     AS CHAR,
+    translation   AS LOG,
+    VerForm       AS CHAR)          IN {1}.
+
+FUNCTION sw-code         RETURN CHAR
+   (in-class      AS CHAR,
+    in-code       AS CHAR)          IN {1}.
+
+FUNCTION sw-code2        RETURN CHAR
+   (in-class      AS CHAR,
+    in-code       AS CHAR)          IN {1}.
+
+FUNCTION sw-val          RETURN CHAR
+   (in-class      AS CHAR,
+    in-val        AS CHAR)          IN {1}.
+
+FUNCTION sw-val-beg      RETURN CHAR
+   (in-class      AS CHAR,
+    in-val        AS CHAR)          IN {1}.
+
+FUNCTION sw-desc         RETURN CHAR
+   (in-class      AS CHAR,
+    in-val        AS CHAR)          IN {1}.
+FUNCTION sw-descm        RETURN CHAR
+   (in-class      AS CHAR,
+    in-val        AS CHAR)          IN {1}.
+
+FUNCTION sw-buf          RETURN CHAR
+   (in-buf        AS CHAR)          IN {1}.
+
+FUNCTION sw-e72          RETURN CHAR
+   (in-recop      AS RECID,
+    in-headr      AS LOG,
+    tran          AS LOG,
+    VerForm       AS CHAR,
+    iFormISO      AS LOG)           IN {1}.
+
+FUNCTION sw-icn          RETURN CHAR
+   (in-acct       AS CHAR,
+    in-curr       AS CHAR)          IN {1}.
+
+FUNCTION is-cyril        RETURN LOG
+   (in-buf        AS CHAR)          IN {1}.
+
+FUNCTION send-rec        RETURN CHAR
+   (op-rec        AS recid)         IN {1}.
+
+FUNCTION get-op-bank     RETURN RECID
+   (op-rec        AS RECID,
+    in-op-bank-type AS CHAR)        IN {1}.
+
+FUNCTION pos-acct-no-bic RETURN CHAR
+   (in-acct       AS CHAR,
+    in-sr         AS CHAR)          IN {1}.
+
+FUNCTION save-reflect    RETURN CHAR
+   (InStr         AS CHAR,
+    InStrSR       AS CHAR,
+    InNum         AS INT64)           IN {1}.
+
+FUNCTION num-link        RETURN INT64
+   (ipFileName    AS CHAR,
+    ipCode        AS CHAR,
+    ipCodeVal     AS CHAR)          IN {1}.
+
+FUNCTION Chk-a RETURN LOG (iArg AS CHAR)
+                                    IN {1}.
+
+FUNCTION Chk-c RETURN LOG (iArg AS CHAR)
+                                    IN {1}.
+
+FUNCTION Chk-n RETURN LOG (iArg AS CHAR)
+                                    IN {1}.
+
+FUNCTION Check50F-INF RETURN LOG (iArg AS CHAR,iTag AS CHAR, iIsMess AS log, iForeing AS log)
+                                    IN {1}.
+
+FUNCTION Check50F-XXXX RETURN LOG (iArg AS CHAR,iTag AS CHAR, iIsMess AS log)
+                                    IN {1}.
+
+FUNCTION Check50F-IBEI RETURN LOG (iArg AS CHAR, iIsMess AS log, iForeing AS log)
+                                    IN {1}.
+
+FUNCTION Check50F-x RETURN LOG (iArg AS CHAR,iNum AS INT64, iIsMess AS log)
+                                    IN {1}.
+
+FUNCTION Check50F-4 RETURN LOG (iArg AS CHAR, iIsMess AS log)
+                                    IN {1}.
+
+FUNCTION Check50F-1 RETURN LOG (iArg AS CHAR,iNum AS INT64, iIsMess AS log)
+                                    IN {1}.
+
+FUNCTION Check50F   RETURN LOG (iArg AS CHAR,iNum AS INT64, iIsMess AS log)
+                                    IN {1}.
+FUNCTION FillNAcctCr RETURN CHAR (iOpKind      AS CHAR,
+                                  iFormat      AS CHAR,
+                                  iTypeMsg     AS CHAR,
+                                  iAcct        AS CHAR,
+                                  iBankCode    AS CHAR,
+                                  iOurBankCode AS CHAR,
+                                  iINN         AS CHAR,
+                                  iOurINN      AS CHAR,
+                                  iBankName    AS CHAR,
+                                  iOurBankName AS CHAR)
+                                    IN {1}.
+
+FUNCTION trans50f RETURN char (iTxt as char,iTrans as log,iVerForm as char)
+                                    IN {1}.
+
+FUNCTION ChangeInsDate RETURNS DATE (INPUT iOpDate  AS DATE,
+                                     INPUT iInsDate AS DATE)
+                                    IN {1}.
+
+FUNCTION Chk2863U RETURNS LOGICAL (INPUT iDetails AS CHARACTER,
+                                   INPUT iName    AS CHARACTER) IN {1}.

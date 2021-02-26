@@ -1,0 +1,205 @@
+PUT /* stream vvs */ UNFORMATTED
+'
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Version>14.00</Version>
+ </DocumentProperties>
+ <OfficeDocumentSettings xmlns="urn:schemas-microsoft-com:office:office">
+  <AllowPNG/>
+ </OfficeDocumentSettings>
+ <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
+   <ProtectStructure>False</ProtectStructure>
+  <ProtectWindows>False</ProtectWindows>
+ </ExcelWorkbook>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="6"
+    ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s62">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>
+   <NumberFormat ss:Format="0"/>
+  </Style>
+  <Style ss:ID="s63">
+   <NumberFormat ss:Format="@"/>
+  </Style>
+  <Style ss:ID="s64">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <NumberFormat ss:Format="Fixed"/>
+  </Style>
+  <Style ss:ID="s65">
+   <Font ss:Size="9" ss:Bold="1"/>
+   <Alignment ss:Vertical="Bottom" ss:WrapText="1"/>
+   <NumberFormat ss:Format="0"/>
+  </Style>
+
+  <Style ss:ID="s67">
+   <Alignment ss:Vertical="Bottom" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="2"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9"
+    ss:Color="#000000" ss:Bold="1"/>
+  </Style>
+
+  <Style ss:ID="s68">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9" 
+    ss:Color="#000000" ss:Bold="0"/>
+  </Style>
+  
+  <Style ss:ID="s68red">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9" 
+    ss:Color="#FF0000" ss:Bold="1"/>
+  </Style>
+  
+  <Style ss:ID="s68wait">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9" 
+    ss:Color="#000000" ss:Bold="1"/>
+   <Interior ss:Color="#FFFFCC" ss:Pattern="Solid"/> 
+  </Style>
+  <Style ss:ID="s68error">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9" 
+    ss:Color="#000000" ss:Bold="1"/>
+   <Interior ss:Color="#FFC9C9" ss:Pattern="Solid"/> 
+  </Style>
+  
+  <Style ss:ID="s68grey">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9" 
+    ss:Color="#000000" ss:Bold="1"/>
+   <Interior ss:Color="#F2F2F2" ss:Pattern="Solid"/> 
+  </Style>
+  
+  <Style ss:ID="s70">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="2"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="2"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="9"
+    ss:Color="#000000" ss:Bold="1"/>
+  </Style>
+  
+  <Style ss:ID="s74">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="11"
+    ss:Color="#000000"/>
+   <NumberFormat ss:Format="@"/>
+  </Style>
+ </Styles>~n
+ 
+ <Worksheet ss:Name="journal">~n
+  <Table ss:ExpandedColumnCount="24" ss:ExpandedRowCount="150000" x:FullColumns="1"
+   x:FullRows="1" ss:DefaultRowHeight="12">~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="60"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="40"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="180"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="210"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="140"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="40"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="110"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="110"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="70"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="80"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="200"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="70"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="70"/>~n
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="70"/>~n
+   <Row ss:AutoFitHeight="0">
+    <Cell ss:MergeAcross="12" ss:StyleID="s74"><Data ss:Type="String">Отчет по принятым сообщениям 365-п за период с ' beg-date ' по ' end-date ' </Data></Cell>~n
+   </Row>
+   <Row ss:AutoFitHeight="0" ss:Span="1"/>~n
+   '.
+
+	PUT /* STREAM VVS */ UNFORMATTED 
+	'<Row ss:AutoFitHeight="0" ss:Height="25">~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Дата</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Статус</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Принятый файл из ФНС</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Тип сообщения</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Наименование организации</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Список счетов в запросе / Счет в БИС</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Группа</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Дата блокировки на счете</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Дата отмены блокировки</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">НомРешПр</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">ДатаРешПр</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">СумВзыск/ВидРеш</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Остаток на счете в момент блокировки</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Остаток сформированный в файле</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">НомРешОт</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">ДатаРешОт</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Код ответа в ФНС</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Код ответа ФНС на ответ банка</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Дата ответа ФНС на ответ банка</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Время ответа ФНС на ответ банка</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Справка/выписка в ФНС</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Код ответа на справку</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Дата ответа на справку</Data></Cell>~n
+	<Cell ss:StyleID="s67"><Data ss:Type="String">Время ответа на справку</Data></Cell>~n
+	</Row>~n'.

@@ -1,0 +1,6 @@
+ summa1
+                     VALIDATE (summa1 <> 0 AND
+                               ( IF summa >  0 THEN summa1 <= summa AND summa1 > 0
+                                              ELSE summa1 >= summa AND summa1 < 0),
+                     "Сумма должна быть меньше или равна сумме проводки и не равна 0")
+                WITH FRAME edt

@@ -1,0 +1,105 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2004 ТОО "Банковские информационные системы"
+     Filename: PERM.HSW
+      Comment: 20844 Модернизация службы "Права
+               доступа"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 22.03.2004 19:19 serge   
+     Modified: 22.03.2004 20:13 serge    20844 Модернизация службы "Права
+                                         доступа"
+     Modified: 24.03.2004 16:30 serge    20844 Модернизация службы "Права
+                                         доступа"
+     Modified: 11.06.2004 11:32 serge    0029521 Блокировки записей при
+                                         формировании рейса в МЦИ
+     Modified: 19.05.2006 14:10 SHIB     0044702 Проверка необходимости
+                                         ведения истории изменений по
+                                         таблице permission 
+*/
+{oracle.def}
+
+DEFINE SHARED VARIABLE HistoryOn AS LOGICAL   NO-UNDO.
+DEFINE SHARED VARIABLE FilesHist AS CHARACTER NO-UNDO.
+DEFINE SHARED VARIABLE h_base    AS HANDLE    NO-UNDO.
+DEFINE VARIABLE mOTObjTrID       AS INT64     NO-UNDO. 
+
+if not (HistoryOn and (FilesHist = ? or can-do(FilesHist,permission.class-code))) then /* No History! */
+  return.
+
+mOTObjTrID = INT64(DYNAMIC-FUNCTION("GetSysConf" IN h_base,"obj-transaction")) NO-ERROR. 
+
+&SCOP c1 ~001
+&SCOP c2 ~002
+
+def var str-hist as char init '' no-undo.
+def var d as date no-undo.
+def var t as INT64 no-undo.
+d = today.
+t = TIME - ( TIMEZONE  - 180) * 60.
+
+IF t < 0 THEN
+   assign
+      d = TODAY - 1
+      t =  24 * 60 * 60 + t
+   .
+
+str-hist = 'can-' + permission.method-id + '{&c1}' +
+           string(permission.allow, "+/-") + permission.user-id + '{&c1}'.
+{fromlist.i}
+
+IF     CAN-DO(DYNAMIC-FUNCTION("FGetSetting" IN h_base,"History","HistoryOnFiles",""),"permission")
+   AND CAN-DO(DYNAMIC-FUNCTION("FGetSetting" IN h_base,"History","HistOnFilesPerm",""),permission.class-code)
+THEN
+DO:
+
+   &SCOPED-DEFINE FindHistCommonPartQuery ~
+           history.file-name   = permission.class-code ~
+       AND history.modif-date  = d ~
+       AND history.user-id     = USERID("bisquit") ~
+       AND history.field-ref   = permission.surrogate ~
+       AND history.modif-time  = t ~
+       AND history.modify      = "W"
+   &IF DEFINED(ORACLE) &THEN
+      _avoid_long:
+      FOR EACH history WHERE {&FindHistCommonPartQuery} NO-LOCK:
+         IF history.field-value BEGINS 'can-' + permission.method-id + ','
+         THEN LEAVE _avoid_long.
+      END.
+   &ELSE
+      FIND FIRST history WHERE {&FindHistCommonPartQuery}
+                           AND history.field-value BEGINS "can-" + permission.method-id + ","
+      NO-LOCK NO-ERROR.
+   &ENDIF
+   
+   if not avail history OR length(history.field-value) > 3000 then do:
+      create history.
+      assign
+         history.file-name   = permission.class-code
+         history.field-name  = ''
+         history.modif-date  = d
+         history.user-id     = userid("bisquit")
+         history.field-ref   = permission.surrogate
+         history.modif-time  = t
+         history.last-rec    = True
+         history.modify      = 'W'
+         history.field-value = str-hist
+         history.history-id  = MTIME
+         history.db-trans-id = {dbtransid.i}
+         history.obj-transaction-id = mOTObjTrID WHEN mOTObjTrID <> 0 AND mOTObjTrID <> ?
+      .
+   end.
+   ELSE DO:
+      FIND CURRENT history EXCLUSIVE-LOCK.
+      entry(2, history.field-value) = entry(2, history.field-value) + '{&c2}' +
+                                      entry(2, str-hist).
+   END.
+END.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='25/06/2015 12:22:32.885+04:00' */
+/* $LINTUSER='ariz' */
+/* $LINTMODE='1' */
+/* $LINTFILE='perm.hsw' */
+/*prosignwzNb4Ge3WHi36Xq2Patagg*/

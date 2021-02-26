@@ -1,0 +1,845 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2014 ЗАО "Банковские информационные системы"
+     Filename: book-reg318p.p
+      Comment: Книга хранилища ценностей 318-П
+   Parameters: Типы документов, отступ
+         Uses:
+      Used by:
+      Created: 03.08.2008 15:49 elus
+     Modified: 03.08.2008 15:49 elus
+*/
+{globals.i}
+{wordwrap.def}
+{intrface.get tparam}
+{intrface.get sessions}
+{intrface.get vok} /* Инструмент работы с обьектами ВОК */
+{intrface.get instrum}  /* Инструменты для курсов и валют PP-INSTR.P */
+{intrface.get kau}
+
+{sh-defs.i}
+{ksh-defs.i}
+
+DEFINE INPUT  PARAMETER iParam AS CHARACTER NO-UNDO. 
+
+DEFINE VARIABLE iDocType AS CHARACTER NO-UNDO.
+DEFINE VARIABLE iOtstup  AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mNn      AS INT64     NO-UNDO INIT 0.
+DEFINE VARIABLE mNacCur  AS CHARACTER NO-UNDO.
+
+iDocType = IF ENTRY(1,iParam,";") EQ "" THEN "*" ELSE ENTRY(1,iParam,";").
+
+IF NUM-ENTRIES(iParam,";") > 1 THEN
+   iOtstup = FILL(" ",INT(ENTRY(2,iParam,";"))) NO-ERROR.
+IF NUM-ENTRIES(iParam,";") > 2 THEN
+   mNacCur = STRING(ENTRY(3,iParam,";"),"x(3)").
+ELSE
+   mNacCur = "RUB".
+
+DEFINE TEMP-TABLE ttBookReg NO-UNDO /* Данные для заявки на валюту и ценности */  
+   FIELD Acct       LIKE Acct.acct                                      
+   FIELD Bal-acct   LIKE acct.bal-acct                                  
+   FIELD Currency   LIKE Acct.currency                                  
+   FIELD Details    LIKE Acct.Details                                   
+   FIELD RepGroup   AS CHARACTER /* Группа балансовых счетов */
+   FIELD Balance    AS DECIMAL /* остаток в вал. */                     
+   FIELD SummDb     AS DECIMAL /* приход в вал. */                      
+   FIELD SummCr     AS DECIMAL /* расход в вал. */                      
+   FIELD BalanceRub AS DECIMAL /* остаток в руб */                    
+   FIELD SummDbRub  AS DECIMAL /* приход в руб */                     
+   FIELD SummCrRub  AS DECIMAL /* расход в руб */                     
+   FIELD DocDate    AS CHARACTER
+   FIELD OpDate     AS DATE
+
+   INDEX idx Acct Currency
+   INDEX idxdate DocDate
+.                     
+
+DEFINE VARIABLE mColAmt   AS INT64   NO-UNDO. /* Ширина поля сумма */
+DEFINE VARIABLE mCols     AS INT64   NO-UNDO. /* Ширина отчета */
+DEFINE VARIABLE mLines    AS CHARACTER NO-UNDO EXTENT 14. /* Табличка */
+DEFINE VARIABLE mCurKau   AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mKau-id   AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mGrupType AS LOGICAL   NO-UNDO. /* Групперовка по классификатору */
+DEFINE VARIABLE vOpTime   AS INT64     NO-UNDO.
+DEFINE VARIABLE vOpDate   AS DATE      NO-UNDO.
+DEFINE VARIABLE vDate     AS CHARACTER NO-UNDO.
+DEFINE BUFFER cAcct FOR Acct. /* буфер для acct */
+
+{agr-beg.def 
+   &NameTitle = "КНИГА ХРАНИЛИЩА ЦЕННОСТЕЙ"
+   &TypeDoc   = "iDocType"
+   &NameRep   = "'КнигаХран'"} /* Здесь тип документа не важен */
+   
+mDateLst = GetDprDays(mUsDprIDLst).
+
+{agr-beg.i} 
+
+ASSIGN
+   mColAmt   = IF mNameCurr THEN 3 ELSE {&format-cur-name}
+   mGrupType = CAN-FIND(FIRST code WHERE
+                              code.class  EQ "ГрупКнигЦен"
+                          AND code.parent EQ "ГрупКнигЦен")
+   .
+
+ASSIGN
+   mLines[ 1] = "┌─────┬────────────────────────────┬──────────────────────┬─" 
+      + FILL("─"                           ,mColAmt + 24) + "─┐"
+   mLines[ 2] = "Переопределяется ниже"
+   mLines[ 3] = "│     │        ценностей           │                      ├─" 
+      + FILL("─"                           ,mColAmt + 24) + "─┤"
+   mLines[ 4] = "│     │                            │                      │ " 
+      + PADC("сумма (цифрами)"             ,mColAmt + 24) + " │"
+   mLines[ 5] = "│     │                            │                      │ " 
+      + PADC("с указанием"                 ,mColAmt + 24) + " │"
+   mLines[ 6] = "│     │                            │                      │ " 
+      + PADC("наименования"                ,mColAmt + 24) + " │"
+   mLines[ 8] = "│     │                            │                      │ " 
+      + PADC("валюты"                      ,mColAmt + 24) + " │"
+   mLines[ 9] = "├─────┼────────────────────────────┼──────────────────────┼─"
+      + "────────────────────────" + FILL("─",mColAmt     ) + "─┤"
+   mLines[10]  = "│  1  │            2               │          3           │ "
+      + PADC("4",mColAmt + 24) + " │"
+   mLines[11]  = "├─────┼────────────────────────────┼──────────────────────┼─"
+      + "────────────────────────" + FILL("─",mColAmt     ) + "─┤"  
+   mLines[12] = "│     │                            │                      | "
+      + "                        " + FILL(" ",mColAmt     ) + " │"  
+   mLines[13] = "└─────┴────────────────────────────┴──────────────────────┴─"
+      + "────────────────────────" + FILL("─",mColAmt     ) + "─┘"  
+   mLines[14] = "│     │                        |   │                      │ "
+     + "                        " + FILL(" ",mColAmt     ) + " │"  
+   mCols      = LENGTH(iOtstup + mLines[1])
+   .
+
+&GLOB Cols mCols
+
+DO i = 1 TO NUM-ENTRIES(mUsDprIDLst):
+   mCurKau = ENTRY(i,mUsDprIDLst).
+   FOR EACH kau-entry WHERE kau-entry.kau-id    BEGINS "КодСмены"   
+                        AND kau-entry.kau       EQ mCurKau
+                        AND kau-entry.op-date   EQ mCuDate          
+                        AND kau-entry.op-status GE CHR(251)         
+   NO-LOCK,
+
+   FIRST op WHERE op.op EQ kau-entry.op
+   NO-LOCK:
+
+      RUN GetDateTimeOpTr(op.op-transaction, op.op, OUTPUT vOpTime,OUTPUT vOpDate).
+
+      CASE mDateOtc:
+         WHEN "" THEN vDate = "*".
+         WHEN "*" THEN
+         DO:
+            vDate = STRING(vOpDate, "99/99/9999").
+            IF NOT CAN-DO(mDateLst, vDate) THEN NEXT.
+         END.
+         OTHERWISE
+         DO:
+            vDate = STRING(vOpDate, "99/99/9999").
+            IF mDateOtc NE vDate THEN NEXT.
+         END.
+      END CASE.
+
+
+      RUN AddRecInTemp-Table(kau-entry.acct,kau-entry.Currency, vDate).
+   END.
+END.
+
+IF mCuUserID = ? THEN /* книга делается по подразделению, то */
+DO:  /* во временную таблицу добавим остальные счета подразделения */
+   each-acct:
+   FOR EACH cAcct WHERE 
+            cAcct.branch-id EQ mCuBrchID 
+      NO-LOCK:
+      CASE mSessFlt:
+         WHEN "Дневные" THEN 
+         DO:
+            IF GetXattrValueEx("acct",cacct.acct + "," + cacct.currency,"ВечерКас","Нет") NE "Нет" THEN
+               NEXT each-acct.
+         END.
+         WHEN "Вечерние" THEN
+         DO:
+            IF GetXattrValue("acct",cacct.acct + "," + cacct.currency,"ВечерКас") NE "Да" THEN
+               NEXT each-acct.
+         END.
+      END CASE.
+      RUN get-kau-id(cAcct.acct,cAcct.Currency,OUTPUT mKau-id).
+      IF mKau-id BEGINS "КодСмены" THEN
+      CASE mDateOtc:
+         WHEN "" THEN RUN AddRecInTemp-Table(cAcct.acct,cAcct.Currency,STRING(mCuDate)).
+         WHEN "*" THEN
+         DO i = 1 TO NUM-ENTRIES(mDateLst):
+            RUN AddRecInTemp-Table(cAcct.acct,cAcct.Currency,ENTRY(i,mDateLst)).
+         END.
+         OTHERWISE
+         DO:
+            RUN AddRecInTemp-Table(cAcct.acct,cAcct.Currency,mDateOtc).
+         END.
+      END CASE.      
+   END. /* FOR EACH сAcct */
+END. /* IF mCuUserID = ? THEN */
+ELSE
+   IF mDocType NE "*" THEN
+      RUN EditRecInTemp-Table.
+
+IF NOT mShowZero THEN 
+   FOR EACH ttBookReg WHERE 
+            ttBookReg.Balance EQ 0:
+       DELETE ttBookReg.
+   END.               
+
+DEFINE VARIABLE mBookBeg AS DATE NO-UNDO. /* Дата начала книги (доп. реквизит) */
+DEFINE VARIABLE mPageNum AS INT64 NO-UNDO. /* номер страницы */
+
+IF mCuUserID = ? THEN /* книга делается по подразделению */
+   mBookBeg = GetDateBeginBook(mCuDate,mCuBrchID,"br-book-cash").
+ELSE                  /* книга делается по кассиру */
+   mBookBeg = GetDateBeginBook(mCuDate,mCuUserID,"us-book-cash").
+
+mPageNum = OpDaysVOK(mBookBeg,mCuDate,mCuUserID,mCuBrchID).
+
+{agr-end.i 
+   &OnePageRep  = "YES"
+   &OnePageName = "PrintOnePageBookReg"}
+
+{intrface.del}
+
+/* ========================== Procedure block ============================ */
+PROCEDURE PrintOnePageBookReg.
+
+   DEFINE VARIABLE vBegDate   AS CHARACTER NO-UNDO. /* Начата */
+   DEFINE VARIABLE vEndDate   AS CHARACTER NO-UNDO. /* Окончена */
+   DEFINE VARIABLE vDate      AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vCurrName  AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vDeteils   AS CHARACTER NO-UNDO EXTENT 6. /* Для разбиения на строки */
+   DEFINE VARIABLE vTmpDate   AS DATE      NO-UNDO.
+   DEFINE VARIABLE vChDate    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vGroupName AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vBalName   AS CHARACTER NO-UNDO EXTENT 6.
+   DEFINE VARIABLE vAlreadyPrint AS CHARACTER   NO-UNDO.
+
+   DEFINE VARIABLE vMonthsStr  AS CHARACTER NO-UNDO. /* 12 месяцев */
+   DEFINE VARIABLE vMonthName  AS CHARACTER NO-UNDO. /* месяц */
+   DEFINE VARIABLE vMonthName2 AS CHARACTER NO-UNDO. /* месяц */
+   DEFINE VARIABLE vRepDate    AS DATE NO-UNDO.
+
+   DEFINE BUFFER bttBookReg FOR ttBookReg.
+   DEFINE BUFFER currency   FOR currency.
+
+   vMonthsStr = 'Январь,Февраль,Март,Апрель,Май,Июнь,' + 
+                'Июль,Август,Сентябрь,Октябрь,Ноябрь,Декабрь'.
+   vMonthName2 = 'Января,Февраля,Марта,Апреля,Мая,Июня,' + 
+                'Июля,Августа,Сентября,Октября,Ноября,Декабря'.
+ 
+   FOR EACH bttBookReg
+   BREAK BY bttBookReg.OpDate:
+
+   IF FIRST-OF(bttBookReg.OpDate) THEN
+   DO:
+      vRepDate = IF {assigned mDateOtc} THEN bttBookReg.OpDate
+                                        ELSE mCuDate.
+
+      vMonthName  = ENTRY(MONTH(vRepDate),vMonthsStr).
+      mChrDate = '"' + SUBSTRING(STRING(vRepDate,"99/99/9999"),1,2) + '" ' + vMonthName + " " + SUBSTRING(STRING(vRepDate,"99/99/9999"),7,4) + " года".
+      vTmpDate    = DATE(IF mCuUserID = ? THEN GetXattrValue("branch",STRING(mCuBrchID),"beg-book-val") ELSE GetUserXattrValue(mCuUserID,"beg-book-val")).
+      vChDate     = 'Начата ' + '"' + SUBSTRING(STRING(vTmpDate,"99/99/9999"),1,2) + '" ' + ENTRY(MONTH(vTmpDate),vMonthName2) + " " + SUBSTRING(STRING(vTmpDate,"99/99/9999"),7,4) + " года".
+
+/*ayv остаток должен определяться на следующий рабочий день*/
+      DEF VAR vR AS DATE NO-UNDO.
+      DEF BUFFER b-ses FOR sessions.
+
+      FOR EACH b-ses WHERE b-ses.branch-id EQ mCuBrchID
+                     AND   b-ses.op-date GT mCuDate
+            NO-LOCK BY b-ses.op-date:
+            LEAVE.
+      END.
+      
+      IF AVAIL(b-ses) THEN 
+         vR = b-ses.op-date.
+      ELSE DO:
+         MESSAGE 'Следующая смена не открыта! Остаток на ' + STRING(mCuDate,'99.99.9999') VIEW-AS ALERT-BOX.
+         vR = mCuDate.
+      END.
+/**/
+
+      mLines[2] = "│  №  │       Наименование         │     Номер счета      │ "
+       + PADC("Остаток на " + REPLACE({strdate.i vR},'г.','года') ,mColAmt + 24) + IF mNameCurr THEN "  │" ELSE " │".
+      ASSIGN
+      vChDate     = 'Начата "___" __________ 20___ года' WHEN vChDate EQ ?.
+      ASSIGN
+         vBegDate = vChDate
+         vEndDate = 'Окончена "___" __________ 20___ года'
+         vDate    = 'Месяц ' + vMonthName + ' Год ' + STRING(YEAR(vRepDate),"9999")
+         .      
+      
+/* ========================== Титульный лист ============================= */
+   IF mBookTit THEN
+   DO:   /* Титульный лист печатаем */
+      {head-318p.i
+         &CodForm = "'0402118'"
+      }
+      {orgname318p.i
+         &CurBranchName = mBranchName
+      }
+      PUT UNFORMATTED
+         PADC("КНИГА",                                    {&cols}) SKIP
+         PADC("хранилища ценностей",                      {&cols}) SKIP.
+/*          FILL(' ',{&cols} - LENGTH(vBegDate)) vBegDate             SKIP
+         FILL(' ',{&cols} - LENGTH(vEndDate)) vEndDate             SKIP.
+        PADC("Записи в настоящей книге",                 {&cols}) SKIP
+         PADC("производятся до полного её использования", {&cols}) SKIP(1).
+         PAGE.*/
+   END.
+/* ========================== Шапка таблички ============================= */
+/*   PUT UNFORMATTED
+      FILL(' ',{&cols} - LENGTH(vDate)) vDate SKIP.*/
+   DO i = 1 TO 10:
+      IF mLines[i] NE "" THEN
+         PUT UNFORMATTED iOtstup mLines[i] SKIP.
+   END.
+/* ++++++++++++++++++++  Перенаименование рублей +++++++++++++++++++++++++++*/
+   FOR EACH ttBookReg NO-LOCK.  
+      if ttBookReg.Currency = "" then ttBookReg.Currency = "643".
+   end.
+/* ==================== Создание таблички с суммами ====================== */
+   FOR EACH ttBookReg WHERE ttBookReg.DocDate EQ bttBookReg.DocDate NO-LOCK BREAK  
+      BY ttBookReg.RepGroup 
+      BY ttBookReg.Bal-acct
+      BY ttBookReg.Currency:
+      mNn = mNn + 1.
+      IF mGrupType THEN
+         vGroupName = GetCodeName("ГрупКнигЦен",ttBookReg.RepGroup).
+      ELSE
+      DO:
+         CASE ttBookReg.RepGroup:
+            WHEN "1" THEN vGroupName = "Денежная наличность".
+            WHEN "2" THEN vGroupName = "Другие ценности    ".
+         END CASE.
+      END.
+
+      IF FIRST-OF(ttBookReg.RepGroup) THEN 
+         vAlreadyPrint = "".   
+      
+      IF NOT CAN-DO(vAlreadyPrint,ttBookReg.RepGroup) THEN
+      DO: /* Печатаем разделитель */
+         IF mGrupType THEN
+         DO:   
+            PUT UNFORMATTED iOtstup 
+               mLines[11] SKIP.
+             /*iOtstup "│     │ " STRING(vGroupName,"x(24)") 
+               ENTRY(2,mLines[14],"|") SKIP.*/
+             /*ayv исправлена печать разделителя для случаев, если онне помещается в строку*/
+               vBalName[1] = vGroupName.
+               {wordwrap.i 
+                &s = vBalName
+                &n = 6
+                &l = 24
+               }               
+               PUT UNFORMATTED
+                  iOtstup "│     │ " vBalName[1] FORMAT "x(24)" 
+                  ENTRY(2,mLines[14],"|") 
+                  SKIP.
+               DO i = 2 TO 6:
+                  IF vBalName[i] NE "" THEN
+                     PUT UNFORMATTED 
+                        iOtstup "│     │ " vBalName[i] FORMAT "x(24)" 
+                        ENTRY(2,mLines[14],"|") 
+                        SKIP.
+                  ELSE
+                    LEAVE.
+               END.
+            /**/
+         END.
+         ELSE
+            IF mPrnAcct THEN
+               PUT UNFORMATTED iOtstup 
+                  mLines[11] SKIP
+                  iOtstup "│     │ " STRING(vGroupName,"x(26)") 
+                  ENTRY(2,mLines[14],"|") SKIP
+                  iOtstup mLines[11] SKIP.
+            ELSE
+               PUT UNFORMATTED iOtstup
+                  mLines[11] SKIP
+                  iOtstup "│     │" STRING(vGroupName,"x(24)") " │ " 
+                  ttBookReg.bal-acct "                │" 
+                  ENTRY(2,mLines[12],"|") SKIP
+                  iOtstup mLines[11] SKIP.
+      
+         {additem.i vAlreadyPrint ttBookReg.RepGroup}
+      END.
+      IF mGrupType THEN
+      DO:   
+         IF FIRST-OF(ttBookReg.bal-acct) THEN
+         DO:
+            vBalName[1] = GetCodeNameEx('ГрупКнигЦен',STRING(ttBookReg.bal-acct),"").
+            {wordwrap.i 
+             &s = vBalName
+             &n = 6
+             &l = 24
+         }               
+            PUT UNFORMATTED iOtstup
+               mLines[11] SKIP 
+               iOtstup "│     │ " vBalName[1] FORMAT "x(26)" " │ " 
+               ttBookReg.bal-acct "                │" 
+               ENTRY(2,mLines[12],"|") 
+               SKIP.
+            DO i = 2 TO 6:
+               IF vBalName[i] NE "" THEN
+                  PUT UNFORMATTED iOtstup 
+                     "│     │ " vBalName[i] FORMAT "x(24)" 
+                     ENTRY(2,mLines[14],"|") SKIP.
+               ELSE
+                  LEAVE.
+            END. /* DO i = 2  */
+            PUT UNFORMATTED iOtstup                  
+               mLines[11] SKIP.
+         END.
+      END.
+
+      vDeteils = ttBookReg.Details.
+      {wordwrap.i 
+        &s = vDeteils
+        &n = 6
+        &l = 24
+      }
+
+      FIND FIRST currency WHERE currency.currency EQ ttBookReg.Currency
+         NO-LOCK NO-ERROR.
+      IF AVAIL currency THEN
+         IF mNameCurr THEN
+            vCurrName = IF currency.currency = "" 
+                        THEN mNacCur 
+                        ELSE STRING(currency.i-currency,"x(3)").
+         ELSE
+            vCurrName = STRING(currency.name-currenc,"x({&format-cur-name})").
+      ELSE
+         IF mNameCurr THEN
+            vCurrName = " - ".
+         ELSE
+            vCurrName = STRING("валюта не найдена","x({&format-cur-name})").
+
+      IF mPrnAcct THEN
+         PUT UNFORMATTED iOtstup 
+            "│" mNn FORMAT ">>>>9"
+            "│ " vDeteils[1] FORMAT "x(26)" " │ " 
+            ttBookReg.acct FORMAT "x(20)" " │ "
+            ttBookReg.Balance FORMAT "->,>>>,>>>,>>>,>>9.99" "   " 
+            vCurrName " │ "
+            SKIP.
+      ELSE
+         PUT UNFORMATTED iOtstup 
+            "│" mNn FORMAT ">>>>9"
+            "│ " vDeteils[1] FORMAT "x(26)" " │                      │ "
+            ttBookReg.Balance FORMAT "->,>>>,>>>,>>>,>>9.99" "   " 
+            vCurrName " │ "
+            SKIP.
+
+      DO i = 2 TO 6:
+         IF vDeteils[i] NE "" THEN
+            PUT UNFORMATTED iOtstup 
+               "│     │ " vDeteils[i] FORMAT "x(24)" ENTRY(2,mLines[14],"|")
+               SKIP.
+         ELSE
+            LEAVE.
+      END. /* DO i = 2  */
+   END.
+   PUT UNFORMATTED iOtstup mLines[13] SKIP.
+/* ================ Подписи и заверительная надпись ====================== */
+   RUN GetRepFioByRef(ENTRY(1,PROGRAM-NAME(2), "."),mCuBrchID,?,mCuDprID).
+   PUT UNFORMATTED SKIP
+       iOtstup "Должностные лица, ответственные за сохранность ценностей" + 
+       " (кассовый работник ВСП)" SKIP.
+
+/*PUT UNFORMATTED SKIP(1)
+       iOtstup "Должностные лица, ответственные за сохранность ценностей" + 
+       " (кассовый работник ВСП)" SKIP(1).
+
+   DO i = 1 TO 9:
+      IF    mFioInRep318p[i + 1]  NE "" 
+         OR mPostInRep318p[i + 1] NE ""
+         OR i < 3 THEN DO:
+            RUN PrintFioAndPostV IN THIS-PROCEDURE(mFioInRep[i],mPostInRep[i],
+                                                   LENGTH(iOtstup) + 20).
+            PUT UNFORMATTED SKIP(1).  
+         END.
+      ELSE
+      DO:
+         PUT UNFORMATTED SKIP(1)
+             iOtstup "С данными бухгалтерского учета сверено:" SKIP(1).
+         RUN PrintFioAndPostV IN THIS-PROCEDURE(mFioInRep[i],mPostInRep[i],
+                                                LENGTH(iOtstup) + 20).
+         LEAVE.
+      END.
+   END.*/
+   /*ayv*/
+   i = 1.
+   IF mTotalSign > 20 THEN mTotalSign = 20.
+   DO WHILE i < mTotalSign:
+      IF mFioInRep[i]  EQ "" 
+         AND mPostInRep[i] EQ "" THEN DO:
+         i = i + 1.
+         LEAVE.
+      END. 
+      RUN PrintFioAndPostV1 IN THIS-PROCEDURE(mFioInRep[i],mPostInRep[i],
+                                                LENGTH(iOtstup) + 20).
+      /*Только для Чижолкиной и Погореловой добавлен дополнительный подписант*/
+      IF CAN-DO('Погорелова Н.А.,Чижолкина М.В.', mFioInRep[i]) THEN 
+      DO:
+         RUN PrintFioAndPostV1 IN THIS-PROCEDURE('Лашина Е.К.','Руководитель направления РКО',
+                                                LENGTH(iOtstup) + 20).
+      END.
+      i = 1 + 1.
+   END.
+   PUT UNFORMATTED SKIP
+             iOtstup "С данными бухгалтерского учета сверено:" SKIP.
+   DO WHILE i <= mTotalSign:
+      /*Только для Чижолкиной и Погореловой заполняется гл. бухгалтер*/
+      IF CAN-DO('Погорелова Н.А.,Чижолкина М.В.', mFioInRep[1]) THEN
+      DO:
+         RUN PrintFioAndPostV1 IN THIS-PROCEDURE('Франк Н.Р.','Главный бухгалтер',
+                                                LENGTH(iOtstup) + 20).
+      END.
+      ELSE
+         RUN PrintFioAndPostV1 IN THIS-PROCEDURE(mFioInRep[i],mPostInRep[i],
+                                                LENGTH(iOtstup) + 20).
+      i = i + 1.
+   END.
+/**/
+
+   {bookend-318p.i} /* заверительная надпись */
+
+   END.
+   END.
+END PROCEDURE. /* PrintOnePageBookReg */
+
+/*------------------------------------------------------------------------------
+   Назначение: Добавляет во временную таблицу записи о счетах 
+------------------------------------------------------------------------------*/
+PROCEDURE AddRecInTemp-Table:
+
+   DEFINE INPUT  PARAMETER iAcct     AS CHARACTER NO-UNDO. /* Номер счета */
+   DEFINE INPUT  PARAMETER iCurrency AS CHARACTER NO-UNDO.  /* Валюта */
+   DEFINE INPUT  PARAMETER iOpDate   AS CHARACTER NO-UNDO.
+
+   DEFINE BUFFER bAcct FOR Acct.
+   DEFINE BUFFER bbAcct FOR Acct.
+   DEFINE BUFFER bCurrency FOR Currency.
+
+   DEFINE VARIABLE vNumEntry  AS INT64. /* Кол-во смен юзера */
+   DEFINE VARIABLE vDprId     AS CHARACTER NO-UNDO. /* Смена */
+   DEFINE VARIABLE vOutQtyDb  AS INT64   NO-UNDO INIT 0 . /* Кол-во документов по дебету */   
+   DEFINE VARIABLE vOutQtyCr  AS INT64   NO-UNDO INIT 0 . /* Кол-во документов по кредиту */
+   DEFINE VARIABLE vQtyDocs   AS DECIMAL   NO-UNDO. /* Количество документов */
+
+/* Переменные для подчета всего */
+   DEFINE VARIABLE vBalance    AS DECIMAL NO-UNDO. /* Остаток в валюте */
+   DEFINE VARIABLE vSummCr     AS DECIMAL NO-UNDO. /* Расход в валюте */
+   DEFINE VARIABLE vSummDb     AS DECIMAL NO-UNDO. /* Приход в валюте */
+   
+   DEFINE VARIABLE vBalanceRub AS DECIMAL NO-UNDO. /* Остаток в рублях */
+   DEFINE VARIABLE vSummCrRub  AS DECIMAL NO-UNDO. /* Расход в рублях */
+   DEFINE VARIABLE vSummDbRub  AS DECIMAL NO-UNDO. /* Приход в рублях */
+
+   DEFINE VARIABLE vBalAcct    AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE vDetails    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vGroup      AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vDate       AS DATE      NO-UNDO.
+   DEFINE VARIABLE vDateStr    AS CHARACTER NO-UNDO.
+
+   DEFINE BUFFER code      FOR code.
+
+   vDate = IF {assigned mDateOtc} THEN DATE(iOpDate)
+                                  ELSE mCuDate.
+   vDateStr = IF {assigned mDateOtc} THEN iOpDate
+                                     ELSE "*".
+
+   FIND FIRST ttBookReg WHERE ttBookReg.acct     EQ iAcct 
+                          AND ttBookReg.Currency EQ iCurrency
+                          AND ttBookReg.DocDate  EQ vDateStr
+   NO-LOCK NO-ERROR.
+/* Если это новая запись во временной таблице */
+   IF NOT AVAILABLE ttBookReg THEN
+   DO:
+/* Посчитаем обороты и остатки по счету */
+      IF mCuUserID = ? THEN /* книга делается по подразделению */
+      DO:
+         RUN acct-pos IN h_base (iAcct,
+                                 iCurrency,
+                                 vDate,
+                                 vDate,
+                                 CHR(251)).   
+         IF iCurrency = "" THEN ASSIGN
+            vBalance = sh-bal 
+            vSummDb  = sh-db
+            vSummCr  = sh-cr
+         .                   
+         ELSE ASSIGN
+            vBalance = sh-val
+            vSummDb  = sh-vdb
+            vSummCr  = sh-vcr
+         .
+
+         vBalanceRub = sh-bal.
+         vSummDbRub  = sh-db.
+         vSummCrRub  = sh-cr.
+      END. /* книга делается по подразделению */
+      ELSE /* книга делается по кассиру */   
+      DO:
+         IF mUsDprIDLst GT "" THEN
+         DO:
+            ASSIGN
+               vBalance    = 0
+               vSummDb     = 0
+               vSummCr     = 0
+               vBalanceRub = 0
+               vSummDbRub  = 0
+               vSummCrRub  = 0
+            .              
+
+            REPEAT vNumEntry = 1 TO NUM-ENTRIES(mUsDprIDLst):
+               vDprId = ENTRY(vNumEntry,mUsDprIDLst).
+               RUN kau-pos.p (iAcct,
+                              iCurrency,
+                              vDate,
+                              vDate,
+                              CHR(251), /* "Ф",  */
+                              vDprId).
+
+               IF iCurrency = "" THEN ASSIGN
+                  vBalance = vBalance + ksh-bal 
+                  vSummDb  = vSummDb  + ksh-db
+                  vSummCr  = vSummCr  + ksh-cr
+               .                   
+               ELSE ASSIGN
+                  vBalance = vBalance + ksh-val
+                  vSummDb  = vSummDb  + ksh-vdb
+                  vSummCr  = vSummCr  + ksh-vcr
+               .
+
+               vBalanceRub = vBalanceRub + ksh-bal.
+               vSummDbRub  = vSummDbRub  + ksh-db.
+               vSummCrRub  = vSummCrRub  + ksh-cr.
+
+            END. /* REPEAT vNumEntry = 1 TO */
+         END. /* IF mDprIDLstNF GT "" THEN */
+
+      END. /* книга делается по кассиру */                                                           
+/* Посчитаем кол-во документов (uvok.fun)*/
+      IF mUsDprIDLst GT "" THEN
+      DO:
+         vQtyDocs = 0.
+         REPEAT vNumEntry = 1 TO NUM-ENTRIES(mUsDprIDLst):
+            vDprId = ENTRY(vNumEntry,mUsDprIDLst).
+            RUN KauQtyOp(iAcct,
+                         iCurrency,
+                         vDprId,
+                         vDate,
+                         OUTPUT vOutQtyDb,
+                         OUTPUT vOutQtyCr).
+            vQtyDocs = vQtyDocs + vOutQtyDb + vOutQtyCr. /* кол-во */
+         END. /* REPEAT vNumEntry = 1 TO */                             
+      END.  /* IF mUsDprIDLst GT "" THEN */                                                            
+
+      IF vBalance NE 0 OR vQtyDocs NE 0 THEN /* если записи не пустые */
+      DO:
+         CREATE ttBookReg.
+         ASSIGN
+            vBalAcct  = SUBSTRING(iAcct,1,5)
+            mAgreeYes = TRUE   /* Признак непустого отчета */
+            .
+         IF mGrupType THEN
+         DO:
+            FIND FIRST code WHERE 
+                       code.class EQ 'ГрупКнигЦен'
+                   AND code.code  EQ vBalAcct
+               NO-LOCK NO-ERROR.
+            IF AVAIL code THEN
+               ASSIGN
+                  vGroup   = code.parent
+                  .
+         END.
+
+         ASSIGN
+            vGroup   = "1" WHEN NOT mGrupType
+            vDetails = GetXAttrValueEx("Acct",
+                                      iAcct + "," + iCurrency,
+                                      "form-type-code",
+                                      "-")
+            .
+
+
+         IF vDetails EQ "-" THEN /* это не бланк */
+         DO:
+            IF iCurrency GT "999" THEN
+               FIND FIRST bCurrency WHERE bCurrency.currency EQ iCurrency 
+                  NO-LOCK NO-ERROR.
+            IF AVAILABLE bCurrency THEN 
+               ASSIGN
+                  vGroup   = "2" WHEN NOT mGrupType
+                  vDetails = bCurrency.name-currenc.
+            ELSE
+               vDetails = " ".
+         END. /* это не бланк */
+         ELSE  do:
+            /* Если надо вывести наименование счёта */
+            if vDetails = "ГБ0050000001" or
+               vDetails = "ОФ0050000001" or
+               vDetails = "ТФ0050000001"
+               then do:
+               find first bbAcct where bbAcct.acct = iAcct no-lock no-error.
+               if avail bbAcct then do:
+                  vDetails = bbacct.Details.
+                  vGroup   = IF NOT mGrupType THEN "2" ELSE vGroup.
+               end.
+            end.
+            else do:
+               ASSIGN
+                  vDetails = GetSecCodeNameEx(vDetails,GetCodeName("КодТипаБланков",vDetails))
+                  vDetails = IF vDetails EQ ? THEN " " ELSE vDetails              
+                  vGroup   = IF NOT mGrupType THEN "2" ELSE vGroup
+                  .
+            end.
+         end.
+         ASSIGN 
+            ttBookReg.Acct       = iAcct
+            ttBookReg.Currency   = iCurrency
+            ttBookReg.Details    = vDetails
+            ttBookReg.RepGroup   = vGroup
+            ttBookReg.Balance    = vBalance    /* остаток в вал. */
+            ttBookReg.SummDb     = vSummDb     /* приход в вал.  */
+            ttBookReg.SummCr     = vSummCr     /* расход в вал.  */
+            ttBookReg.BalanceRub = vBalanceRub /* остаток в руб  */
+            ttBookReg.SummDbRub  = vSummDbRub  /* приход в руб   */
+            ttBookReg.SummCrRub  = vSummCrRub  /* расход в руб   */
+            ttBookReg.Bal-acct   = INT(vBalAcct)
+            ttBookReg.DocDate    = vDateStr
+            ttBookReg.OpDate     = DATE(vDateStr)
+         NO-ERROR.
+      END. /* */
+   END. /* ELSE AVAILABLE ttAgrCur */
+END PROCEDURE. /* AddCurrencyRec */
+
+/*------------------------------------------------------------------------------
+   Назначение: Правит записи во временной таблицы
+------------------------------------------------------------------------------*/
+
+PROCEDURE EditRecInTemp-Table:
+
+   DEFINE VARIABLE vRate    AS DECIMAL INIT 0 NO-UNDO.
+   DEFINE VARIABLE vSumm    AS DECIMAL INIT 0 NO-UNDO.
+   DEFINE VARIABLE vSummRub AS DECIMAL INIT 0 NO-UNDO.
+
+   DEFINE BUFFER bacct     FOR acct.
+   DEFINE BUFFER bcurrency FOR currency.
+   DEFINE BUFFER kau-entry FOR kau-entry.
+   DEFINE BUFFER op        FOR op.
+
+   FOR EACH kau-entry WHERE kau-entry.op-date   EQ mCuDate
+                        AND kau-entry.kau-id    BEGINS "КодСмены"
+                        AND kau-entry.op-status GE CHR(251)
+                        AND CAN-DO(mUsDprIDLst,kau-entry.kau)
+       NO-LOCK,
+   FIRST op OF kau-entry WHERE
+                NOT CAN-DO(iDocType,op.doc-type) NO-LOCK.
+
+      IF kau-entry.Currency EQ "" THEN
+         ASSIGN
+            vSumm    = kau-entry.amt-rub
+            vSummRub = vSumm
+          .
+      ELSE
+      DO:
+         vRate = FindRateSimple("Учетный",
+                                kau-entry.currency,
+                                mCuDate).         
+         ASSIGN
+            vSumm    = kau-entry.amt-cur
+            vSummRub = kau-entry.amt-cur * vRate
+         .
+      END.
+
+      FIND FIRST ttBookReg 
+         WHERE ttBookReg.acct     EQ kau-entry.acct
+           AND ttBookReg.Currency EQ kau-entry.currency
+      NO-LOCK NO-ERROR.
+
+      IF AVAIL ttBookReg THEN
+         IF kau-entry.debit THEN
+            ASSIGN
+               ttBookReg.Balance    = ttBookReg.Balance    - vSumm    /* остаток в вал. */  
+               ttBookReg.SummDb     = ttBookReg.SummDb     - vSumm    /* приход в вал. */    
+               ttBookReg.BalanceRub = ttBookReg.BalanceRub - vSummRub /* остаток в руб */    
+               ttBookReg.SummDbRub  = ttBookReg.SummDbRub  - vSummRub /* приход в руб */     
+            .                                                        
+         ELSE                                                        
+            ASSIGN                                                   
+               ttBookReg.Balance    = ttBookReg.Balance    + vSumm    /* остаток в вал. */  
+               ttBookReg.SummCr     = ttBookReg.SummCr     - vSumm    /* расход в вал. */    
+               ttBookReg.BalanceRub = ttBookReg.BalanceRub + vSummRub /* остаток в руб */    
+               ttBookReg.SummCrRub  = ttBookReg.SummCrRub  - vSummRub /* расход в руб */     
+            .
+   END. /* FOR EACH kau-entry */
+END PROCEDURE. /* EditRecInTemp-Table */
+/* $LINTUSER='ELUS' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='26/12/2014 12:13:15.986+04:00' */
+/* $LINTFILE='book-reg318p.p' */
+/*prosignoIQHjcTe626yaEDtsktCyg*/
+
+PROCEDURE PrintFioAndPostV1.
+   DEFINE INPUT PARAMETER iFio    AS CHARACTER NO-UNDO. /* ФИО которое печатаем               */
+   DEFINE INPUT PARAMETER iPost   AS CHARACTER NO-UNDO. /* Должность которую печатаем         */
+   DEFINE INPUT PARAMETER iOtstup AS INT64     NO-UNDO. /* ОТСТУП от края, если не нужен то 0 */
+   
+   IF iFio  EQ "" THEN iFio  = FILL('_', 15).
+   IF iPost EQ "" THEN iPost = FILL('_', 15).
+
+   RUN PrintFioAndPost31(iFio,
+                        iPost,
+                        iOtstup,
+                        "наименование должности,личная подпись,фамилия и инициалы"
+                        ).
+
+END PROCEDURE.
+
+
+PROCEDURE PrintFioAndPost31.
+
+   DEFINE INPUT PARAMETER iFio    AS CHARACTER NO-UNDO. /* ФИО которое печатаем               */
+   DEFINE INPUT PARAMETER iPost   AS CHARACTER NO-UNDO. /* Должность которую печатаем         */
+   DEFINE INPUT PARAMETER iOtstup AS INT64     NO-UNDO. /* ОТСТУП от края, если не нужен то 0 */
+   DEFINE INPUT PARAMETER iText   AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE vPost          AS CHARACTER NO-UNDO EXTENT 7.
+   DEFINE VARIABLE vSignLength    AS INT64     NO-UNDO.
+   DEFINE VARIABLE i              AS INT64     NO-UNDO.
+
+   vSignLength    = MAX(25,LENGTH(ENTRY(1,iText)),LENGTH(ENTRY(2,iText)),LENGTH(ENTRY(3,iText))).
+   mMaxLengthPost = 40.
+   vPost[1] = iPost.
+   {wordwrap.i
+       &s = vPost
+       &n = 7 
+       &l = mMaxLengthPost
+   }
+   PUT UNFORMATTED SKIP.
+   DO i = 1 TO 7:
+      IF vPost[i] GT "" OR i EQ 1 THEN DO:
+         PUT UNFORMATTED SPACE(iOtstup).
+         IF i EQ 1 THEN 
+            PUT UNFORMATTED PADR(ENTRY(1,iText),vSignLength).
+         ELSE
+            PUT UNFORMATTED SPACE(vSignLength).
+         PUT UNFORMATTED SPACE(3) vPost[i] SKIP.
+      END.
+   END.
+
+   PUT UNFORMATTED
+      SKIP(1)
+      SPACE(iOtstup) PADR(ENTRY(2,iText),vSignLength) SPACE(3) FILL('_', 15)
+      SKIP
+      SPACE(iOtstup) PADR(ENTRY(3,iText),vSignLength) SPACE(3) iFio
+      SKIP(1).
+END PROCEDURE.

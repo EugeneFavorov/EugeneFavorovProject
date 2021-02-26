@@ -1,0 +1,23 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2008 ЗАО "Банковские информационные системы"
+     Filename: ovn-nps2.p
+      Comment: "Объявление на взнос наличными 318-П"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 11.08.2008 ushd 0094531
+*/
+DEFINE VARIABLE vDoc AS CHARACTER NO-UNDO.
+
+vDoc = "ОНВН318xls".
+&GLOBAL-DEFINE LAW_318p YES
+&GLOBAL-DEFINE xls YES
+
+{ovn-nps.p &vidDoc=vDoc}
+/* $LINTUSER='PASA' */
+/* $LINTENV ='dvp' */
+/* $LINTVSS ='$/ws1-dvp/bq/' */
+/* $LINTDATE='23/12/2014 14:25:56.078+04:00' */
+/* $LINTFILE='ovn-nps4.p' */
+/*prosignaVsblES0paSc1SLPTX3uGg*/

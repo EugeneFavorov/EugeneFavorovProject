@@ -1,0 +1,57 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ehbrw.F6
+      Comment: Документы для электронного хранилища - фильтрация
+   Parameters:
+         Uses:
+      Used by:
+      Created: ayv
+     Modified:  
+*/
+
+ELSE IF LASTKEY EQ KEYCODE("F6") THEN
+DO ON ERROR UNDO, LEAVE
+   ON ENDKEY UNDO,LEAVE : 
+   PAUSE 0.
+   UPDATE 
+    mFltBranchDb
+    mFltAcctDb
+    mFltBranchCr
+    mFltAcctCr     
+    mFltDocType   
+    mFltCurrency
+    mFltOpKind
+    mFltDetails  
+    mFltParam     
+    mFltActual    
+    mFltStartDate1
+    mFltStartDate2
+    mFltEndDate1  
+    mFltEndDate2 
+   WITH FRAME flt-fr.
+   HIDE FRAME flt-fr NO-PAUSE.
+   {relq {&files}}
+   NEXT REFRESH.
+END.
+ELSE IF LASTKEY EQ KEYCODE("Ctrl-F6") THEN
+DO:
+   ASSIGN
+    mFltBranchDb   = '*'
+    mFltAcctDb     = '*'
+    mFltBranchCr   = '*'
+    mFltAcctCr     = '*'
+    mFltDocType    = '*'
+    mFltCurrency   = '*'
+    mFltOpKind     = '*'
+    mFltDetails    = '*'
+    mFltParam      = '*'
+    mFltActual     = 'Да'
+    mFltStartDate1 = ?
+    mFltStartDate2 = ?
+    mFltEndDate1   = ?
+    mFltEndDate2   = ?
+   .
+   {relq {&files}}
+   NEXT REFRESH.
+END.

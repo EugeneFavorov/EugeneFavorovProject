@@ -1,0 +1,117 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2019 ЗАО "Банковские информационные системы"
+     Filename: runsched.p
+      Comment: Сервер задач по календарю
+   Parameters: нет
+         Uses:
+      Used by:
+      Created: 16/03/97 Serge
+     Modified: 16/03/97 Serge
+*/
+Form "~n@(#) RUNSCHED.P 1.0 Serge 16/03/97 Serge 16/03/97 Сервер задач по календарю"
+with frame sccs-id stream-io width 250.
+
+DEFINE NEW GLOBAL SHARED VARIABLE h_cache AS HANDLE     NO-UNDO.
+RUN pp-cache.p PERSIST SET h_cache.
+
+{bislogin.i}
+{intrface.get xclass}   /* Библиотека инструментов метасхемы. */
+{intrface.get op}
+{intrface.get strng}
+{intrface.get import}
+{intrface.get filex}
+{intrface.get exch}
+{intrface.get rights}
+{intrface.get osyst}
+{intrface.get tmess}    /* Инструменты обработки сообщений. */
+
+def var delay as INT64 no-undo.
+def var servpath as char no-undo.
+DEF VAR vFilialID AS CHARACTER NO-UNDO.
+DEF VAR mTimeZn   AS INT64     NO-UNDO.
+DEF VAR mDateZn   AS DATE      NO-UNDO.
+
+                        /* Предзагрузка системных интерфейсов */
+RUN LoadStartupInterfaces.
+
+auto = SESSION:BATCH-MODE AND SESSION:CLIENT-TYPE <> "WEBSPEED".
+{filial.pro}
+
+IF auto THEN
+DO:
+   vFilialID =  getThisUserXAttrValue("filial-id").
+   RUN SetConnectLink (vFilialID).
+   RUN SetEnvironment (vFilialID).
+END.
+{sched_tz.i}
+
+servpath = os-getenv("BQ") + "/" + os-getenv("BQNAME") + ".schedule/".
+
+output to value(servpath + "schedule.txt").
+  mTimeZn = GetTimeTz().
+  mDateZn = GetDateTz().
+put unformatted 
+  "Сервер задач по календарю запущен - " string(mDateZn,"99/99/9999") " в " string(mTimeZn,"hh:mm:ss") "." skip.
+output close.
+
+RUN Init-SysMes IN h_tmess ("","","").
+do while true on endkey undo, leave:
+  run schedclc.p.
+
+  delay = 60.
+    mTimeZn = GetTimeTz().
+    mDateZn = GetDateTz().
+    SCHED:
+     /* WHOLE-INDEX schedule */
+    for each schedule  WHERE schedule.filial-id EQ shFilial no-lock:
+       IF LOGICAL(GetXAttrValueEx("schedule", schedule.schedule-id, "pause", "no")) THEN
+          NEXT SCHED.
+    if next-date = mDateZn and next-time > mTimeZn
+         and next-time - mTimeZn < delay then
+       delay = next-time - mTimeZn.
+    else if (next-date < mDateZn or
+       (next-date = mDateZn and next-time <= mTimeZn)) then
+       delay = 0.
+  end.
+  if delay > 0 then pause delay.
+
+  for each schedule where schedule.filial-id eq shFilial
+                      AND (next-date < mDateZn or
+                          (next-date = mDateZn and next-time <= mTimeZn)) no-lock:
+      IF NOT LOGICAL(GetXAttrValueEx("schedule", schedule.schedule-id, "pause", "no")) THEN
+      DO:
+         SETUSERID("SERV0000", "123", "BISQUIT").
+         RUN run-once.p (ROWID(schedule)).
+      END.
+  end.
+
+  /* Останов сервера RUNSCHED */
+  if search(servpath + "schedule.txt") eq ? then quit.
+
+end.
+
+PROCEDURE LoadStartupInterfaces:
+   DEFINE VAR vLibs AS CHARACTER NO-UNDO.
+   DEFINE VAR vInt  AS INT64   NO-UNDO.
+   DEFINE VAR vName AS CHARACTER NO-UNDO.
+   DEFINE VAR vHdl  AS HANDLE    NO-UNDO.
+   vLibs = {&STARTUP_INTERFACES}.
+   IF {assigned vLibs} THEN DO:
+      DO vInt = 1 TO NUM-ENTRIES(vLibs):
+         vName = TRIM(ENTRY(vInt,vLibs)).
+         vHdl = ?.
+         RUN GetHIntrface (vName,OUTPUT vHdl).
+         IF VALID-HANDLE(vHdl)
+            THEN NEXT.
+         RUN StartProc(vName,THIS-PROCEDURE,OUTPUT vHdl).
+      END.
+   END.
+END PROCEDURE.
+/* $LINTFILE='runsched.p' */
+/* $LINTMODE='1' */
+/* $LINTENV ='dpl' */
+/* $LINTVSS ='$/ws3-dpl/bq' */
+/* $LINTUSER='soav' */
+/* $LINTDATE='10/06/2016 12:36:31.650+03:00' */
+/*prosign8dRiPnSabgEhS+qQXhiboA*/

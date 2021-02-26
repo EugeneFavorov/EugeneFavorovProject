@@ -1,0 +1,23 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ptsregbrw.QRY
+      Comment: Движение(регистрация) документов - запросы
+   Parameters:
+         Uses:
+      Used by:
+      Created:  
+     Modified:  
+*/
+
+{qrdef.i
+   &buff-list        = "pl_indocsreg"
+   &need-buff-list   = "pl_indocsreg"
+   &Join-list        = "each"
+   &fixed-where           = "'where pl_indocsreg.doc_type = ""ПТС"" 
+                         AND pl_indocsreg.file_name eq ""term-obl""
+                         AND pl_indocsreg.surrogate eq ContCode'"
+   &var-where        = "ContCode"
+   &SortBy          = "'BY RECID(pl_indocsreg)'"
+   &condition        = "true"
+}

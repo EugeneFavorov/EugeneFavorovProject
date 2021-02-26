@@ -1,0 +1,96 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: 
+     Filename: personomsk.p
+      Comment: Ищем клиента в базе BANK и создаем в БИСе
+   Parameters: 
+         Uses:
+      Used by:
+      Created: kam 
+     Modified:    
+*/
+
+{globals.i}
+{intrface.get xclass}   /* Библиотека инструментов метасхемы. */
+{intrface.get rights}
+{intrface.get osyst}
+
+DEFINE INPUT PARAMETER iTypeNotif AS CHAR.
+
+DEFINE VARIABLE mStr AS CHARACTER NO-UNDO.
+/*
+if OS-GETENV("HOSTNAME") <> "bis263" then return.
+*/
+{justasec}
+
+/*
+shFilial = '0500'.
+  */
+DO ON ERROR UNDO, RETURN ERROR
+   ON STOP UNDO, LEAVE :
+  IF NOT CONNECTED("bank") THEN DO:
+    CONNECT -pf VALUE("/home2/bis/quit41d/conf/bismfr.pf").
+   &IF DEFINED( SESSION-REMOTE ) = 0 &THEN
+     put screen col 1 row screen-lines + message-lines + 1
+   				color bright-blink-normal "Подключение к МФР...".
+   &ELSE
+    mblodd_char_Tmp03 = ?.
+    RUN bloddProgressBar( INPUT-OUTPUT mblodd_char_Tmp03, ?, ?, ?, "Подключение к МФР...", ? ).
+   &ENDIF
+  END.
+  
+/*  RUN notaryonline.p( "1234"). */
+/*
+INPUT FROM VALUE("c1.txt").
+  REPEAT:
+    IMPORT mStr.
+    IF mStr NE "end" THEN
+    DO:
+        RUN nal_avto2.p(mStr).
+    END. 
+  END.
+INPUT CLOSE.
+*/
+/*
+    RUN chk-notar.p.
+ */
+
+/*    RUN notar-csupd.p(DATE(11, 20, 2015)).
+    RUN notar-csupd.p(DATE(11, 21, 2015)).
+    RUN notar-csupd.p(DATE(11, 22, 2015)). */
+/*    RUN notar-csupd.p(DATE(1, 26, 2016)). */
+    RUN notar-chek.p.
+    IF iTypeNotif EQ "OP-ENTRY" THEN
+    DO: 
+        RUN notar-csupd.p(TODAY - 7).
+        RUN notar-csupd.p(TODAY - 6).
+        RUN notar-csupd.p(TODAY - 5).
+        RUN notar-csupd.p(TODAY - 4).
+        RUN notar-csupd.p(TODAY - 3). 
+        RUN notar-csupd.p(TODAY - 2). 
+        RUN notar-csupd.p(TODAY - 1).
+        IF (TIME / 3600) GT 11.00 THEN
+        DO:
+            RUN notar-csupd.p(TODAY).
+        END.
+    END.
+    ELSE
+    DO:
+        RUN notar-csupd1.p(iTypeNotif).
+    END.    
+    RUN notar-otpr.p. 
+/*
+    RUN notar-csupd.p(TODAY - 1).
+    RUN notar-csupd.p(TODAY).
+ */   
+  CATCH eAnyError AS Progress.Lang.Error:
+    PUT UNFORMATTED "CATCH: " + RETURN-VALUE + " " + eAnyError:GetMessage(1) SKIP.
+  END CATCH.
+  FINALLY:
+    IF CONNECTED("bank") THEN DISCONNECT bank.
+    IF CONNECTED("bismfr") THEN DISCONNECT bismfr.
+  END FINALLY.
+END. /* DO */
+hide message no-pause.
+
+

@@ -1,0 +1,226 @@
+
+DEFINE TEMP-TABLE ttRequest XML-NODE-NAME "REQUEST"
+	FIELD request-id	AS INT64
+	FIELD request-repeated	AS LOG  LABEL "повторная заявка"
+	FIELD claim-id		AS CHAR LABEL "номер сделки PL"
+	FIELD task-id		AS CHAR LABEL "номер задачи PL"
+	FIELD tariff-code	AS CHAR LABEL "код тарифа"
+	FIELD branch-id		AS CHAR LABEL "код подразделения"
+	FIELD open-date		AS DATE LABEL "дата открытия договора"
+	FIELD end-date		AS DATE LABEL "дата окончания договора" XML-NODE-TYPE "HIDDEN"
+	FIELD cred-term		AS INT  LABEL "срок кредита в месяцах"
+	FIELD summa		AS DEC  LABEL "сумма кредита"
+	FIELD price-avto	AS DEC  LABEL "цена авто"
+	FIELD pledge-price-avto	AS DEC  LABEL "залоговая цена авто"
+	FIELD sum-kred-avto	AS DEC  LABEL "цена авто в счет кредита"
+	FIELD rate-cred		AS DEC  LABEL "ставка по кредиту"
+	FIELD rate-rko		AS DEC  LABEL "коммиссия рко" XML-NODE-TYPE "HIDDEN"
+	FIELD product-id	AS CHAR LABEL "ид. продукта"
+	FIELD cust-type		AS CHAR  XML-NODE-TYPE "HIDDEN" /* тип клиента для сч дох/расх */
+	FIELD claim-date	AS DATETIME LABEL "дата предоставления заявки PL"
+	INDEX request-id	IS UNIQUE PRIMARY request-id
+.
+DEFINE TEMP-TABLE ttPERSON XML-NODE-NAME "PERSON"
+	FIELD person-id		as INT64
+	FIELD request-id	as INT64 XML-NODE-TYPE "HIDDEN"
+	FIELD send-bki		AS LOG LABEL "согласие на выгрузку в бки"
+	FIELD person-status	AS CHAR LABEL "Субъект (ФЛ/ФЛН/ФЛП)"
+	FIELD name-last		AS CHAR LABEL "фамилия"
+	FIELD first-names	AS CHAR LABEL "имя и отчество"
+	FIELD gender		AS LOG  LABEL "пол (да-м,нет-ж)"
+	FIELD Birthday		AS DATE LABEL "дата рождения"
+	FIELD BirthPlace	AS CHAR LABEL "место рождения"
+	FIELD country-id	AS CHAR LABEL "код страны пребывания"
+	FIELD INN		AS CHAR LABEL "инн"
+	FIELD tax-insp		AS CHAR LABEL "код региона гни"
+	FIELD country-id2	AS CHAR LABEL "гражданство"
+	FIELD phone-home	AS CHAR LABEL "домашний телефон"
+	FIELD cell-phone	AS CHAR LABEL "мобильный телефон"
+	FIELD real-person-id	LIKE person.person-id XML-NODE-TYPE "HIDDEN"
+	FIELD role		AS CHAR LABEL "роль субъекта (заемщик)"
+	/*
+	FIELD EmployerName	AS CHAR LABEL "имя работодателя"
+	FIELD OccupationCode	AS CHAR LABEL "код вида деятельности"
+	FIELD OccupationStatus	AS CHAR LABEL "статус занятости"
+	FIELD OccupationTrade	AS CHAR LABEL "сфера деятельности"
+	FIELD OccuDateHired	AS CHAR LABEL "дата найма на работу"
+	FIELD OccuDateTerm	AS CHAR LABEL "дата окончания найма"
+	FIELD OccuCurrent	AS CHAR LABEL "статус места работы"
+	FIELD OccuTitle		AS CHAR LABEL "тип должности"
+	*/
+	INDEX person-id		IS UNIQUE PRIMARY person-id
+.
+DEFINE TEMP-TABLE ttADDR XML-NODE-NAME "ADDRESS"
+    FIELD person-id		as INT64  XML-NODE-TYPE "HIDDEN"
+    FIELD addr-type		as char LABEL "тип адреса (адрпроп,адрфакт,адрмраб)"
+    FIELD registration-date	as DATE LABEL "дата регистрации"
+    FIELD country-id		as char LABEL "код страны"
+    FIELD code-gni    		as char LABEL "регион гни"
+    FIELD code-reg    		as char LABEL "регион"
+    FIELD addr-obl    		as char LABEL "район"
+    FIELD addr-city   		as char LABEL "город"
+    FIELD addr-npunkt 		as char LABEL "нас.пункт"
+    FIELD addr-street 		as char LABEL "улица"
+    FIELD addr-house  		as char LABEL "дом"
+    FIELD addr-str    		as char LABEL "строение"
+    FIELD addr-corp   		as char LABEL "корпус"
+    FIELD addr-kv     		as char LABEL "квартира"
+    FIELD addr-idx    		as char LABEL "индекс"
+    INDEX ttADDRtype IS UNIQUE person-id addr-type
+.
+DEFINE TEMP-TABLE ttDOCUM XML-NODE-NAME "DOCUMENT"
+    FIELD person-id   AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD docum-type  AS CHAR LABEL "тип документа"
+    FIELD docum-no    AS CHAR LABEL "номер документа"
+    FIELD docum-podr  AS CHAR LABEL "подразделение"
+    FIELD docum-date  AS DATE LABEL "дата выдачи"
+    FIELD docum-issue AS CHAR LABEL "кем выдан"
+    FIELD docum-in-bis AS LOG LABEL "документ найден в бис" XML-NODE-TYPE "HIDDEN"
+    INDEX ttDOCtype IS UNIQUE person-id docum-type
+.
+DEFINE TEMP-TABLE ttCONTRACT XML-NODE-NAME "CONTRACT"
+    FIELD request-id  AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD contract-type   AS CHAR LABEL "тип договора"
+    FIELD contract-summa  AS DEC  LABEL "сумма договора"
+    FIELD contract-nds    AS DEC  LABEL "сумма договора"
+    FIELD contractor-name AS CHAR LABEL "наименование контрагента"
+    FIELD contract-num    AS CHAR LABEL "номер договора"
+    FIELD contract-date   AS DATE LABEL "дата договора"
+    FIELD contract-end-date AS DATE LABEL "дата окончания договора"
+    FIELD contractor-inn  AS CHAR LABEL "кем выдан"
+    FIELD contractor-current-account AS CHAR LABEL "кем выдан"
+    FIELD contractor-corr-account AS CHAR LABEL "кем выдан"
+    FIELD contractor-bank-name  AS CHAR LABEL "кем выдан"
+    FIELD contractor-bank-bik  AS CHAR LABEL "кем выдан"
+    FIELD contractor-phone  AS CHAR LABEL "кем выдан"
+    FIELD contract-name AS CHAR LABEL "наименование получателя"
+    FIELD contract-inn  AS CHAR LABEL "инн получателя"
+    FIELD contract-current-account AS CHAR LABEL "кем выдан"
+    FIELD contract-corr-account AS CHAR LABEL "кем выдан"
+    FIELD contract-bank-name  AS CHAR LABEL "кем выдан"
+    FIELD contract-bank-bik  AS CHAR LABEL "кем выдан"
+    FIELD contract-invoice-num  AS CHAR LABEL "кем выдан"
+    FIELD contract-invoice-date  AS DATE LABEL "кем выдан"
+    FIELD contract-beneficiary AS CHAR LABEL "получатель премии"
+    FIELD CollAgrNum AS CHAR LABEL "Номер договора коллективной схемы страхования"
+    FIELD curr-payments-account AS CHAR  LABEL "Hомер расчетного счета получателя иных платежей"
+    FIELD curr-premium-account AS CHAR  LABEL "Номер расчетного счета получателя страховой премии"
+    FIELD insurance-premium-summa  AS DEC  LABEL "Сумма страховой премии для получателя СБ Стратегия"
+    FIELD other-payments-summa AS DEC  LABEL "Сумма страховой премии для получателя СБ Стратегия"
+
+.
+DEFINE TEMP-TABLE ttCONTRACTSUM XML-NODE-NAME "contract-summa"
+    FIELD request-id    AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD contract-type AS CHAR XML-NODE-TYPE "HIDDEN"
+    FIELD sum-type      AS CHAR
+    FIELD summa         AS DEC  LABEL "сумма договора"
+    INDEX ttcsum IS UNIQUE request-id contract-type sum-type
+.
+
+DEFINE TEMP-TABLE ttCAR XML-NODE-NAME "CAR"
+    FIELD request-id     AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD brand          AS CHAR LABEL "марка"
+    FIELD model          AS CHAR LABEL "модель"
+    FIELD type           AS CHAR LABEL "тип автомобиля"
+    FIELD category       AS CHAR LABEL "тип автомобиля"
+    FIELD create-year    AS CHAR LABEL "год выпуска"
+    FIELD VIN            AS CHAR LABEL "VIN автомобиля"
+    FIELD engine-number  AS CHAR LABEL "номер двигателя"
+    FIELD chassis-number AS CHAR LABEL "номер шасси"
+    FIELD body-number    AS CHAR LABEL "номер кузова"
+    FIELD pts-series     AS CHAR LABEL "номер птс"
+    FIELD pts-num        AS CHAR LABEL "номер птс"
+    FIELD pts-date       AS DATE LABEL "дата выдачи птс"
+    FIELD tc-color       AS CHAR LABEL "цвет кузова" XML-NODE-NAME "color"
+    FIELD is-new         AS LOG LABEL "признак нового авто"
+    FIELD permissible-weight AS CHAR LABEL "разрешенная макс.масса ТС"
+.
+DEFINE TEMP-TABLE ttEMPL XML-NODE-NAME "EMPLOYMENT"
+    FIELD person-id       AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD empl-type       AS CHAR LABEL "тип документа"
+    FIELD empl-name       AS CHAR LABEL "номер документа"
+    FIELD empl-inn        AS CHAR LABEL "подразделение"
+    FIELD empl-ceo        AS CHAR LABEL "дата выдачи"
+    FIELD empl-position   AS CHAR LABEL "кем выдан"
+    FIELD empl-contract-type AS CHAR LABEL "документ найден в бис"
+    FIELD empl-status     AS CHAR LABEL "дата выдачи"
+    FIELD empl-experience AS CHAR LABEL "дата выдачи"
+    FIELD empl-income     AS CHAR LABEL "дата выдачи"
+    FIELD empl-chief      AS CHAR LABEL "дата выдачи"
+    FIELD empl-fixed-phone   AS CHAR LABEL "дата выдачи"
+    FIELD empl-cell-phone    AS CHAR LABEL "дата выдачи"
+    FIELD empl-legal-address AS CHAR LABEL "дата выдачи"
+    FIELD empl-fact-address  AS CHAR LABEL "дата выдачи"
+.
+DEFINE TEMP-TABLE ttCARD XML-NODE-NAME "CARD"
+    FIELD request-id      AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD card-vin        AS CHAR LABEL "номер карты"
+    FIELD card-number     AS CHAR LABEL "номер договора"
+    FIELD card-date       AS DATE LABEL "дата заключения договора"
+    FIELD card-price      AS DEC LABEL "стоимость"
+    FIELD card-term       AS CHAR LABEL "срок предоставления кредита"
+.
+
+DEFINE TEMP-TABLE ttBLACKCARD XML-NODE-NAME "BLACKCARD"
+    FIELD request-id      AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD card-vin        AS CHAR LABEL "номер карты"
+    FIELD card-number     AS CHAR LABEL "номер договора"
+    FIELD card-date       AS DATE LABEL "дата заключения договора"
+    FIELD card-price      AS DEC LABEL "стоимость"
+    FIELD card-term       AS CHAR LABEL "срок предоставления кредита"
+.
+
+DEFINE TEMP-TABLE ttPROCARD XML-NODE-NAME "PPOCARD"
+    FIELD request-id      AS INT64 XML-NODE-TYPE "HIDDEN"
+    FIELD card-vin        AS CHAR LABEL "номер карты"
+    FIELD card-number     AS CHAR LABEL "номер договора"
+    FIELD card-date       AS DATE LABEL "дата заключения договора"
+    FIELD card-price      AS DEC LABEL "стоимость"
+    FIELD card-term       AS CHAR LABEL "срок предоставления кредита"
+.
+
+DEFINE TEMP-TABLE ttREQUESTINFO XML-NODE-NAME "REQUESTINFO"
+    FIELD claim-id  AS CHAR LABEL "номер сделки PL"
+    FIELD task-id   AS CHAR LABEL "номер задачи PL"
+.
+
+
+DEF VAR iMessage AS LONGCHAR NO-UNDO.
+DEFINE VARIABLE hPDS AS HANDLE NO-UNDO.
+DEFINE VARIABLE lReturn AS LOGICAL NO-UNDO.
+DEFINE DATASET dsRequests 
+	FOR ttRequest, ttPERSON, ttADDR, ttDOCUM, ttCONTRACT, ttCAR, ttCONTRACTSUM, ttEMPL, ttCARD, ttBLACKCARD, ttPROCARD
+		DATA-RELATION Req2Pers FOR ttRequest, ttPERSON
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Pers2Adr FOR ttPERSON, ttADDR
+		RELATION-FIELDS(person-id, person-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Pers2Doc FOR ttPERSON, ttDOCUM
+		RELATION-FIELDS(person-id, person-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Pers2Empl FOR ttPERSON, ttEMPL
+		RELATION-FIELDS(person-id, person-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Req2Con FOR ttRequest, ttCONTRACT
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Com2Sum FOR ttCONTRACT, ttCONTRACTSUM
+		RELATION-FIELDS(request-id, request-id, contract-type, contract-type) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Req2Car FOR ttRequest, ttCAR
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Req2Card FOR ttRequest, ttCARD
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Req2Card FOR ttRequest, ttBLACKCARD
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+		DATA-RELATION Req2Card FOR ttRequest, ttPROCARD
+		RELATION-FIELDS(request-id, request-id) NESTED FOREIGN-KEY-HIDDEN
+
+	.
+
+    DEF TEMP-TABLE ttGraph NO-UNDO
+	FIELD p-date    AS DATE
+	FIELD p-percent AS DEC
+	FIELD p-rest    AS DEC
+	FIELD p-dolg    AS DEC
+	INDEX p-dateidx IS UNIQUE PRIMARY p-date
+	.
+function BankNameCity return char (buffer b for banks):
+  return {banknm.lf b} + (if {bankct.lf b} <> "" then ', ' else '') +
+           {bankct.lf b}.
+end function.

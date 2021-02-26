@@ -1,0 +1,16 @@
+DEFINE VARIABLE mHandle AS INT64     NO-UNDO.
+DEFINE VARIABLE mUser   AS CHARACTER NO-UNDO.
+mUser = USERID('bisquit').
+FIND FIRST _user WHERE 
+   _user._userid EQ mUser 
+NO-LOCK NO-ERROR.
+IF AVAIL(_user) THEN 
+   mUser = mUser + "/" + TRIM(_user._user-name).
+RUN STORED-PROC qbis.send-sql-statement mHandle = PROC-HANDLE
+     ("Select IGP.Set_User_Info('" + mUser + "') from dual").
+FOR EACH qbis.proc-text-buffer WHERE PROC-HANDLE = mHandle:
+   RUN dbgprint.p ("userinfo.i",proc-text).
+END.
+IF ERROR-STATUS:ERROR
+THEN RUN dbgprint.p ("userinfo.i","Ошибка заполнения User_Info.").
+ELSE CLOSE STORED-PROCEDURE qbis.send-sql-statement WHERE PROC-HANDLE = mHandle.

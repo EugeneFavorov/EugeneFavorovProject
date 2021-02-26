@@ -1,0 +1,17 @@
+
+            op.doc-num
+            op.doc-type
+            op-entry.amt-cur  VALIDATE(( IF OP-ENTRY.AMT-RUB =  0 THEN input op-entry.amt-cur <> 0 AND input op-entry.amt-cur <> ? ELSE TRUE),
+                                      "Сумма не может быть равна нулю")
+            op-entry.currency WHEN op-template.currency =  ?
+            op-entry.symbol
+            op-entry.acct-db WHEN op-templ.acct-db =  ? OR op-templ.acct-db =  ""
+                               OR modify-flag-db
+                             VALIDATE(modify-flag-db OR CAN-FIND(LAST acct WHERE acct.acct =  input op-entry.acct-db),
+                                      "Счет по дебету не найден")
+            op-entry.acct-cr WHEN op-templ.acct-cr =  ? OR op-templ.acct-cr =  ""
+                               OR modify-flag-cr
+                             VALIDATE(modify-flag-cr OR CAN-FIND(LAST acct WHERE acct.acct =  input op-entry.acct-cr),
+                                      "Счет по кредиту не найден")
+            op.details
+          WITH FRAME opreq

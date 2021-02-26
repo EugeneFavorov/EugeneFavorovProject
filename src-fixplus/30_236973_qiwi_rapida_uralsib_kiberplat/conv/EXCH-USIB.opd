@@ -1,0 +1,42 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 31/05/2015 23:32:48 БД "-db /home2/bis/quit41d/db-spb/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+EXCH-USIB:
+DO TRANSACTION EXECUTABLE NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PSYS.EXCH-USIB
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// ОБМЕН С УРАЛСИБ
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// EXCH-PSYS
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// mail-ext
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// 
+   /// </tr_proc>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+END TRANSACTION. // ТРАНЗАКЦИЯ EXCH-USIB - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

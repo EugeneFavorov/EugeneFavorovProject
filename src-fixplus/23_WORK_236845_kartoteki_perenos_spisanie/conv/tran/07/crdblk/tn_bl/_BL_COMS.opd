@@ -1,0 +1,151 @@
+[OpKindList 4.1d] // Экспорт данных произвел I0400SGI 22/03/2016 14:12:58 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+_BL_COMS:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.CrdBlk.TN_BL._BL_COMS
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Постановка на КБС
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// TN_BL
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   DO BEFORE:
+      @mContract="";
+      1
+   END BEFORE.
+
+   30:
+   DO TEMPLATE CLASS op ACTION Поиск ROLE Выборка:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@iOp)
+
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   40:
+   DO TEMPLATE CLASS opb ACTION Создание ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @iRegim = @iRegimAuto;
+         ТРАНЗАКЦИЯ(_c2accom)
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [b]
+      // РЕКВИЗИТ: contract-date (формула) #2
+      @contract-date = ДАТА()
+
+      // РЕКВИЗИТ: details (формула) #3
+      @details = GET_VALUE_BY_QUERY('acct','details','acct.acct begins ' + '"' + @macctcor + '"');
+
+      // РЕКВИЗИТ: doc-date (формула) #4
+      @doc-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-type (константа) #5
+      @doc-type = [017]
+      // РЕКВИЗИТ: due-date (формула) #6
+      @due-date = ДАТА()
+
+      // РЕКВИЗИТ: ins-date (формула) #7
+      @ins-date = ДАТА()
+
+      // РЕКВИЗИТ: op-status (константа) #8
+      @op-status = [√]
+      // РЕКВИЗИТ: op-transaction (формула) #9
+      @op-transaction = @op-transaction(30)
+
+      // РЕКВИЗИТ: doc-num (формула) #10
+      @doc-num = счетчик("мемордер")
+
+      50:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [b]
+         // РЕКВИЗИТ: acct-db (формула) #2
+         @acct-db = @acct_47423
+
+         // РЕКВИЗИТ: acct-cr (формула) #3
+         @acct-cr = @macctcor
+
+         // РЕКВИЗИТ: amt-cur (константа) #4
+         @amt-cur = [0]
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @mNDS
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @mcurr
+
+         // РЕКВИЗИТ: op-entry (константа) #7
+         @op-entry = [1]
+
+      END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+
+      DO AFTER:
+         @op47423 = @op(40);
+         //ПЕЧАТЬ(@op(40),'memorn');
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+   70:
+   DO TEMPLATE CLASS op ACTION Модификация ROLE Выборка:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         0
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@iOp)
+
+      // РЕКВИЗИТ: acctcorr (формула) #2
+      @acctcorr = @acct_47423
+
+      80:
+      DO TEMPLATE CLASS op-entry ACTION Модификация ROLE op-entry:
+         // РЕКВИЗИТ: acct-cr (формула) #1
+         @acct-cr = @acct_47423
+
+
+      END TEMPLATE. // ШАБЛОН:   80  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   70  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ _BL_COMS - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

@@ -1,0 +1,266 @@
+/*
+   Назначение  : Отчет по сообщениям о приостановлении операций по счетам за период
+   Параметры   :
+
+  Используемые 
+  инклюд-файлы :
+
+  Используется
+  в процедурах :
+
+   Создание    :
+
+   Исправление :
+*/
+
+def input param exmask as char no-undo.
+
+def var f-name as char no-undo.
+def var f-nameImp as char no-undo.
+def var acctmask as char init "30109*,405*,406*,407*,40802*,40807*,40821*,40817*,40820*,420*,421*,422*,4230*,4260*" no-undo.
+pause 0.
+/* find first printer no-lock no-error.  не знаю зачем - иначе ругается */
+
+{globals.i}
+{sh-defs.i new}
+
+FUNCTION GetDocField RETURNS CHAR
+  ( INPUT vContents AS CHAR, INPUT vField AS CHAR, INPUT vDef AS CHAR):
+  DEF VAR ss AS CHAR NO-UNDO.
+  DEF VAR ii AS INT  NO-UNDO.
+
+  ii = INDEX( vContents, '~n' + vField + ':'). 
+  IF ii < 1 THEN RETURN vDef. ELSE DO:
+    ss = SUBSTRING( vContents, ii + LENGTH( vField) + 2).
+    RETURN ENTRY( 1, ss, '~n').
+  END.
+END.
+
+{getdates.i}
+
+{setdest.i}
+
+DEF VAR fname as char.
+DEF STREAM vvs.
+
+fname = "./acctblk"  + "_" + userid('bisquit') + ".xml".
+
+OUTPUT STREAM vvs TO VALUE (fname)
+  UNBUFFERED  CONVERT  TARGET "UTF-8"  SOURCE "IBM866".
+
+PUT STREAM vvs UNFORMATTED '
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Version>14.00</Version>
+ </DocumentProperties>
+ <OfficeDocumentSettings xmlns="urn:schemas-microsoft-com:office:office">
+  <AllowPNG/>
+ </OfficeDocumentSettings>
+ <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
+   <ProtectStructure>False</ProtectStructure>
+  <ProtectWindows>False</ProtectWindows>
+ </ExcelWorkbook>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="6"
+    ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="s62">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Bottom"/>
+   <NumberFormat ss:Format="0"/>
+  </Style>
+  <Style ss:ID="s63">
+   <NumberFormat ss:Format="@"/>
+  </Style>
+  <Style ss:ID="s64">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <NumberFormat ss:Format="Fixed"/>
+  </Style>
+  <Style ss:ID="s65">
+   <Font ss:Size="9" ss:Bold="1"/>
+   <Alignment ss:Vertical="Bottom" ss:WrapText="1"/>
+   <NumberFormat ss:Format="0"/>
+  </Style>
+
+  <Style ss:ID="s67">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="11"
+    ss:Color="#000000" ss:Bold="1"/>
+  </Style>
+
+  <Style ss:ID="s68">
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" x:CharSet="204" x:Family="Swiss" ss:Size="8" 
+    ss:Color="#000000" ss:Bold="1"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="journal">
+  <Table ss:ExpandedColumnCount="16" ss:ExpandedRowCount="150000" x:FullColumns="1"
+   x:FullRows="1" ss:DefaultRowHeight="12">
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="70"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="110"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="70"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="80"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="40"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="190"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="80"/>\n
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="190"/>\n
+   '.
+
+  PUT STREAM VVS UNFORMATTED '<Row ss:Height="' + string(12) + '" >\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">дата загрузки</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">счет</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">тип</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">формат</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">статус</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">файл</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">сумма</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">сообщение об отмене</Data></Cell>\n
+    </Row>\n
+    '.
+
+DEF VAR icnt AS INT NO-UNDO.
+icnt = 0.
+
+FOR EACH Packet
+ WHERE Packet.Class-Code EQ "PTAXAcctBlk"
+ AND Packet.PackDate >= beg-date AND Packet.PackDate <= end-date
+ AND Packet.State NE 'ОТПР'
+ AND Packet.filial-id EQ shFilial
+ NO-LOCK
+ BY Packet.PackDate BY Packet.PackTime:
+  FIND FIRST PackObject 
+   WHERE PackObject.PacketID EQ Packet.PacketID
+     AND PackObject.file-name MATCHES "acct" /* так надо */
+     NO-LOCK NO-ERROR.
+  FIND FIRST FileExch
+   WHERE FileExch.FileExchId EQ Packet.FileExchId
+   NO-LOCK NO-ERROR.
+  FIND FIRST PacketText
+   WHERE PacketText.PacketID EQ Packet.PacketID
+   NO-LOCK NO-ERROR. 
+
+  /*
+  */
+  IF AVAIL FileExch AND (
+      FileExch.Name BEGINS 'ZNO' OR
+      FileExch.Name BEGINS 'IZV' OR
+      FileExch.Name BEGINS 'PNO'
+      )
+      THEN NEXT.
+  IF NOT AVAIL PackObject THEN
+    PUT UNFORMATTED Packet.PacketID " не найдена запись PackObject" SKIP.
+  IF NOT AVAIL FileExch THEN
+    PUT UNFORMATTED PackObject.Surrogate " не найдена запись FileExch" SKIP.
+  IF NOT AVAIL PacketText THEN
+    PUT UNFORMATTED PackObject.Surrogate " не найдена запись PacketText" SKIP.
+
+  IF PackObject.Kind EQ 'РЕШЕНПРИОСТ' THEN DO:
+    DEF BUFFER oPackObject FOR PackObject.
+    DEF BUFFER oPacket     FOR Packet.
+    DEF BUFFER oFileExch   FOR FileExch.
+    DEF BUFFER oPacketText FOR PacketText.
+    DEF VAR nR AS CHAR NO-UNDO.
+    DEF VAR dR AS CHAR NO-UNDO.
+
+    IF GetDocField(PacketText.Contents, 'КолДок', '') <> '1' THEN
+      PUT UNFORMATTED "кол-во документов в решении <>1 " SKIP.
+    nR = GetDocField(PacketText.Contents, 'НомРешПр', '').
+    dR = GetDocField(PacketText.Contents, 'ДатаРешПр', '').
+
+    FOR EACH oPackObject
+     WHERE oPackObject.file-name EQ "acct"
+       AND oPackObject.surrogate EQ PackObject.surrogate
+       AND oPackObject.packobjectid NE PackObject.packobjectid
+       AND oPackObject.Kind EQ 'РЕШЕНОТМЕНА'
+     NO-LOCK,
+     FIRST oPacket
+      WHERE oPacket.PacketID EQ oPackObject.PacketID
+      NO-LOCK,
+     FIRST oFileExch
+      WHERE oFileExch.FileExchId EQ oPacket.FileExchId
+      NO-LOCK,
+     FIRST oPacketText
+      WHERE oPacketText.PacketID EQ oPacket.PacketID
+      NO-LOCK:
+      IF nR EQ GetDocField(oPacketText.Contents, 'НомРешПр', '')
+        AND dR NE GetDocField(oPacketText.Contents, 'ДатаРешПр', '') THEN
+        PUT UNFORMATTED PackObject.surrogate " номер решения совпадает, а дата нет" SKIP.
+      IF nR EQ GetDocField(oPacketText.Contents, 'НомРешПр', '') THEN LEAVE.
+    END.
+  END. ELSE DO:
+    RELEASE oPackObject.
+  END.
+
+  PUT STREAM VVS UNFORMATTED '<Row ss:Height="' + string(12) + '" >
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      Packet.PackDate
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'  
+      (IF AVAIL PackObject THEN DelFilFromAcct( PackObject.Surrogate) ELSE '')
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      (IF AVAIL PackObject THEN PackObject.Kind ELSE '')
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      Packet.mail-format
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      Packet.State
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+        (IF AVAIL FileExch THEN FileExch.Name ELSE '')
+        '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      GetDocField( PacketText.Contents, 'СумВзыск','')
+      '</Data></Cell>\n
+    <Cell ss:StyleID="s68" ><Data ss:Type="String">'
+      (IF AVAIL oPackObject THEN oFileExch.Name ELSE '')
+      '</Data></Cell>\n
+    </Row>\n
+    '.
+
+END. 
+
+ put stream vvs unformatted
+   '
+  </Table>\n
+ </Worksheet>\n
+</Workbook>\n
+'.
+output stream vvs close.
+put unformatted "нажмите ESC для формирования XLS файла." SKIP.
+{preview.i}
+RUN sndbispc ("file=" + fname + ";class=bq").

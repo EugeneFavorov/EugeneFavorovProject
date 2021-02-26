@@ -1,0 +1,171 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 31/05/2015 23:32:48 БД "-db /home2/bis/quit41d/db-spb/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+i-cybcom:
+DO TRANSACTION NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PSYS.EXCH-CYBER.X-CybPlat.i-cybcom
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// КиберПлат: Комиссия по реестру
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// X-CybPlat
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   10:
+   DO TEMPLATE CLASS Packet ACTION Поиск ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: PacketID (формула)
+      @PacketID = SEARCH(@PacketId)
+
+
+      DO AFTER:
+         @SummAmt = РЕКВИЗИТ(@Class-Code(10), @PacketId(10), "SummAmt", "0");
+         @ReeName = ENTRY(2, РЕКВИЗИТ("FileExch", @FileExchID(10), "Name", "_"), "_");
+         IF @SummAmt == "0" THEN
+         BREAK(1);
+         ELSE;
+         1;
+         ENDIF;
+         
+         IF CAN-DO("........", @ReeName) THEN
+            @ReeDate = SUBSTR(@ReeName, 7, 2) + "." + 
+                       SUBSTR(@ReeName, 5, 2) + "." + 
+                       SUBSTR(@ReeName, 1, 4);
+         ELSE;
+            MESSAGE("Не удалось определить дату реестра", -1);
+            BREAK();
+         ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS opb ACTION Создание ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: contract-date (формула)
+      @contract-date = ДАТА()
+
+      // РЕКВИЗИТ: op-status (константа)
+      @op-status = [Ф]
+      // РЕКВИЗИТ: doc-type (константа)
+      @doc-type = [01]
+      // РЕКВИЗИТ: op-date (формула)
+      @op-date = ДАТА()
+
+      // РЕКВИЗИТ: order-pay (константа)
+      @order-pay = [5]
+      // РЕКВИЗИТ: doc-date (формула)
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: details (формула)
+      @details = "Комиссия за перевод денежных средств с целью гашения кредитов по системе Киберплат согласно реестра от " + @ReeDate
+
+      // РЕКВИЗИТ: doc-num (формула)
+      @doc-num = Счетчик("1")
+
+      25:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: amt-rub (формула)
+         @amt-rub = @SummAmt * 0.8 / 100
+
+         // РЕКВИЗИТ: acct-db (константа)
+         @acct-db = [47422810900001201671     @0000]
+         // РЕКВИЗИТ: acct-cr (константа)
+         @acct-cr = [70601810000001240401     @0000]
+         // РЕКВИЗИТ: op (формула)
+         @op = @op(20);
+
+         // РЕКВИЗИТ: currency (константа)
+         @currency = []
+
+      END TEMPLATE. // ШАБЛОН:   25  - КОНЕЦ
+
+
+      DO AFTER:
+         MESSAGE("Cоздан комиссионный документ номер " + @doc-num + " на сумму " + TRIM(FORMAT(@amt-rub(25),'>>>>>>>>>>9.99','DECIMAL')), 1);
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   90:
+   DO TEMPLATE CLASS PCyberRee ACTION Создание ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: SeanceID (формула)
+      @SeanceID = @SeanceId(10)
+
+      // РЕКВИЗИТ: ParentID (формула)
+      @ParentID = @PacketId(10)
+
+      // РЕКВИЗИТ: Class-Code (формула)
+      @Class-Code = @Class-Code(10)
+
+      // РЕКВИЗИТ: State (константа)
+      @State = [СОЗД]
+      // РЕКВИЗИТ: PackDate (формула)
+      @PackDate = TODAY()
+
+      // РЕКВИЗИТ: Kind (формула)
+      @Kind = @Kind(10)
+
+      // РЕКВИЗИТ: PackTime (формула)
+      @PackTime = TIME()
+
+      // РЕКВИЗИТ: mail-format (формула)
+      @mail-format = @mail-format(10)
+
+      // РЕКВИЗИТ: StateOBJ (формула)
+      @StateOBJ = @op-status(20)
+
+      120:
+      DO TEMPLATE CLASS PackObject ACTION Создание ROLE PackObjLink:
+         // РЕКВИЗИТ: file-name (константа)
+         @file-name = [op-entry]
+         // РЕКВИЗИТ: Surrogate (формула)
+         @Surrogate = @op(20) + "," + @op-entry(25)
+
+         // РЕКВИЗИТ: SeanceID (формула)
+         @SeanceID = @Seanceid(10)
+
+         // РЕКВИЗИТ: Kind (формула)
+         @Kind = "ICyberComm"
+
+
+      END TEMPLATE. // ШАБЛОН:   120  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   90  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ i-cybcom - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

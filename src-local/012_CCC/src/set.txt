@@ -1,0 +1,863 @@
+BASH=/bin/bash
+BASH_ARGC=()
+BASH_ARGV=()
+BASH_LINENO=()
+BASH_SOURCE=()
+BASH_VERSINFO=([0]="3" [1]="2" [2]="57" [3]="1" [4]="release" [5]="x86_64-suse-linux-gnu")
+BASH_VERSION='3.2.57(1)-release'
+BQ=/home2/bis/quit41d
+COLORTERM=1
+COLUMNS=143
+CPU=x86_64
+CSHEDIT=emacs
+CVUQDISK_GRP=oinstall
+DIRSTACK=()
+DLC=/usr/dlc
+ENV=/etc/bash.bashrc
+EUID=0
+FROM_HEADER=
+GROUPS=()
+G_BROKEN_FILENAMES=1
+G_FILENAME_ENCODING=@locale,UTF-8,KOI8-R,CP1251
+HISTCONTROL=ignoreboth
+HISTFILE=/root/.bash_history
+HISTFILESIZE=1000
+HISTSIZE=1000
+HISTTIMEFORMAT='%F %H:%M:%S '
+HOME=/root
+HOST=bis-rezerv
+HOSTFILE=
+HOSTNAME=bis-rezerv
+HOSTTYPE=x86_64
+IFS=$' \t\n'
+INFODIR=/usr/local/info:/usr/share/info:/usr/info
+INFOPATH=/usr/local/info:/usr/share/info:/usr/info
+INPUTRC=/etc/inputrc
+JAVA_BINDIR=/usr/lib64/jvm/jre/bin
+JAVA_HOME=/usr/lib64/jvm/jre
+JAVA_ROOT=/usr/lib64/jvm/jre
+JRE_HOME=/usr/lib64/jvm/jre
+LANG=ru_RU.CP866
+LC_MESSAGES=C
+LESS='-M -I'
+LESSCLOSE='lessclose.sh %s %s'
+LESSKEY=/etc/lesskey.bin
+LESSOPEN='lessopen.sh %s'
+LESS_ADVANCED_PREPROCESSOR=no
+LINES=56
+LOGNAME=root
+LS_COLORS='no=00:fi=00:di=01;34:ln=00;36:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=41;33;01:ex=00;32:*.cmd=00;32:*.exe=01;32:*.com=01;32:*.bat=01;32:*.btm=01;32:*.dll=01;32:*.tar=00;31:*.tbz=00;31:*.tgz=00;31:*.rpm=00;31:*.deb=00;31:*.arj=00;31:*.taz=00;31:*.lzh=00;31:*.lzma=00;31:*.zip=00;31:*.zoo=00;31:*.z=00;31:*.Z=00;31:*.gz=00;31:*.bz2=00;31:*.tb2=00;31:*.tz2=00;31:*.tbz2=00;31:*.avi=01;35:*.bmp=01;35:*.fli=01;35:*.gif=01;35:*.jpg=01;35:*.jpeg=01;35:*.mng=01;35:*.mov=01;35:*.mpg=01;35:*.pcx=01;35:*.pbm=01;35:*.pgm=01;35:*.png=01;35:*.ppm=01;35:*.tga=01;35:*.tif=01;35:*.xbm=01;35:*.xpm=01;35:*.dl=01;35:*.gl=01;35:*.wmv=01;35:*.aiff=00;32:*.au=00;32:*.mid=00;32:*.mp3=00;32:*.ogg=00;32:*.voc=00;32:*.wav=00;32:'
+LS_OPTIONS='-A -N --color=tty -T 0'
+MACHTYPE=x86_64-suse-linux
+MAIL=/var/mail/root
+MAILCHECK=60
+MANPATH=/usr/share/man:/usr/local/man:/usr/man
+MC_SID=23895
+MC_TMPDIR=/tmp/mc-root
+MINICOM='-c on'
+MORE=-sl
+NLS_DATE_FORMAT=YYYY.MM.DD-HH24:MI:SS
+NLS_LANG=AMERICAN_AMERICA.UTF8
+NNTPSERVER=news
+OLDPWD=/home2/bis/quit41d/src-local/12_CCC
+OPTERR=1
+OPTIND=1
+ORACLE_BASE=/opt/oracle
+ORACLE_HOME=/opt/oracle/product/11.2.0.1/db_ent1
+ORACLE_HOSTNAME=bis-rezerv.bankom.omsk.su
+ORACLE_OWNER=oracle
+ORACLE_SID=QBIS
+ORAENV_ASK=NO
+ORA_ASM_HOME=/opt/oracle/product/11gR1/asm
+ORA_CRS_HOME=/opt/oracle/product/11gR1/crs
+OSTYPE=linux
+PAGER=less
+PATH=/sbin:/usr/sbin:/usr/local/sbin:/root/bin:/usr/local/bin:/usr/bin:/bin:/usr/bin/X11:/usr/X11R6/bin:/usr/games:/usr/lib64/jvm/jre/bin:/usr/lib/mit/bin:/usr/lib/mit/sbin:/usr/dlc/bin:/home2/bis/quit41d
+PIPESTATUS=([0]="0")
+PPID=23893
+PROFILEREAD=true
+PROMPT_COMMAND='pwd>&7;kill -STOP $$'
+PS1=$'\\[\E[1m\E[31m\\]\\h:\\w # \\[\E(B\E[m\\]'
+PS2='> '
+PS4='+ '
+PWD=/home2/bis/quit41d/src-local/12_CCC/src
+PYTHONSTARTUP=/etc/pythonstart
+QT_SYSTEM_DIR=/usr/share/desktop-data
+SHELL=/bin/bash
+SHELLOPTS=braceexpand:emacs:hashall:histexpand:history:interactive-comments:monitor
+SHLVL=2
+SSH_CLIENT='192.168.139.24 59607 22'
+SSH_CONNECTION='192.168.139.24 59607 192.168.171.157 22'
+SSH_TTY=/dev/pts/15
+TERM=xterm
+TMP=/tmp
+TMPDIR=/tmp
+UID=0
+USER=root
+XCURSOR_THEME=
+XDG_CONFIG_DIRS=/etc/xdg
+XDG_DATA_DIRS=/usr/share:/etc/opt/kde3/share:/opt/kde3/share
+XKEYSYMDB=/usr/share/X11/XKeysymDB
+XNLSPATH=/usr/share/X11/nls
+YAST=/sbin/yast
+YAST_MODLIST=()
+_=set
+ftp_proxy=http://192.168.221.116:3129/
+http_proxy=http://192.168.221.116:3129/
+https_proxy=http://192.168.221.116:3129/
+is=bash
+no_proxy='localhost, 127.0.0.1'
+s=/etc/bash_completion.d/zypper.sh
+_cd_ () 
+{ 
+    local c=${COMP_WORDS[COMP_CWORD]};
+    local s g=0 x;
+    local IFS='
+';
+    local -i o;
+    shopt -q extglob && g=1;
+    test $g -eq 0 && shopt -s extglob;
+    case "$(complete -p ${1##*/} 2> /dev/null)" in 
+        mkdir)
+
+        ;;
+        *)
+            s="-S/"
+        ;;
+    esac;
+    case "$c" in 
+        *\**)
+            COMPREPLY=($(for x in $c; do
+		    test -d $x && echo $x/
+		done))
+        ;;
+        \$\(*\))
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \$\(*)
+            COMPREPLY=($(compgen -c -P '$(' -S ')'	-- ${c#??}))
+        ;;
+        \`*\`)
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \`*)
+            COMPREPLY=($(compgen -c -P '\`' -S '\`' -- ${c#?}))
+        ;;
+        \$\{*\})
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \$\{*)
+            COMPREPLY=($(compgen -v -P '${' -S '}'	-- ${c#??}))
+        ;;
+        \$*)
+            COMPREPLY=($(compgen -v -P '$' $s	-- ${c#?}))
+        ;;
+        \~*/*)
+            COMPREPLY=($(compgen -d $s		-- "${c}"))
+        ;;
+        \~*)
+            COMPREPLY=($(compgen -u $s		-- "${c}"))
+        ;;
+        *\:*)
+            if [[ $COMP_WORDBREAKS =~ : ]]; then
+                local C=${c%"${c##*[^\\]:}"};
+                COMPREPLY=($(compgen -d $s          -- "${c}"));
+                for ((o=0; o<${#COMPREPLY[@]}; o++))
+                do
+                    COMPREPLY[o]=${COMPREPLY[o]#"$C"};
+                done;
+            fi
+        ;;
+    esac;
+    if test "${1##*/}" = "cd" -a ${#COMPREPLY[@]} -gt 0; then
+        x="$(bind -v)";
+        local dir=$([[ $x =~ mark-directories+([[:space:]])on ]] && echo on);
+        local sym=$([[ $x =~ mark-symlinked-directories+([[:space:]])on ]] && echo on);
+        for x in ${CDPATH//:/'
+'};
+        do
+            o=${#COMPREPLY[@]};
+            for s in $(compgen -d $x/$c);
+            do
+                if [[ ( ( $sym == on && -h $s ) || ( $dir == on && ! -h $s ) ) && ! -d ${s#$x/} ]]; then
+                    s="${s}/";
+                fi;
+                COMPREPLY[o++]=${s#$x/};
+            done;
+        done;
+    fi;
+    if test ${#COMPREPLY[@]} -gt 0; then
+        s="${COMP_WORDBREAKS// }";
+        s="${s//	}";
+        s="${s//[\{\}()\[\]]}";
+        s="${s} 	(){}[]";
+        o=${#s};
+        while test $((o--)) -gt 0; do
+            c="${s:${o}:1}";
+            COMPREPLY=(${COMPREPLY[*]//${c}/\\${c}});
+        done;
+    fi;
+    if test "${1##*/}" != "mkdir" -a ${#COMPREPLY[@]} -eq 1; then
+        x=${COMPREPLY[0]};
+        o=$((${#x} - 1));
+        if test "$x" = "$c" -a "${x:${o}:1}" != "/"; then
+            COMPREPLY[0]="${x}/";
+        fi;
+    fi;
+    test $g -eq 0 && shopt -u extglob
+}
+_exp_ () 
+{ 
+    local c=${COMP_WORDS[COMP_CWORD]};
+    local a="${COMP_LINE}";
+    local e s g=0 cd dc t="";
+    local IFS;
+    shopt -q extglob && g=1;
+    test $g -eq 0 && shopt -s extglob;
+    cd='*-?(c)d*';
+    dc='*-d?(c)*';
+    case "${1##*/}" in 
+        compress)
+            e='*.Z'
+        ;;
+        bzip2)
+            case "$c" in 
+                -)
+                    COMPREPLY=(d c);
+                    test $g -eq 0 && shopt -u extglob;
+                    return
+                ;;
+                -? | -??)
+                    COMPREPLY=($c);
+                    test $g -eq 0 && shopt -u extglob;
+                    return
+                ;;
+            esac;
+            case "$a" in 
+                $cd | $dc)
+                    e='!*.bz2'
+                ;;
+                *)
+                    e='*.bz2'
+                ;;
+            esac
+        ;;
+        bunzip2)
+            e='!*.bz2'
+        ;;
+        gzip)
+            case "$c" in 
+                -)
+                    COMPREPLY=(d c);
+                    test $g -eq 0 && shopt -u extglob;
+                    return
+                ;;
+                -? | -??)
+                    COMPREPLY=($c);
+                    test $g -eq 0 && shopt -u extglob;
+                    return
+                ;;
+            esac;
+            case "$a" in 
+                $cd | $dc)
+                    e='!*.+(gz|tgz|z|Z)'
+                ;;
+                *)
+                    e='*.+(gz|tgz|z|Z)'
+                ;;
+            esac
+        ;;
+        gunzip)
+            e='!*.+(gz|tgz|z|Z)'
+        ;;
+        uncompress)
+            e='!*.Z'
+        ;;
+        unzip)
+            e='!*.+(???)';
+            t="@(MS-DOS executable|Zip archive)*"
+        ;;
+        gs | ghostview)
+            e='!*.+(eps|EPS|ps|PS|pdf|PDF)'
+        ;;
+        gv | kghostview)
+            e='!*.+(eps|EPS|ps|PS|ps.gz|pdf|PDF)'
+        ;;
+        acroread | [xk]pdf)
+            e='!*.+(pdf|PDF)'
+        ;;
+        dvips)
+            e='!*.+(dvi|DVI)'
+        ;;
+        [xk]dvi)
+            e='!*.+(dvi|dvi.gz|DVI|DVI.gz)'
+        ;;
+        tex | latex | pdflatex)
+            e='!*.+(tex|TEX|texi|latex)'
+        ;;
+        export)
+            case "$a" in 
+                *=*)
+                    c=${c#*=}
+                ;;
+                *)
+                    COMPREPLY=($(compgen -v -- ${c}));
+                    test $g -eq 0 && shopt -u extglob;
+                    return
+                ;;
+            esac
+        ;;
+        *)
+            e='!*'
+        ;;
+    esac;
+    case "$(complete -p ${1##*/} 2> /dev/null)" in 
+        *-d*)
+
+        ;;
+        *)
+            s="-S/"
+        ;;
+    esac;
+    IFS='
+';
+    case "$c" in 
+        \$\(*\))
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \$\(*)
+            COMPREPLY=($(compgen -c -P '$(' -S ')'  -- ${c#??}))
+        ;;
+        \`*\`)
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \`*)
+            COMPREPLY=($(compgen -c -P '\`' -S '\`' -- ${c#?}))
+        ;;
+        \$\{*\})
+            eval COMPREPLY=\(${c}\)
+        ;;
+        \$\{*)
+            COMPREPLY=($(compgen -v -P '${' -S '}'  -- ${c#??}))
+        ;;
+        \$*)
+            COMPREPLY=($(compgen -v -P '$'          -- ${c#?}))
+        ;;
+        \~*/*)
+            COMPREPLY=($(compgen -f -X "$e"         -- ${c}))
+        ;;
+        \~*)
+            COMPREPLY=($(compgen -u ${s}	 	-- ${c}))
+        ;;
+        *@*)
+            COMPREPLY=($(compgen -A hostname -P '@' -S ':' -- ${c#*@}))
+        ;;
+        *[*?[]*)
+            COMPREPLY=($(compgen -G "${c}"))
+        ;;
+        *[?*+\!@]\(*\)*)
+            if test $g -eq 0; then
+                COMPREPLY=($(compgen -f -X "$e" -- $c));
+                test $g -eq 0 && shopt -u extglob;
+                return;
+            fi;
+            COMPREPLY=($(compgen -G "${c}"))
+        ;;
+        *)
+            if test "$c" = ".."; then
+                COMPREPLY=($(compgen -d -X "$e" -S / ${_nosp} -- $c));
+            else
+                for s in $(compgen -f -X "$e" -- $c);
+                do
+                    if test -d $s; then
+                        COMPREPLY=(${COMPREPLY[@]} $(compgen -f -X "$e" -S / -- $s));
+                    else
+                        if test -z "$t"; then
+                            COMPREPLY=(${COMPREPLY[@]} $s);
+                        else
+                            case "$(file -b $s 2> /dev/null)" in 
+                                $t)
+                                    COMPREPLY=(${COMPREPLY[@]} $s)
+                                ;;
+                            esac;
+                        fi;
+                    fi;
+                done;
+            fi
+        ;;
+    esac;
+    test $g -eq 0 && shopt -u extglob
+}
+_man_ () 
+{ 
+    local c=${COMP_WORDS[COMP_CWORD]};
+    local o=${COMP_WORDS[COMP_CWORD-1]};
+    local os="- f k P S t l";
+    local ol="whatis apropos pager sections troff local-file";
+    local m s;
+    if test -n "$MANPATH"; then
+        m=${MANPATH//:/\/man,};
+    else
+        m="/usr/X11R6/man/man,/usr/openwin/man/man,/usr/share/man/man";
+    fi;
+    case "$c" in 
+        -)
+            COMPREPLY=($os)
+        ;;
+        --)
+            COMPREPLY=($ol)
+        ;;
+        -?)
+            COMPREPLY=($c)
+        ;;
+        \./*)
+            COMPREPLY=($(compgen -f -d -X '\./.*'  -- $c))
+        ;;
+        [0-9n] | [0-9n]p)
+            COMPREPLY=($c)
+        ;;
+        *)
+            case "$o" in 
+                -l | --local-file)
+                    COMPREPLY=($(compgen -f -d -X '.*' -- $c))
+                ;;
+                [0-9n] | [0-9n]p)
+                    s=$(eval echo {${m}}$o/);
+                    if type -p sed >&/dev/null; then
+                        COMPREPLY=($(ls -1fUA $s 2>/dev/null|			  sed -n "/^$c/{s@\.[0-9n].*\.gz@@g;s@.*/:@@g;p;}"));
+                    else
+                        s=($(ls -1fUA $s 2>/dev/null));
+                        s=(${s[@]%%.[0-9n]*});
+                        s=(${s[@]#*/:});
+                        for m in ${s[@]};
+                        do
+                            case "$m" in 
+                                $c*)
+                                    COMPREPLY=(${COMPREPLY[@]} $m)
+                                ;;
+                            esac;
+                        done;
+                        unset m s;
+                        COMPREPLY=(${COMPREPLY[@]%%.[0-9n]*});
+                        COMPREPLY=(${COMPREPLY[@]#*/:});
+                    fi
+                ;;
+                *)
+                    COMPREPLY=($(compgen -c -- $c))
+                ;;
+            esac
+        ;;
+    esac
+}
+_scout () 
+{ 
+    SCOUT_CMDLIST=();
+    SCOUT=`which scout`;
+    local opts cur prev prevprev;
+    if test ${#SCOUT_CMDLIST[*]} = 0; then
+        for foo in $(LC_ALL=C $SCOUT 2>&1 | sed -e "1,/Available modules:/d" | egrep [a-z] | awk -F ' ' '{print $1}');
+        do
+            SCOUT_CMDLIST="$SCOUT_CMDLIST $foo";
+        done;
+        SCOUT_CMDLIST="$SCOUT_CMDLIST";
+    fi;
+    cur=${COMP_WORDS[COMP_CWORD]};
+    prev=${COMP_WORDS[COMP_CWORD-1]};
+    if [[ ${#COMP_WORDS[@]} -ge 3 ]]; then
+        prevprev=${COMP_WORDS[COMP_CWORD-2]};
+    fi;
+    case "$prev" in 
+        scout)
+            opts=$SCOUT_CMDLIST;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        autoconf)
+            opts=`$SCOUT autoconf  2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        bin)
+            opts=`$SCOUT bin       2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        java)
+            opts=`$SCOUT java      2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        perl)
+            opts=`$SCOUT perl      2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        pkgconfig)
+            opts=`$SCOUT pkgconfig 2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        python)
+            opts=`$SCOUT python    2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        ruby)
+            opts=`$SCOUT ruby      2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        webpin)
+            opts=`$SCOUT webpin    2>&1 | sed -e "1,/Options:/d" | awk -F ', ' '{print $2}' | sed -e 's/ .*//' -e 's/--repo=REPO/--repo/'`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        --repo)
+            if ( $SCOUT $prevprev --listrepos | egrep "\- none \-" > /dev/null ); then
+                echo -e "\nNo repositories are available";
+            else
+                opts=`$SCOUT $prevprev --listrepos | sed 's/Available repositories://' | awk -F ' - ' '{print $1}'`;
+                COMPREPLY=($(compgen -W "${opts}" -- ${cur}));
+            fi
+        ;;
+    esac
+}
+_scpm () 
+{ 
+    SCPM_CMDLIST=();
+    SCPM=`which scpm`;
+    local opts cur prev prevprev;
+    if test ${#SCPM_CMDLIST[*]} = 0; then
+        for foo in $(LC_ALL=C $SCPM 2>&1 | sed -e "1,/command may be:/d" | egrep ^[a-z] | awk -F ' ' '{print $1}');
+        do
+            SCPM_CMDLIST="$SCPM_CMDLIST $foo";
+        done;
+        SCPM_CMDLIST="$SCPM_CMDLIST";
+    fi;
+    cur=${COMP_WORDS[COMP_CWORD]};
+    prev=${COMP_WORDS[COMP_CWORD-1]};
+    if [[ ${#COMP_WORDS[@]} -ge 3 ]]; then
+        prevprev=${COMP_WORDS[COMP_CWORD-2]};
+    fi;
+    case "$prev" in 
+        scpm)
+            opts=$SCPM_CMDLIST;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        switch)
+            opts=`$SCPM list`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        rename)
+            opts=`$SCPM list`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+        delete)
+            opts=`$SCPM list`;
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+        ;;
+    esac
+}
+_strip () 
+{ 
+    local s c o;
+    if test ${#COMPREPLY[@]} -gt 0; then
+        s="${COMP_WORDBREAKS// }";
+        s="${s//	}";
+        s="${s//[\{\}()\[\]]}";
+        s="${s} 	(){}[]";
+        o=${#s};
+        while test $((o--)) -gt 0; do
+            c="${s:${o}:1}";
+            COMPREPLY=(${COMPREPLY[*]//${c}/\\${c}});
+        done;
+    fi
+}
+_yast2 () 
+{ 
+    local cur prevprev prev len idx mod MODOPTS line opt rest;
+    MODOPTS=();
+    if test ${#YAST_MODLIST[*]} = 0; then
+        YAST_MODLIST=($(LC_ALL=C $YAST -l| grep '^[a-z]' | grep -v "Available"));
+    fi;
+    if [[ ${#COMP_WORDS[@]} -gt 4 ]]; then
+        return 0;
+    fi;
+    cur=${COMP_WORDS[COMP_CWORD]};
+    prev=${COMP_WORDS[COMP_CWORD-1]};
+    if [[ ${#COMP_WORDS[@]} -ge 3 && $COMP_CWORD -ge 2 ]]; then
+        prevprev=${COMP_WORDS[COMP_CWORD-2]};
+    fi;
+    if [[ $cur == '-' ]]; then
+        COMPREPLY=(-h -l -g -s);
+        return 0;
+    fi;
+    if [ "$prev" = "-i" -o "$prevprev" = "-i" -o "$prev" = "--install" -o "$prevprev" = "--install" -o "$prev" = "--remove" -o "$prevprev" = "--remove" -o "$prev" = "--update" -o "$prevprev" = "--update" ]; then
+        return 0;
+    fi;
+    for mod in ${YAST_MODLIST[@]};
+    do
+        if [[ -n $prevprev && $prevprev == $mod ]]; then
+            while read line; do
+                case "$line" in 
+                    Options:*)
+                        while read opt rest; do
+                            case "$opt" in 
+                                "")
+                                    break 2
+                                ;;
+                                *)
+                                    MODOPTS=("${MODOPTS[@]}" "$opt")
+                                ;;
+                            esac;
+                        done
+                    ;;
+                esac;
+            done < <(LC_ALL=C $YAST $mod $prev help 2>&1);
+            len=${#cur};
+            idx=0;
+            for pval in ${MODOPTS[@]};
+            do
+                if [[ "$cur" == "${pval:0:$len}" ]]; then
+                    COMPREPLY[$idx]=$pval;
+                    idx=$[$idx+1];
+                fi;
+            done;
+            return 0;
+        fi;
+        if [[ $prev == $mod ]]; then
+            while read line; do
+                case "$line" in 
+                    Basic\ Syntax:*)
+                        while read rest rest opt rest; do
+                            case "$opt" in 
+                                \<*\>)
+
+                                ;;
+                                "")
+                                    break
+                                ;;
+                                *)
+                                    MODOPTS=("${MODOPTS[@]}" "$opt")
+                                ;;
+                            esac;
+                        done
+                    ;;
+                    Commands:*)
+                        while read opt rest; do
+                            case "$opt" in 
+                                "")
+                                    break 2
+                                ;;
+                                *)
+                                    MODOPTS=("${MODOPTS[@]}" "$opt")
+                                ;;
+                            esac;
+                        done
+                    ;;
+                esac;
+            done < <(LC_ALL=C $YAST $mod help 2>&1);
+            len=${#cur};
+            idx=0;
+            for pval in ${MODOPTS[@]};
+            do
+                if [[ "$cur" == "${pval:0:$len}" ]]; then
+                    COMPREPLY[$idx]=$pval;
+                    idx=$[$idx+1];
+                fi;
+            done;
+            return 0;
+        fi;
+    done;
+    len=${#cur};
+    idx=0;
+    for pval in ${YAST_MODLIST[@]};
+    do
+        if [[ "$cur" == "${pval:0:$len}" ]]; then
+            COMPREPLY[$idx]=$pval;
+            idx=$[$idx+1];
+        fi;
+    done;
+    return 0
+}
+_zypper () 
+{ 
+    ZYPPER_CMDLIST=();
+    ZYPPER="$(type -p zypper)";
+    local noglob=$(shopt -po noglob);
+    local magic_string="Command options:";
+    local comp cur prev command;
+    local -a opts=();
+    local -i ITER=0;
+    local IFS='
+';
+    set -o noglob;
+    if test ${#ZYPPER_CMDLIST[@]} -eq 0; then
+        ZYPPER_CMDLIST=($(LC_ALL=POSIX $ZYPPER -q -h | 				sed -rn '/^[[:blank:]]*Commands:/,$ {
+					/[\t]{4}/d
+					s/^[[:blank:]]*//
+					s/^[[:upper:]].*://
+					s/[[:blank:]]+[[:upper:]].*$//
+					s/,[[:blank:]]+/\n/
+					s/\?/\\?/
+					/^$/d
+					p
+				}'));
+    fi;
+    if test $COMP_CWORD -lt 1; then
+        let COMP_CWORD=${#COMP_WORDS[@]};
+    fi;
+    prev=${COMP_WORDS[COMP_CWORD-1]};
+    cur=${COMP_WORDS[COMP_CWORD]};
+    let ITER=COMP_CWORD;
+    while test $((ITER--)) -ge 0; do
+        comp="${COMP_WORDS[ITER]}";
+        if [[ "${ZYPPER_CMDLIST[@]}" =~ "${comp}" ]]; then
+            command=${COMP_WORDS[ITER]};
+            break;
+        fi;
+        if [[ "${comp}" =~ "zypper" ]]; then
+            command="zypper";
+            break;
+        fi;
+    done;
+    unset ITER comp;
+    case "$prev" in 
+        "--type" | "-t")
+            opts=(package patch pattern product);
+            COMPREPLY=($(compgen -W "${opts[*]}" -- ${cur}));
+            _strip;
+            eval $noglob;
+            return 0
+        ;;
+        "--repo" | "-r")
+            opts=(${opts[@]}$(echo; LC_ALL=POSIX $ZYPPER -q lr | 				sed -rn '/^[0-9]/{
+					s/^[0-9]+[[:blank:]]*\|[[:blank:]]*([^|]+).*/\1/
+					s/[[:blank:]]*$//
+					p
+				}'));
+            COMPREPLY=($(compgen -W "${opts[*]}" -- ${cur}));
+            _strip;
+            eval $noglob;
+            return 0
+        ;;
+    esac;
+    unset prev;
+    if [[ "$command" =~ "zypper" ]]; then
+        opts=(${ZYPPER_CMDLIST[*]}$(echo; LC_ALL=POSIX $ZYPPER -q help 2>&1 | 			sed -rn '/Global Options:/,/Commands:/{
+				/[\t]{4}/d
+				s/^[[:blank:]]*//
+				/[[:upper:]].*:/d
+				s/[[:blank:]]+[[:upper:]].*$//
+				s/[,[:blank:]].*$/\n/
+				/^$/d
+				p
+			}'));
+        COMPREPLY=($(compgen -W "${opts[*]}" -- ${cur}));
+        _strip;
+        eval $noglob;
+        return 0;
+    fi;
+    if test -n "$command"; then
+        opts=$(LC_ALL=POSIX $ZYPPER -q help $command 2>&1 | sed -e "1,/$magic_string/d" -e 's/.*--/--/' -e 's/ .*//');
+        case "$command" in 
+            help | \?)
+                opts=(${ZYPPER_CMDLIST[@]})
+            ;;
+            removerepo | rr | modifyrepo | mr | renamerepo | nr | refresh | ref)
+                opts=(${opts[@]}$(echo; LC_ALL=POSIX $ZYPPER -q lr | 					sed -rn '/^[0-9]/{
+						s/^[0-9]+[[:blank:]]*\|[[:blank:]]*([^|]+).*/\1/
+						s/[[:blank:]]*$//
+						/^$/d
+						p
+					}'))
+            ;;
+            addservice | as | modifyservice | ms | removeservice | rs)
+                opts=(${opts[@]}$(echo; LC_ALL=POSIX $ZYPPER -q ls | 					sed -rn '/^[0-9]/{
+						s/^[0-9]+[[:blank:]]*\|[[:blank:]]*([^|]+).*/\1/
+						s/[[:blank:]]*$//
+						/^$/d
+						p
+					}'))
+            ;;
+            removelock | rl)
+                opts=(${opts[@]}$(echo; LC_ALL=POSIX $ZYPPER -q ll | 					sed -rn '/^[0-9]/{
+						s/^[0-9]+[[:blank:]]*\|[[:blank:]]*([^|]+).*/\1/p
+						s/[[:blank:]]*$//
+						/^$/d
+						p
+					}'))
+            ;;
+        esac;
+        IFS='
+';
+        COMPREPLY=($(compgen -W "${opts[*]}" -- ${cur}));
+        _strip;
+    fi;
+    eval $noglob
+}
+command_not_found_handle () 
+{ 
+    local cmd state rest;
+    local -i pid ppid pgrp session tty_nr tpgid;
+    if test -n "$MC_SID" -o ! -t 1; then
+        return 127;
+    fi;
+    read pid cmd state ppid pgrp session tty_nr tpgid rest < /proc/self/stat;
+    if test $$ -eq $tpgid; then
+        return 127;
+    fi;
+    if test -x "/usr/sbin/$1" -o -x "/sbin/$1"; then
+        if test -x "/usr/sbin/$1"; then
+            prefix='/usr';
+        else
+            prefix='';
+        fi;
+        echo "Absolute path to '$1' is '$prefix/sbin/$1', so it might be intended to be run only by user with superuser privileges (eg. root).";
+        return 127;
+    fi;
+    if test -n "$COMMAND_NOT_FOUND_AUTO"; then
+        test -x /usr/bin/python && test -x /usr/bin/command-not-found && /usr/bin/python /usr/bin/command-not-found "$1" zypp;
+    else
+        echo -e "If '$1' is not a typo you can run the following command to lookup the package that contains the binary:\n    command-not-found $1";
+    fi;
+    return 127
+}
+mc () 
+{ 
+    . /usr/share/mc/bin/mc-wrapper.sh
+}
+path () 
+{ 
+    if test -x /usr/bin/$1; then
+        ${1+"/usr/bin/$@"};
+    else
+        if test -x /bin/$1; then
+            ${1+"/bin/$@"};
+        fi;
+    fi
+}
+ppwd () 
+{ 
+    local _t="$1" _w _x _u="$USER" _h="$HOST";
+    test -n "$_t" || return;
+    test "${_t#tty}" = $_t && _t=pts/$_t;
+    test -O /dev/$_t || return;
+    _w="$(dirs +0)";
+    _x=$((${#_w}-18));
+    test ${#_w} -le 18 || _w="...${_w#$(printf "%.*s" $_x "$_w")}";
+    printf "\e]2;%s@%s:%s\007\e]1;%s\007" "$_u" "$_h" "$_w" "$_h" > /dev/$_t
+}
+remount () 
+{ 
+    /bin/mount -o remount,${1+"$@"}
+}
+spwd () 
+{ 
+    ( IFS=/;
+    set $PWD;
+    if test $# -le 3; then
+        echo "$PWD";
+    else
+        eval echo \"..\${$(($#-1))}/\${$#}\";
+    fi )
+}
+startx () 
+{ 
+    test -x /usr/bin/startx || { 
+        echo "No startx installed" 1>&2;
+        return 1
+    };
+    /usr/bin/startx ${1+"$@"} 2>&1 | tee $HOME/.xsession-errors
+}

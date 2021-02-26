@@ -1,0 +1,26 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ptsregbrw.FND
+      Comment: Движение(регистрация) документов - текущая запись.
+   Parameters:
+         Uses:
+      Used by:
+      Created:    
+     Modified:   
+*/
+
+   
+ASSIGN
+    DateChange  = NoNull(STRING(pl_indocsreg.create_date,"99.99.9999 HH:MM:SS"))
+    DateValue   = pl_indocsreg.date_value
+    NameEvent   = NoNull(pl_indocsreg.event)
+    Branch_     = NoNull(pl_indocsreg.branch)
+    User_Id     = NoNull(pl_indocsreg.user_id)
+    User_FIO    = GetFIO(User_Id)
+    DocType     = NoNull(pl_indocsreg.doc_type)
+    Details     = NoNull(pl_indocsreg.details)
+    Descriptions = NoNull(pl_indocsreg.descriptions)
+    PrinalFIO = GetFIO(Descriptions).
+.    
+

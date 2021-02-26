@@ -1,0 +1,64 @@
+/* RECID [RETURN] key trigger */
+ELSE IF  LASTKEY = 10
+     AND TRANSACTION
+     AND favail() THEN DO:
+
+ 
+    /* сумму нельзя списать, если доступно для списания 0. Пока уберем даную проверку. */
+/*
+    IF dec(mAmountForWriteOff) LE 0 THEN
+    DO:
+        MESSAGE "Списание документа невозможно!"
+            VIEW-AS ALERT-BOX INFO BUTTONS OK.
+        NEXT REFRESH.
+    END.
+    ELSE 
+*/ 
+
+   IF AVAILABLE op THEN
+   DO:
+      IF GetXAttrValueEx("op",
+                         STRING(op.op),
+                         "ПриостСпис",
+                         "") EQ "Да" THEN
+      DO:
+         mStrTMP =  GetXAttrValueEx("op",
+                                    STRING(op.op),
+                                    "op-bal", 
+                                    "").
+
+         IF mStrTMP NE "" THEN
+         DO:
+            FIND FIRST opbb WHERE opbb.op EQ INT64(mStrTMP) NO-LOCK NO-ERROR.
+
+            IF AVAILABLE opbb THEN
+            DO:
+               mStrTMP = opbb.doc-num.
+            END.
+            ELSE
+            DO:
+               mStrTMP = "".
+            END.
+         END.
+
+         IF mStrTMP NE "" THEN
+            mStrTMP = "N " + mStrTMP.
+
+         RUN Fill-SysMes("","","-1","По документу " + mStrTMP + " списание приостановлено").
+         NEXT REFRESH.
+      END.
+   END.
+
+      
+    IF kau1 EQ "Приостановлен" THEN
+    DO:
+        MESSAGE "Исполнение платежа приостановлено!"
+            VIEW-AS ALERT-BOX INFO BUTTONS OK.
+        NEXT REFRESH.
+    END.
+    ELSE
+    DO:
+        pick-value = STRING(RECID({&edtfile})).
+        LEAVE REFRESH.
+    END.
+END.

@@ -1,0 +1,81 @@
+DEF VAR mCodNVal     AS CHAR   NO-UNDO.
+DEF VAR mIsPolup     AS LOG    NO-UNDO.
+DEF VAR mI           AS INT64  NO-UNDO.
+
+DEF VAR mOpTime      AS INT64   NO-UNDO.
+DEF VAR mOpDate      AS DATE   NO-UNDO.
+DEF VAR mVidOpNalV   AS CHAR   NO-UNDO.
+DEF VAR m5           AS CHAR   NO-UNDO.
+DEF VAR m6           AS DEC    NO-UNDO.
+DEF VAR m7           AS CHAR   NO-UNDO.
+DEF VAR m8           AS DEC    NO-UNDO.
+DEF VAR m9           AS CHAR   NO-UNDO.
+DEF VAR m10          AS INT64  NO-UNDO.
+DEF VAR m11          AS CHAR   NO-UNDO.
+DEF VAR m12          AS DEC    NO-UNDO.
+DEF VAR m13          AS CHAR   NO-UNDO.
+DEF VAR mDover       AS CHAR   NO-UNDO.
+DEF VAR m15          AS CHAR   NO-UNDO.
+DEF VAR mFIO         AS CHAR   NO-UNDO.
+DEF VAR m17          AS CHAR   NO-UNDO.
+DEF VAR mADR         AS CHAR   NO-UNDO.
+DEF VAR mTmpStr      AS CHAR   NO-UNDO.
+
+DEF VAR mDocId       AS CHAR   NO-UNDO.
+DEF VAR msprate      AS DEC    NO-UNDO.
+DEF VAR mNameBank    AS CHAR   NO-UNDO.
+DEF VAR mREGN        AS CHAR   NO-UNDO.
+DEF VAR mAdres-pch   AS CHAR   NO-UNDO.
+DEF VAR mAdres-kass  AS CHAR   NO-UNDO.
+DEF VAR mDocNumCode  AS CHAR   NO-UNDO.
+DEF VAR mDocNum      AS INT64  NO-UNDO.
+DEF VAR mDate        AS DATE   NO-UNDO.
+
+DEF VAR mDocNumEdt   AS INT64  NO-UNDO.
+DEF VAR mRid         AS INT64  NO-UNDO.
+DEF VAR mNaznSchKas  AS CHAR   NO-UNDO.
+DEF VAR mScetKomis   AS CHAR   NO-UNDO.
+DEF VAR mBranchMask  AS CHAR   INIT    "*"
+                               FORMAT  "X(30)"
+                               LABEL   "Код Подразделения " 
+                               NO-UNDO.
+DEF VAR mUserMask    AS CHAR   INIT    "*"
+                               FORMAT  "X(30)"
+                               LABEL   "Пользователь      " 
+                               NO-UNDO.
+DEF VAR mParam       AS CHAR   NO-UNDO EXTENT 2.
+DEF VAR mPrintOpNum  AS LOG    INIT    FALSE 
+                               NO-UNDO.
+DEF VAR mOpGr15      AS CHAR   NO-UNDO.
+DEF VAR mSummKon113  AS DEC    NO-UNDO.
+DEF VAR mSumm1626    AS DEC    NO-UNDO.
+DEF VAR vOpLnk       AS INT64  NO-UNDO.
+DEF VAR vOp          AS INT64  NO-UNDO.
+
+DEF BUFFER acct-cr   FOR acct.
+DEF BUFFER acct-db   FOR acct.
+DEF BUFFER op-entry1 FOR op-entry.
+DEF BUFFER op-entry2 FOR op-entry.
+DEF BUFFER dop       FOR op.
+
+DEF TEMP-TABLE tt-id NO-UNDO
+   FIELD id AS RECID
+   FIELD dt AS DATE
+   FIELD tm AS INT64
+.
+
+DEF TEMP-TABLE tt-itog NO-UNDO
+   FIELD vidop AS CHAR
+   FIELD val5  AS CHAR
+   FIELD val7  AS CHAR
+   FIELD val11 AS CHAR
+   FIELD sum6  AS DEC
+   FIELD sum8  AS DEC
+   FIELD sum12 AS DEC
+.
+
+DEFINE TEMP-TABLE ttBreakInfo
+    FIELD m5     AS CHARACTER
+    FIELD m7     AS CHARACTER
+    FIELD sprate AS DECIMAL 
+.

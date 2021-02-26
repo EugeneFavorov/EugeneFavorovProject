@@ -1,0 +1,42 @@
+/*   IF FIRST-OF(op.op) THEN                            */
+/*      mIsPolup = FALSE.                               */
+/*                                                      */
+/*   IF     mIsPolup EQ TRUE /* полупроводки один раз */*/
+/*/*      AND (    op-entry.acct-cr EQ ?                */
+/*           OR op-entry.acct-db EQ ?) */               */
+/*   THEN NEXT.                                         */
+   
+   mVidOpNalV = GetXAttrValueEx("op",
+                                STRING(op-entry.op),
+                                "ВидОпНалВ",
+                                "").
+   IF mVidOpNalV EQ "" THEN NEXT.
+
+   IF op-entry.acct-cr NE ? THEN
+   DO:
+      FIND FIRST acct-cr WHERE acct-cr.acct EQ op-entry.acct-cr NO-LOCK NO-ERROR.
+      FIND FIRST op-entry2 WHERE RECID(op-entry2) EQ RECID(op-entry) NO-LOCK.
+   END.
+   ELSE DO:
+      FIND FIRST op-entry2 WHERE op-entry2.op EQ op-entry.op
+                             AND op-entry2.acct-cr NE ? NO-LOCK NO-ERROR.
+      IF NOT AVAIL op-entry2 THEN NEXT.
+      FIND FIRST acct-cr WHERE acct-cr.acct EQ op-entry2.acct-cr NO-LOCK NO-ERROR.
+      mIsPolup = TRUE.
+   END.
+   IF op-entry.acct-db NE ? THEN
+   DO:
+      FIND FIRST acct-db WHERE acct-db.acct EQ op-entry.acct-db NO-LOCK NO-ERROR.
+      FIND FIRST op-entry1 WHERE RECID(op-entry1) EQ RECID(op-entry) NO-LOCK.
+   END.
+   ELSE DO:
+      FIND FIRST op-entry1 WHERE op-entry1.op EQ op-entry.op
+                             AND op-entry1.acct-db NE ? NO-LOCK NO-ERROR.
+      IF NOT AVAIL op-entry1 THEN NEXT.
+      FIND FIRST acct-db WHERE acct-db.acct EQ op-entry1.acct-db NO-LOCK NO-ERROR.
+      mIsPolup = TRUE.
+   END.
+
+   IF NOT(   CAN-DO(mNaznSchKas, acct-cr.contract)
+          OR CAN-DO(mNaznSchKas, acct-db.contract))
+   THEN NEXT.

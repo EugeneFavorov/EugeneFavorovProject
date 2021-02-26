@@ -1,0 +1,143 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-1998 ТОО "Банковские информационные системы"
+     Filename: pp-new.var
+      Comment: Определение переменных для печати платежных поручений
+   Parameters:
+         Uses:
+      Used by: pp-new.p pp-new1.p
+      Created: 09.11.1999 Kostik
+     Modified: 28.07.2003 Guva заявка 15378 добавлено поле дата перечисления платежа 
+     Modified: 04.09.2008 MUTA 0097390 NO-UNDO при объявлении временной таблицы
+     Modified: 22/07/2009 kraw (0104913) memorn.p
+*/
+Form "~n@(#) pp-new.var 1.0 Kostik 09/11/1999 Kostik 09/11/1999 Определение переменных" with frame sccs-id width 250.
+
+&if defined( FILE_sword_p ) = 0 and defined( FILE_sword_p_p ) = 0 
+AND DEFINED(NoInpDefs) = 0 &then
+Define Input Param rid As RecID No-Undo.
+&endif
+
+Define Variable AmtStr           As Character Extent   3 No-Undo.
+Define Variable Detail           As Character Extent   5 No-Undo.
+
+Define Variable PayType          As Character            No-Undo.
+Define Variable PlINN            As Character            No-Undo.
+Define Variable PlKPP            As Character            No-Undo.
+Define Variable PlCAcct          As Character            No-Undo.
+Define Variable PlLAcct          As Character            No-Undo.
+Define Variable PlMFO            As Character            No-Undo.
+Define Variable PlName           As Character Extent   6 No-Undo.
+Define Variable PlRKC            As Character Extent   4 No-Undo.
+
+Define Variable PoINN            As Character            No-Undo.
+Define Variable PoKPP            As Character            No-Undo.
+Define Variable PoAcct           As Character            No-Undo.
+Define Variable PoBankName       As Character Extent   3 No-Undo.
+Define Variable PoCAcct          As Character            No-Undo.
+Define Variable PoMFO            As Character            No-Undo.
+Define Variable PoName           As Character Extent   6 No-Undo.
+Define Variable PoRKC            As Character Extent   4 No-Undo.
+
+Define Variable Rub              As Character            No-Undo.
+Define Variable Val				 As Character 			 No-Undo.
+DEFINE VARIABLE mCur             AS CHARACTER            NO-UNDO.
+&IF DEFINED(multiline-author) = 0 &THEN
+DEFINE VARIABLE Author           AS CHARACTER            NO-UNDO.
+&ELSE
+DEFINE VARIABLE Author           AS CHARACTER EXTENT   3 NO-UNDO.
+&ENDIF
+Define Variable theDate          As Character            No-Undo.
+Define Variable NameOrder        As Character Extent   2 No-Undo.
+Define Variable NumberForm       As Character            No-Undo.
+
+Define Variable Format-Rub       As Character            No-Undo.
+Define Variable INNPl       As Character      No-Undo.
+Define Variable INNPo       As Character      No-Undo.
+
+DEFINE VARIABLE mKBK             AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mUIN1            AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mUIN2            AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mUIN3            AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mOKATO           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokOp           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokNP           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokND           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokDD           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokTP           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPokST           AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mSpisPl          AS CHARACTER           NO-UNDO.
+DEFINE VARIABLE mPPDate          AS CHARACTER  FORMAT "x(10)" NO-UNDO.
+
+/*-------------------------------------- Штамп, для СПБИ ---------------------------------------*/
+DEFINE VARIABLE BankAcct         AS CHARACTER EXTENT   1 NO-UNDO.
+DEFINE VARIABLE BankName         AS CHARACTER EXTENT   3 NO-UNDO.
+DEFINE VARIABLE BankMFO          AS CHARACTER EXTENT   2 NO-UNDO.
+DEFINE VARIABLE RKCName          AS CHARACTER            NO-UNDO.
+DEFINE VARIABLE Inspector        AS CHARACTER EXTENT   1 NO-UNDO.
+DEFINE VARIABLE mIsUni3          AS LOGICAL   INITIAL NO NO-UNDO.
+/*----------------------------------------------------------------------------------------------*/
+
+DEFINE VARIABLE mDateCart        AS DATE                 NO-UNDO.
+
+&IF DEFINED(uni1) NE 0 &THEN
+DEF VAR theHeader AS CHAR FORMAT "x(78)" NO-UNDO.
+DEF VAR theBank   AS CHAR FORMAT "x(22)" NO-UNDO.
+DEF VAR theCity   AS CHAR FORMAT "x(22)" NO-UNDO.
+&ENDIF
+
+&IF DEFINED(uni2) NE 0 &THEN
+DEF VAR theUserName AS CHAR FORMAT "x(22)" NO-UNDO.
+DEF VAR theBank     AS CHAR FORMAT "x(22)" NO-UNDO.
+DEF VAR theCity     AS CHAR FORMAT "x(22)" NO-UNDO.
+&ENDIF
+
+
+Def Var InCity  As logic          No-Undo.
+Def Var NameCli As Char  extent 2 No-undo.
+
+Def Var vtmp As Char No-Undo.
+
+DEFINE BUFFER Bank1 FOR Banks.
+DEFINE BUFFER Bank2 FOR Banks.
+DEFINE BUFFER Bank3 FOR Banks.
+DEFINE BUFFER banks-corr2 FOR banks-corr.
+
+Def Buffer c-nostro-db For c-nostro.
+Def Buffer c-nostro-cr For c-nostro.
+
+&IF DEFINED(tt-op-entry) &THEN
+DEFINE TEMP-TABLE tt-op-entry NO-UNDO LIKE op-entry
+   FIELD IsHalfEntryComposited AS LOGICAL
+   FIELD op-entry-half-db LIKE op-entry.op-entry
+   FIELD op-entry-half-cr LIKE op-entry.op-entry
+INDEX ByHalfDb op IsHalfEntryComposited op-entry-half-db
+INDEX ByHalfCr op IsHalfEntryComposited op-entry-half-cr
+.
+&ENDIF
+def buffer bo-op for op.
+def buffer bop-entry for op-entry.
+
+{conv-ord.def}
+
+DEFINE VARIABLE mSetBalSCHinn AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mOpEntryList  AS CHARACTER NO-UNDO.
+
+{wordwrap.def}
+{pick-val.i}
+{bank-id.i}
+
+ASSIGN
+    mSetBalSCHinn = FGetSetting("БалСчИНН",?,"NotAvail")
+    mOpEntryList  = GetSysConf("op-entry-list")
+    mConvOrdType  = GetSysConf({&conv-ord-sysconf})
+.
+IF mConvOrdType = ? THEN mConvOrdType = "".
+
+IF NOT {assigned mOpEntryList} THEN
+    mOpEntryList = "*".
+IF NOT CAN-DO({&conv-ord-positive} + "," + {&conv-ord-negative},
+              mConvOrdType)
+THEN
+    mConvOrdType = {&conv-ord-none}.
+RUN DeleteOldDataProtocol IN h_base ("op-entry-list").

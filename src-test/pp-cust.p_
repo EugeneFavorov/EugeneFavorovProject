@@ -1,0 +1,2560 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2014 ЗАО "Банковские информационные системы"
+     Filename: PP-CUST.P
+      Comment: Библиотека работы с клиентами
+   Parameters: нет
+         Uses:
+      Used by:
+      Created: 06.02.2004 NIK
+     Modified: 12.03.2004 10:59 KSV      (0019947) Добавлена процедура
+                                         GetCustomerByIdnt для поиска клиента
+                                         по идентификатору.
+     Modified: 22.03.2004 18:39 KSV      (0019947) Процедура GetCustomerByIdnt
+                                         доработана под новый справочник
+                                         идентификаторов субъектов. Добавлена
+                                         процедура FltCustomerByIdnt,
+                                         возвращающая условие отбора объектов
+                                         по идентификатору.
+     Modified: 01.04.2004 20:03 KSV      (0019702) Добавлена процедура
+                                         GetCustIdent, возвращающая значения
+                                         идентификатора для субъекта.
+     Modified: 02.04.2004 13:12 KSV      (0019947) Доработана процедура
+                                         GetCustomerByIdnt, добавлена
+                                         возможность выбора по датам.
+                                         Исправлена ошибка в поиске по
+                                         интервалу в процедуре GetCustIdent.
+     Modified: 19.04.2005 18:00 mkv      (0040652) Доработана процедура
+                                         GetCustShortName, добавлена
+                                         возможность возврата короткого наименования клиента.
+     Modified: 30.06.2006 kraw (0052275) перевод УНК на counters;CNTUNK
+     Modified: 09/11/2009 kraw (0118683) GetCustIDRWD, GetCustIDNom, GetCustIDIssue
+     Modified: 20/04/2010 kraw (0126030) GetCustIDOpenDate
+     Modified: 22/06/2010 kraw (0129707) ",К" в GetCustNameFormatted
+     Modified: 08/12/2010 kraa (0111435) доработана процедура GetFirstUnassignedFieldManByRole.
+     Modified: 03/03/2014 sasa (0161083) доработана процедура NewUnk.
+     Modified: 04/03/2014 zaka (221688) добавлена ф-я GetIntegrationID
+
+*/
+{pfuncdef
+ &DefLib="cust" 
+ &Description="Библиотека работы с клиентами"}
+ 
+{globals.i}             /* Глобальные переменные сессии. */
+{ppcust.def}            /* Определение переменных. */
+{intrface.get db2l}     /* Инструмент для динамической работы с БД. */
+{intrface.get tmess}    /* Инструменты обработки сообщений. */
+{intrface.get isrv}
+{intrface.get count}    /* Библиотека для работы со счетчиками. */
+{intrface.get brnch}
+{intrface.get acct}     /* Библиотека для работы со счетами. */
+{intrface.get strng}
+{intrface.get pbase}
+{intrface.get trans}
+{getcli.pro}
+{innchk.i}
+
+&GLOBAL-DEFINE CustIdntSurr    cust-ident.cust-code-type + ',' +                                cust-ident.cust-code      + ',' +                         STRING(cust-ident.cust-type-num)
+
+/*------------------------------------------------------------------------------
+  Purpose:     Поиск клиента по идентификатору, действующего в указанный 
+               интервал времени
+  Parameters:  iCodeType - тип идентификатора
+               iCode     - значение идентификатора
+               iNum      - порядковый номер идентификатора
+               iBegDate  - дата начала действия идентификатора
+               iEndDate  - дата окончания действия идентификатора
+               oCustCat  - тип клиента
+               oCustID   - внутренний идентификатор клиента
+  Notes:       
+------------------------------------------------------------------------------*/
+PROCEDURE GetCustomerByIdnt:
+   DEFINE INPUT  PARAMETER iCodeType   AS CHARACTER         NO-UNDO.
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER         NO-UNDO.
+   DEFINE INPUT  PARAMETER iNum        AS INT64           NO-UNDO.
+   DEFINE INPUT  PARAMETER iBegDate    AS DATE              NO-UNDO.
+   DEFINE INPUT  PARAMETER iEndDate    AS DATE              NO-UNDO.
+   DEFINE OUTPUT PARAMETER oCustCat    AS CHARACTER  INIT ? NO-UNDO.
+   DEFINE OUTPUT PARAMETER oCustID     AS CHARACTER  INIT ? NO-UNDO.
+
+   DEFINE VARIABLE vEndDate AS DATE       NO-UNDO.
+
+   DEFINE BUFFER cust-ident FOR cust-ident.
+
+   IF iBegDate = ? THEN iBegDate = {&BQ-MAX-DATE}.
+   IF iEndDate = ? THEN iEndDate = {&BQ-MIN-DATE}.
+
+   FOR EACH cust-ident WHERE
+      cust-ident.cust-code-type = iCodeType AND
+      cust-ident.cust-code      = iCode     AND 
+      cust-ident.cust-type-num >= (IF iNum > 0 THEN iNum ELSE {&BQ-MIN-INT}) AND 
+      cust-ident.cust-type-num <= (IF iNum > 0 THEN iNum ELSE {&BQ-MAX-INT}) AND 
+      cust-ident.open-date     <= iBegDate   NO-LOCK:
+      
+      vEndDate = (IF cust-ident.close-date = ? 
+                  THEN {&BQ-MAX-DATE} 
+                  ELSE cust-ident.close-date).
+      IF vEndDate < iEndDate THEN NEXT.
+
+      IF oCustCat = ? THEN
+         ASSIGN
+            oCustCat = ""   
+            oCustID  = "".
+
+      {additem.i oCustCat cust-ident.cust-cat}
+      {additem.i oCustID  STRING(cust-ident.cust-id)}
+   END. /* End of FOR */
+END PROCEDURE.
+
+
+FUNCTION FrmtAddrStr RETURNS CHARACTER (ipAdrChar AS CHARACTER, ipRegCode AS CHARACTER ):
+   DEFINE VAR opFrmtAddrStr AS CHARACTER NO-UNDO.
+   DEFINE VAR DefFmtStr     AS CHARACTER INIT ",,,,,д.,корп.,кв.,стр.,,,,," NO-UNDO.   
+   DEFINE VAR vTag          AS CHARACTER NO-UNDO.
+   DEFINE VAR i             AS INTEGER   NO-UNDO.   
+   DEFINE VAR iRegName      AS CHARACTER NO-UNDO. 
+   IF NUM-ENTRIES(ipAdrChar) LT 8 THEN RETURN ipAdrChar.
+   DO i = 1 TO NUM-ENTRIES(ipAdrChar):
+      vTag = "".
+      IF {assigned "TRIM(ENTRY(i,ipAdrChar))"} THEN DO:
+         vTag = (IF {assigned "ENTRY(i,DefFmtStr)"} 
+                 THEN (ENTRY(i,DefFmtStr) + " ") 
+                 ELSE "")  + ENTRY(i,ipAdrChar).
+          
+         {additem.i opFrmtAddrStr vTag}
+      END.
+   END.                   
+   IF {assigned ipRegCode} /*AND NOT CAN-DO("00045,00040",ipRegCode)*/ THEN DO:
+      iRegName = GetCodeNameEx("КодРег",ipRegCode,"") + ",".
+      IF iRegName NE "," AND NUM-ENTRIES(opFrmtAddrStr) > 1 THEN
+      ENTRY(2,opFrmtAddrStr) = iRegName + ENTRY(2,opFrmtAddrStr).
+   END.
+   
+   RETURN opFrmtAddrStr.
+END FUNCTION.
+
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает условие отбора объектов по введенному идентификатору
+  Parameters:  iCodeType   - тип идентификации
+               iCode       - значение идентификатора
+               iPrefix     - имя таблицы, по которой строится условие
+               oFltExpr    - возвращаемое условие отбора
+  Notes:       
+------------------------------------------------------------------------------*/
+PROCEDURE FiltCustomerByIdnt:
+   DEFINE INPUT  PARAMETER iCodeType   AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iPrefix     AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER oFltExpr    AS CHARACTER  INIT "NO" NO-UNDO.
+
+   DEFINE VARIABLE vCustCat   AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vCustID    AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vCnt       AS INT64    NO-UNDO.
+   DEFINE VARIABLE vNum       AS INT64    NO-UNDO.
+
+
+   RUN GetCustomerByIdnt (iCodeType,iCode,0,?,?,OUTPUT vCustCat,OUTPUT vCustID).
+
+   IF vCustCat = ? THEN RETURN.
+
+   oFltExpr = "(".
+
+   iPrefix = IF {assigned iPrefix} THEN iPrefix + "." ELSE "".
+      
+   vNum = NUM-ENTRIES(vCustCat).
+   DO vCnt = 1 TO vNum:
+      oFltExpr = oFltExpr + "(" + iPrefix + "cust-cat = '" + 
+         ENTRY(vCnt,vCustCat) + "' AND " + 
+         iPrefix + "cust-id = '" + 
+         ENTRY(vCnt,vCustID) + "')" + (IF vCnt = vNum THEN ")" ELSE " OR ").
+   END.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает значения идентификатора для указанного субъекта, 
+               действующих в указанный интервал времени.
+  Parameters:  iCustCat  - тип клиента
+               iCustID   - идентификатор клиента
+               iBegDate  - дата начала действия идентификатора
+               iEndDate  - дата окончания действия идентификатора
+               iCustType - тип идентификации
+               oIdent    - список значений идентификатора, разделенный CHR(1)
+  Notes:       
+------------------------------------------------------------------------------*/
+PROCEDURE GetCustIdent:
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustID     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iBegDate    AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iEndDate    AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustType   AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER oIdent      AS CHARACTER  NO-UNDO.
+
+   {getcustident.i
+      &BegDate  = iBegDate
+      &EndDate  = iEndDate
+      &CustCat  = iCustCat  
+      &CustId   = iCustID
+      &CustType = iCustType
+      &RetValue = oIdent
+   }
+   RETURN oIdent.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает короткое наименование
+  Parameters:  iCustCat   - тип клиента
+               iCustID    - идентификатор клиента
+               oShortName - возвращаемое наименование
+  Notes:       
+------------------------------------------------------------------------------*/
+PROCEDURE GetCustShortName:
+   DEF INPUT  PARAM iCustCat   AS CHAR NO-UNDO.
+   DEF INPUT  PARAM iCustID    AS INT64  NO-UNDO.
+   DEF OUTPUT PARAM oShortName AS CHAR NO-UNDO.
+
+   oShortName = "".
+   case iCustCat:
+      when "Б" then do:
+         find first banks where banks.bank-id eq iCustID no-lock no-error.
+         if avail banks then
+            oShortName = banks.short-name.
+      end.
+      when "Ю" then do:
+         find first cust-corp where cust-corp.cust-id eq iCustID no-lock no-error.
+         if avail cust-corp then
+            oShortName = cust-corp.name-short.
+      end.
+      when "Ч" then do:
+         find first person where person.person-id eq iCustID no-lock no-error.
+         if avail person then
+            oShortName = person.name-last.
+      end.
+   end case.
+   if oShortName eq ? then oShortName = "".
+END PROCEDURE.
+
+
+/**************************************************************************/
+
+/* возвращает значение ДР клиента */
+FUNCTION ClientXattrVal RETURNS CHARACTER (vCat  AS CHARACTER,
+                                           vID   AS INT64,
+                                           vAttr AS CHARACTER
+   ):
+   DEFINE VARIABLE vRet AS CHARACTER NO-UNDO.
+
+   CASE vCat:
+   WHEN "Ч" THEN
+      vRet = GetXAttrValueEx("person",    STRING(vID), vAttr, "").
+   WHEN "Ю" THEN
+      vRet = GetXAttrValueEx("cust-corp", STRING(vID), vAttr, "").
+   WHEN "Б" THEN
+      vRet = GetXAttrValueEx("banks",     STRING(vID), vAttr, "").
+   END CASE.
+   RETURN vRet.
+END FUNCTION.
+
+/* возвращает значение ДР клиента */
+FUNCTION ClientTempXattrVal RETURNS CHARACTER (vCat  AS CHARACTER,
+                                               vID   AS INT64,
+                                               vAttr AS CHARACTER,
+                                               iEnd AS DATE 
+   ):
+   DEFINE VARIABLE vRet AS CHARACTER NO-UNDO.
+
+   CASE vCat:
+   WHEN "Ч" THEN
+      vRet = GetTempXAttrValueEx("person",    STRING(vID), vAttr,iEnd, "").
+   WHEN "Ю" THEN
+      vRet = GetTempXAttrValueEx("cust-corp", STRING(vID), vAttr,iEnd, "").
+   WHEN "Б" THEN
+      vRet = GetTempXAttrValueEx("banks",     STRING(vID), vAttr,iEnd, "").
+   END CASE.
+   RETURN vRet.
+END FUNCTION.
+
+/* возвращает значение ДР внешнего клиента по его БИКу и р/счету
+   если внешний клиент не найден, то возвращает - ? */
+FUNCTION BenXattrVal RETURNS CHARACTER (vCat  AS CHARACTER,
+                                        vID   AS INT64,
+                                        vBIC  AS CHARACTER,
+                                        vAcct AS CHARACTER, 
+                                        vAttr AS CHARACTER
+   ):
+   DEFINE VARIABLE vRet AS CHARACTER NO-UNDO INIT ?.
+
+   CASE vCat:
+   WHEN "Ю" THEN
+      FOR FIRST cust-corp WHERE cust-corp.cust-id   EQ vID
+                            AND cust-corp.benacct   EQ vAcct
+                            AND cust-corp.bank-code EQ vBIC
+                NO-LOCK:
+         vRet = ClientXattrVal(vCat, vID, "КПП").
+      END.
+   WHEN "Ч" THEN
+      FOR FIRST person WHERE person.person-id EQ vID
+                         AND person.benacct   EQ vAcct
+                         AND person.bank-code EQ vBIC
+                NO-LOCK:
+         vRet = ClientXattrVal(vCat, vID, "КПП").
+      END.
+   END CASE.
+   RETURN vRet.
+END FUNCTION.
+
+PROCEDURE getKPPacct:
+/* Возвращает КПП плательщика/получателя по счету */
+   DEFINE INPUT  PARAMETER iRequisite AS CHARACTER NO-UNDO. /* kpp-send/kpp-rec */
+   DEFINE INPUT  PARAMETER iAcctSurr  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oValue     AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE iRetVal AS CHARACTER NO-UNDO.
+
+   FOR FIRST acct WHERE acct.acct     EQ ENTRY(2, iAcctSurr)
+                    AND acct.currency EQ ENTRY(1, iAcctSurr)
+             NO-LOCK:
+
+      /* Счет внутрибанковский? */
+      IF acct.cust-cat EQ "В" THEN DO:
+         /* определяем д.р. КПП плат/получ подразделения по коду подразделения счета */
+         oValue = GetXAttrValueEx("branch", acct.branch-id, iRequisite, "").
+         IF oValue EQ "" THEN DO:
+            oValue = fGetSetting("БанкКПП", ?, "").
+         END.
+      END.
+      ELSE DO:
+         oValue = ClientXattrVal(acct.cust-cat, acct.cust-id, "КПП").
+         /* вернем ссылку на клиента, чтобы можно было изменить его КПП */
+         iRetVal = ENTRY(LOOKUP(acct.cust-cat, "Ч,Ю,Б"), "person,cust-corp,banks") + "," + STRING(acct.cust-id).
+      END.
+   END.
+   RETURN iRetVal.
+END PROCEDURE.
+
+PROCEDURE getKPPben:
+/* Возвращает КПП внешнего клиента по БИКу и счету и ИНН */
+   DEFINE INPUT  PARAMETER iBIC       AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iAcct      AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iINN       AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oValue     AS CHARACTER NO-UNDO.
+   DEFINE BUFFER client-recepient FOR client-recepient.
+   DEFINE VARIABLE mSearchStr AS CHARACTER NO-UNDO.
+
+   /* определяем КПП из картотеки получателей */
+   RUN GetRecipientValue (iBIC,
+                          iAcct,
+                          (IF iINN <> "" THEN iINN ELSE CHR(4)),
+                          "КПП",
+                          OUTPUT oValue
+                         ).
+   IF oValue NE "" THEN RETURN.
+
+   /* если в картотеке получателей не нашли, то определяем КПП из справочника постоянных получателей */
+   client-recepient-search:
+   FOR EACH client-recepient NO-LOCK
+       BREAK BY client-recepient.cust-cat BY client-recepient.cust-id
+      :
+      IF FIRST-OF(client-recepient.cust-id) THEN DO:
+         oValue = BenXattrVal(client-recepient.cust-cat, client-recepient.cust-id, iBIC, iAcct, "КПП").
+         IF oValue NE ? THEN
+            LEAVE client-recepient-search.
+         ELSE
+            oValue = "".
+      END.
+   END.
+END PROCEDURE.
+
+PROCEDURE getKPP:
+/* автоматическое определение КПП плательщика/получателя на документе */
+   DEFINE INPUT  PARAMETER iOpRowID   AS ROWID NO-UNDO.
+   DEFINE INPUT  PARAMETER iRequisite AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oKPP       AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE mFlagGo     AS INT64   NO-UNDO.
+   DEFINE VARIABLE mMbrMask    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE mDbIsMbr    AS LOGICAL   NO-UNDO.
+   DEFINE VARIABLE mCrIsMbr    AS LOGICAL   NO-UNDO.
+
+   mMbrMask = fGetSetting("НазнСчМБР", ?, "Ностро").
+
+   FOR FIRST op WHERE ROWID(op) EQ iOpRowID NO-LOCK:
+      FOR FIRST op-entry OF op NO-LOCK:
+         /* определяем тип документа */
+         mDbIsMbr = CAN-FIND(FIRST acct
+                             WHERE acct.acct EQ op-entry.acct-db
+&IF DEFINED(oracle) NE 0 &THEN
+                               AND op-entry.currency BEGINS op-entry.currency
+&ENDIF
+                               AND CAN-DO(mMbrMask, acct.contract) NO-LOCK).
+         mCrIsMbr = CAN-FIND(FIRST acct
+                             WHERE acct.acct EQ op-entry.acct-cr
+&IF DEFINED(oracle) NE 0 &THEN
+                               AND op-entry.currency BEGINS op-entry.currency
+&ENDIF
+                               AND CAN-DO(mMbrMask, acct.contract) NO-LOCK).
+
+         mFlagGo =
+            IF NOT mDbIsMbr AND mCrIsMbr THEN
+               1 /* начальный */
+            ELSE IF mDbIsMbr AND NOT mCrIsMbr THEN
+               2 /* ответный */
+            ELSE IF NOT mDbIsMbr AND NOT mCrIsMbr THEN
+               0 /* внутренний */
+            ELSE
+               3 /* транзитный */
+         .
+
+         FOR FIRST op-bank OF op NO-LOCK:
+         END.
+
+         CASE mFlagGo:
+            WHEN 0 THEN /* внутренний */
+               IF iRequisite EQ "kpp-rec" THEN DO:
+                  RUN getKPPacct(iRequisite,
+                                 op-entry.currency + "," + op-entry.acct-cr,
+                                 OUTPUT oKPP
+                  ).
+               END.
+               ELSE DO:
+                  RUN getKPPacct(iRequisite,
+                                 op-entry.currency + "," + op-entry.acct-db,
+                                 OUTPUT oKPP
+                  ).
+               END.
+            WHEN 1 THEN /* начальный */
+               IF iRequisite EQ "kpp-rec" THEN DO:
+                  IF AVAILABLE op-bank THEN DO:
+                     RUN getKPPben(op-bank.bank-code, op.ben-acct, op.inn, OUTPUT oKPP).
+                  END.
+               END.
+               ELSE DO:
+                  RUN getKPPacct(iRequisite,
+                                 op-entry.currency + "," + op-entry.acct-db,
+                                 OUTPUT oKPP
+                  ).
+               END.
+            WHEN 2 THEN /* ответный */
+               IF iRequisite EQ "kpp-rec" THEN DO:
+                  RUN getKPPacct(iRequisite,
+                                 op-entry.currency + "," + op-entry.acct-cr,
+                                 OUTPUT oKPP
+                  ).
+               END.
+               ELSE IF AVAILABLE op-bank THEN DO.
+                  RUN getKPPben(op-bank.bank-code, op.ben-acct, op.inn, OUTPUT oKPP).
+               END.
+         END CASE.
+      END. /* FOR FIRST op-entry OF op NO-LOCK: */
+   END. /* FOR FIRST op WHERE ROWID(op) EQ iOpRowID NO-LOCK: */
+END PROCEDURE.
+
+/******************************************************************************
+ * возвращает строку Выдан + Дата выдачи документа физлица
+ ******************************************************************************/
+FUNCTION fGetDocIssue RETURNS CHARACTER (
+   INPUT iPersID AS INT64
+):
+   DEFINE VARIABLE vRetVal AS CHARACTER INIT "" NO-UNDO.
+   FOR FIRST person WHERE person.person-id EQ iPersID NO-LOCK:
+      vRetVal = TRIM(person.issue + " " +
+                     GetXattrValueEx("person", STRING(person.person-id),
+                                     "Document4Date_Vid",
+                                     ""
+                     )
+                ).
+   END.
+   RETURN vRetVal.
+END FUNCTION.
+
+/* возвращает строку Кем выдан документ  (для физлица) */
+FUNCTION fGetDocIssueOrg RETURNS CHARACTER (INPUT iPersID AS INT64):
+   DEFINE VARIABLE vRetVal AS CHARACTER INIT "" NO-UNDO.
+   FOR FIRST person WHERE person.person-id EQ iPersID NO-LOCK:
+      vRetVal = TRIM(person.issue).
+   END.
+   RETURN vRetVal.
+END FUNCTION.
+
+/* возвращает дату выдачи документа  (для физлица) */
+FUNCTION fGetDocIssueDate RETURNS CHARACTER (INPUT iPersID AS INT64):
+   DEFINE VARIABLE vRetVal AS CHARACTER INIT "" NO-UNDO.
+   vRetVal = GetXattrValueEx("person", 
+                             STRING(iPersId),
+                             "Document4Date_Vid",
+                             "").
+   RETURN vRetVal.
+END FUNCTION.
+
+/* возвращает кем выдан без кода подразделения по удостоверениям личности (для физлица) */
+FUNCTION fGetDocIssueClear RETURNS CHARACTER (INPUT iPersID AS INT64):
+   DEFINE VARIABLE vRetVal AS CHARACTER INIT "" NO-UNDO.
+   DEFINE BUFFER xperson     FOR person.
+   DEFINE BUFFER xcust-ident FOR cust-ident.
+   FIND FIRST xperson WHERE xperson.person-id = iPersId NO-LOCK NO-ERROR.
+   IF AVAIL xperson THEN DO:
+      FIND FIRST xcust-ident WHERE xcust-ident.cust-cat       = "Ч"
+                               AND xcust-ident.cust-id        = xperson.person-id
+                               AND xcust-ident.cust-code-type = xperson.document-id
+                               AND xcust-ident.cust-code      = xperson.document
+      NO-LOCK NO-ERROR.
+      IF AVAIL xcust-ident THEN vRetVal = xcust-ident.issue.
+   END.
+   RETURN vRetVal.
+END FUNCTION.
+
+/* возвращает кода подразделения по удостоверениям личности (для физлица) */
+FUNCTION fGetDocIssueKP RETURNS CHARACTER (INPUT iPersID AS INT64):
+   DEFINE VARIABLE vRetVal AS CHARACTER INIT "" NO-UNDO.
+   DEFINE BUFFER xperson     FOR person.
+   DEFINE BUFFER xcust-ident FOR cust-ident.
+   FIND FIRST xperson WHERE xperson.person-id = iPersId NO-LOCK NO-ERROR.
+   IF AVAIL xperson THEN DO:
+      FIND FIRST xcust-ident WHERE xcust-ident.cust-cat       = "Ч"
+                               AND xcust-ident.cust-id        = xperson.person-id
+                               AND xcust-ident.cust-code-type = xperson.document-id
+                               AND xcust-ident.cust-code      = xperson.document
+      NO-LOCK NO-ERROR.
+      IF AVAIL xcust-ident
+      THEN vRetVal = GetXattrValueEx("cust-ident",
+                                     GetSurrogateBuffer("cust-ident",(BUFFER xcust-ident:HANDLE)),
+                                     "Подразд",
+                                     "").
+   END.
+   RETURN vRetVal.
+END FUNCTION.
+
+
+/*получение интеграционного номера*/
+
+FUNCTION GetIntegrationID RETURNS INT64:
+   DEFINE VARIABLE vIntegrationID   AS INT64 NO-UNDO.
+   DEFINE VARIABLE vID AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vIdFormat AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vOut AS CHARACTER NO-UNDO.
+   vIntegrationID = GetCounterNextValue("Integration",?).
+   vIdFormat = GetXAttrEx("person","integrationid","data-format").
+   IF LENGTH(STRING(vIntegrationID)) > LENGTH(vIdFormat) THEN DO:
+      MESSAGE "Формат интеграционных номеров клиентов (integrationID) для класса person" 
+              "составляет" STRING(LENGTH(vIdFormat)) "символов, невозможно"
+              "поместить следующее значение " quoter(STRING(vIntegrationID))
+              "!" SKIP
+              "Обратитесь к администратору!"
+      VIEW-AS ALERT-BOX ERROR.
+      RETURN ?.
+   END.
+   RETURN INT64(vIntegrationID).
+END FUNCTION.
+
+/* Получение начала УНК. */
+FUNCTION GetUnkBeg RETURNS CHARACTER:
+   RETURN SUBSTR(GetThisUserOtdel(), 1, INT64(FGetSetting("УНК","Начало","0"))).
+END FUNCTION.
+
+/* Получение нового УНК. */
+FUNCTION NewUnk RETURNS DECIMAL (iFile AS CHARACTER):
+   DEFINE VARIABLE vUnk         AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUnkFormat   AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vOtdel       AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUnkBeg      AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vNextUnk     AS DECIMAL DECIMALS 0 INIT ? NO-UNDO.
+   DEFINE VARIABLE vAlreadyOrd  AS INT64   NO-UNDO.
+   DEFINE VARIABLE vAlreadySurr AS CHARACTER NO-UNDO.
+   
+   vUnkFormat = GetXAttrEx(iFile,"УНК","data-format").
+   IF vUnkFormat EQ ? THEN
+      RETURN ?.
+
+   ASSIGN 
+      vOtdel  = GetUserBranchId(USERID("bisquit"))
+      vUnkBeg = GetUnkBeg()
+   .
+
+   IF AvailCode("Counters", "CNTUNK") <> YES THEN
+   DO:
+      vUnk = GetMaxSigns("banks,person,cust-corp",
+                         "УНК",
+                         vUnkBeg).
+   
+      vUnk = IF vUnk NE "" 
+             THEN vUnk
+             ELSE (vUnkBeg + SUBSTR(STRING(0, vUnkFormat),
+                                   LENGTH(vUnkBeg) + 1)).
+
+      IF LENGTH(vUnk) > LENGTH(vUnkFormat) THEN DO:
+         MESSAGE "Формат уникальных номеров клиентов (УНК) для класса" iFile
+                 "составляет" STRING(LENGTH(vUnkFormat)) "символов, невозможно"
+                 "поместить следующее значение " quoter(string(vNextUnk))
+                 (IF LENGTH(vUnkBeg) > 0 THEN "с префиксом '" + vUnkBeg + "'" ELSE "") "!" SKIP
+                 "Обратитесь к администратору!"
+         VIEW-AS ALERT-BOX ERROR.
+         RETURN ?.
+      END.
+
+      vUnk = STRING(DECIMAL(vUnk) + 1,vUnkFormat) NO-ERROR.
+         
+      IF NOT vUnk BEGINS vUnkBeg 
+         OR ERROR-STATUS:ERROR THEN DO:
+         MESSAGE "Закончились доступные уникальные номера клиентов (УНК)!" SKIP
+                 "Обратитесь к администратору!"
+         VIEW-AS ALERT-BOX ERROR.
+         RETURN ?.
+      END.
+   END.
+   ELSE
+   DO:
+      _sch_free_unk:
+      REPEAT:
+         vNextUnk = ?.
+         
+         IF CAN-FIND(FIRST code WHERE code.code    = "CNTUNK"
+                                  AND code.class   = "Counters"
+                                  AND code.parent  = "Counters"
+                                  AND code.misc[3] = STRING({&CNT_BY_FILIAL}))  
+         THEN vNextUnk = GetCounterNextValue("CNTUNK",?) NO-ERROR.
+         ELSE
+         vNextUnk = DECIMAL(SendData("COUNTER;CNTUNK_" + vUnkBeg + "_0,CNTUNK,NEXT,0", 5)) NO-ERROR.
+
+         
+         IF vNextUnk = ? OR ERROR-STATUS:ERROR THEN DO:
+            MESSAGE "Закончились доступные уникальные номера клиентов (УНК)"
+                    (IF LENGTH(vUnkBeg) > 0 THEN "с префиксом '" + vUnkBeg + "'" ELSE "") "!" SKIP
+                    "Обратитесь к администратору!"
+            VIEW-AS ALERT-BOX ERROR.
+            RETURN ?.
+         END.
+         
+         IF LENGTH(vUnkBeg) + LENGTH(STRING(vNextUnk)) > LENGTH(vUnkFormat) THEN DO:
+            MESSAGE "Формат уникальных номеров клиентов (УНК) для класса" iFile
+                    "составляет" STRING(LENGTH(vUnkFormat)) "символов, невозможно"
+                    "поместить следующее значение " quoter(string(vNextUnk))
+                    (IF LENGTH(vUnkBeg) > 0 THEN "с префиксом '" + vUnkBeg + "'" ELSE "") "!" SKIP
+                    "Обратитесь к администратору!"
+            VIEW-AS ALERT-BOX ERROR.
+            RETURN ?.
+         END.
+         
+         vUnk = STRING(vNextUnk, vUnkFormat).
+
+         IF LENGTH(vUnkBeg) > 0 THEN
+            vUnk = vUnkBeg + SUBSTR(vUnk, LENGTH(vUnkBeg) + 1) NO-ERROR.
+
+         RUN FindSignsByVal IN h_xclass ("person,cust-corp,banks",
+                                         "УНК",
+                                         vUnk,
+                                         OUTPUT vAlreadyOrd,
+                                         OUTPUT vAlreadySurr).
+         IF vAlreadyOrd <> 0
+         THEN NEXT _sch_free_unk.
+
+         LEAVE _sch_free_unk.
+      END.
+   END.
+   RETURN DECIMAL(vUnk).
+END FUNCTION.
+
+/*Создание нового УНК*/
+FUNCTION new-unk RETURNS CHARACTER (ipFileName  AS CHARACTER, /*Имя класса*/
+                                    ipSurrogate AS CHARACTER  /*Уникальный идентификатор*/):
+   DEFINE VARIABLE flag-unk   AS LOGICAL   NO-UNDO.
+   DEFINE VARIABLE vUnk       AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUnkFormat AS CHARACTER NO-UNDO.
+
+   {getflagunk.i &class-code="ipFileName" &flag-unk="flag-unk"}
+   IF NOT flag-unk THEN RETURN ?.
+
+   vUnkFormat = GetXAttrEx(ipFileName,"УНК","data-format").
+   IF vUnkFormat EQ ? THEN
+      RETURN ?.
+
+   vUnk = STRING(NewUnk(ipFileName), vUnkFormat).
+   IF vUnk <> ? THEN DO:
+      IF NOT UpdateSigns(ipFileName, ipSurrogate, "УНК", vUnk, ?)
+      THEN vUnk = ?.
+   END.
+
+   RETURN vUnk.
+END FUNCTION.
+
+/* Функция возвращает УНК клиента. */
+FUNCTION GetUnk RETURNS CHAR (INPUT ipCustCatChar AS CHAR,   /* Тип клиента. */
+                              INPUT ipCustIdInt   AS INT64 /* Номер клиента. */ ):
+
+   RETURN IF ipCustCatChar EQ "В"
+          THEN ""
+          ELSE getXAttrValue((IF ipCustCatChar EQ "Ю"
+                              THEN "cust-corp"
+                              ELSE IF ipCustCatChar EQ "Ч"
+                                   THEN "person"
+                                   ELSE "banks"),
+                              STRING(ipCustIdInt),
+                              "УНК").
+
+END FUNCTION.
+
+/* Получение УНКг клиента, при отсутствии - генерация */
+FUNCTION UNKg RETURN CHAR (INPUT infile AS CHAR,
+                           INPUT insurr AS CHAR):
+   DEFINE VARIABLE vUnkg AS CHARACTER NO-UNDO.
+   RUN GetClientUNKg (infile, insurr, NO, OUTPUT vUnkg).
+   RETURN vUnkg.
+END FUNCTION.
+
+/* Получение нового номера УНКг. */
+PROCEDURE GetNewUnkgNumber:
+   DEFINE INPUT  PARAMETER iFile   AS CHARACTER NO-UNDO.        /* banks/cust-corp/person */
+   DEFINE INPUT  PARAMETER iSilent AS LOGICAL   NO-UNDO.        /* YES - не выводить сообщения, возвращать ошибки в RETURN-VALUE */
+   DEFINE OUTPUT PARAMETER oUnkg   AS INT64   NO-UNDO INIT ?. /* Новый УНК */
+   
+   DEFINE VARIABLE vRetVal AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUnkg   AS CHARACTER NO-UNDO.
+
+   /* Проверка на разрешение генерации УНКг */
+   IF FGetSetting("УНК", "УНКгГен", "НЕТ") <> "НЕТ" THEN DO:
+
+      IF AvailCode("Counters", "CNTUNKg") <> YES THEN DO:
+         /* Без счетчика */
+         vUnkg = GetMaxSigns("banks,person,cust-corp", "УНКг", "").
+         vUnkg = STRING(DECIMAL(vUnkg) + 1,{&UNKg-Format}) NO-ERROR.
+      END.
+      ELSE vUnkg = STRING(GetCounterNextValue("CNTUNKg",?),{&UNKg-Format}) NO-ERROR.
+      
+      IF NOT {assigned vUnkg}
+      OR ERROR-STATUS:ERROR
+      OR ERROR-STATUS:GET-MESSAGE(1) GT "" THEN DO:
+         /* Ошибка генерации */
+         vRetVal = "Закончились доступные УНКг! Обратитесь к администратору!".
+         IF iSilent = NO THEN MESSAGE vRetVal VIEW-AS ALERT-BOX ERROR.
+      END.
+      ELSE oUnkg = INT64(vUnkg).
+
+   END.
+
+   RETURN vRetVal.
+END PROCEDURE.
+
+/* Получение УНКг клиента, при отсутствии - генерация */
+PROCEDURE GetClientUNKg:
+   DEFINE INPUT  PARAMETER iFile   AS CHARACTER NO-UNDO.        /* banks/cust-corp/person */
+   DEFINE INPUT  PARAMETER iSurr   AS CHARACTER NO-UNDO.        /* Суррогат */
+   DEFINE INPUT  PARAMETER iSilent AS LOGICAL   NO-UNDO.        /* YES - не выводить сообщения, возвращать ошибки в RETURN-VALUE */
+   DEFINE OUTPUT PARAMETER oUNKg   AS CHARACTER NO-UNDO INIT ?. /* УНК */
+
+   DEFINE VARIABLE vRetVal  AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUnkg    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vNewUnkg AS INT64   NO-UNDO.
+   
+   /* Проверка на разрешение генерации УНКг */
+   IF FGetSetting("УНК", "УНКгГен", "НЕТ") <> "НЕТ" THEN DO:
+
+      /* Проверка на существование */
+      vUnkg = GetXAttrValueEx(iFile,iSurr,"УНКг",?).
+      IF {assigned vUNKg}
+      THEN oUNKg = vUnkg.
+      ELSE DO:
+         /* Генерация нового номера */
+         RUN GetNewUnkgNumber (iFile, iSilent, OUTPUT vNewUnkg).
+         vRetVal = RETURN-VALUE.
+         IF vNewUnkg <> ? THEN DO:
+            /* Новый номер сгенерирован верно */
+            vUNKg = STRING(vNewUnkg, {&UNKg-Format}).
+            IF vUNKg <> ? THEN DO:
+               IF UpdateSigns(iFile, iSurr, "УНКг", vUNKg, ?)
+               THEN oUNKg   = vUNKg.
+               ELSE vRetVal = "Невозможно создать УНКг=""" + oUNKg + """ для " + iFile.
+            END.
+         END.
+      END.
+
+   END.
+
+   RETURN vRetVal.
+END PROCEDURE.
+
+/* Метод проверки значения реквизита УНК. */
+PROCEDURE ChkUpdUnk$.
+   DEF INPUT  PARAM iClassCode AS CHAR   NO-UNDO. /* Класс объекта. */
+   DEF INPUT  PARAM iSurrogate AS CHAR   NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT  PARAM iValue     AS CHAR   NO-UNDO. /* Значение объекта. */
+   DEFINE VAR vFlagUnk AS LOGICAL NO-UNDO.
+   DEFINE VAR vError   AS LOGICAL NO-UNDO.
+   DEFINE VAR vRetVal  AS CHAR    NO-UNDO.
+   
+   {getflagunk.i &class-code="iClassCode" &flag-unk="vFlagUnk"}
+   IF vFlagUnk THEN DO:
+      RUN ChkUpdNumCode(iClassCode,
+                        iSurrogate,
+                        "УНК",     
+                        iValue) NO-ERROR.
+      IF ERROR-STATUS:ERROR THEN ASSIGN
+         vError  = YES
+         vRetVal = RETURN-VALUE
+      .
+   END.
+
+   IF vError
+   THEN RETURN ERROR vRetVal.
+   ELSE RETURN vRetVal.
+END PROCEDURE.
+
+/* Метод проверки значения реквизита УНКг. */
+PROCEDURE ChkUpdUnkg$.
+   DEF INPUT  PARAM iClassCode AS CHAR   NO-UNDO. /* Класс объекта. */
+   DEF INPUT  PARAM iSurrogate AS CHAR   NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT  PARAM iValue     AS CHAR   NO-UNDO. /* Значение объекта. */
+   
+   DEF VAR vMsg AS CHAR   NO-UNDO. /* Сообщение об ошибке. */
+   DEF VAR vUnk AS CHAR   NO-UNDO. /* Значение ДР. */
+
+   DEFINE VARIABLE vFile AS INT64   NO-UNDO.
+   DEFINE VARIABLE vSurr AS CHARACTER NO-UNDO.
+
+   IF LENGTH (TRIM (iValue)) GT 9 /* жесткая прошивка */
+      THEN vMsg = "Неверный номер УНКг.".
+   ELSE DO:
+      vUnk = GetXattrValueEx (iClassCode, iSurrogate, 'УНКг', ?).
+      IF vUnk NE iValue
+      THEN DO:
+         RUN FindSignsByVal IN h_xclass ("banks,person,cust-corp",
+                                         'УНКг',
+                                         iValue,
+                                         OUTPUT vFile,
+                                         OUTPUT vSurr).
+         IF     vFile GT 0 
+            AND (   ENTRY(vFile,"banks,person,cust-corp") NE iClassCode
+                 OR vSurr NE iSurrogate )
+            THEN vMsg = "Уже есть такой УНКг.".
+      END.
+   END.
+   IF vMsg NE ""
+      THEN RETURN ERROR vMsg.
+   
+END PROCEDURE.
+
+PROCEDURE ChkUpdNumCode PRIVATE.
+   DEF INPUT  PARAM iClassCode AS CHAR   NO-UNDO. /* Класс объекта. */
+   DEF INPUT  PARAM iSurrogate AS CHAR   NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT  PARAM iCode      AS CHAR   NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT  PARAM iValue     AS CHAR   NO-UNDO. /* Значение объекта. */
+
+   DEF VAR vMsg AS CHAR   NO-UNDO. /* Сообщение об ошибке. */
+   DEF VAR vUnk AS CHAR   NO-UNDO. /* Значение ДР. */
+
+   DEFINE VARIABLE vFile AS INT64   NO-UNDO.
+   DEFINE VARIABLE vSurr AS CHARACTER NO-UNDO.
+
+                           /* Поиск описания ДР. */
+   FIND FIRST xattr WHERE
+              xattr.class-code EQ iClassCode
+          AND xattr.xattr-code EQ iCode
+   NO-LOCK NO-ERROR.
+   IF LENGTH (STRING ("0",xattr.data-format)) NE LENGTH (TRIM (iValue))
+      THEN vMsg = "Неверный номер " + iCode + ".".
+   ELSE DO:
+      vUnk = GetXattrValueEx (iClassCode, iSurrogate, iCode, ?).
+      IF vUnk NE iValue
+      THEN DO:
+         RUN FindSignsByVal IN h_xclass ("banks,person,cust-corp",
+                                         iCode,
+                                         iValue,
+                                         OUTPUT vFile,
+                                         OUTPUT vSurr).
+         IF     vFile GT 0 
+            AND (   ENTRY(vFile,"banks,person,cust-corp") NE iClassCode
+                 OR vSurr NE iSurrogate )
+            THEN vMsg = "Уже есть такой " + iCode + ".".
+      END.
+   END.
+   IF vMsg NE ""
+      THEN RETURN ERROR vMsg.
+   RETURN.
+END PROCEDURE.
+
+
+/* Метод проверки значения реквизита Date-out. */
+PROCEDURE ChkUpdDate-out.
+   DEF INPUT  PARAM iClassCode AS CHAR   NO-UNDO. /* Класс объекта. */
+   DEF INPUT  PARAM iSurrogare AS CHAR   NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT  PARAM iValue     AS CHAR   NO-UNDO. /* Значение объекта. */
+
+   DEF BUFFER acct FOR acct. /* Локализация буфера. */
+   DEF BUFFER loan FOR loan. /* Локализация буфера. */
+   DEF BUFFER class FOR class. /* Локализация буфера. */
+
+   DEF VAR vCustCat  AS CHAR   NO-UNDO. /* Тип клиента. */
+   DEF VAR vDate     AS DATE   NO-UNDO. /* Значение поля. */
+   DEF VAR vErrMsg   AS CHAR   NO-UNDO. /* Сообщение об ошибке. */
+   DEF VAR vLoanList AS CHAR   NO-UNDO. /* Классы договоров без контроля */
+
+   vDate = DATE (iValue) NO-ERROR.
+   IF ERROR-STATUS:ERROR
+   THEN vErrMsg = ERROR-STATUS:GET-MESSAGE (1).
+   ELSE DO:
+      /* если дата не установлена то проверки не требуются */
+      IF vDate EQ ? THEN
+         RETURN.
+      CASE iClassCode:
+         WHEN "person"     THEN vCustCat = "Ч".
+         WHEN "cust-corp"  THEN vCustCat = "Ю".
+         WHEN "banks"      THEN vCustCat = "Б".
+      END CASE.
+
+      FOR FIRST acct WHERE
+               acct.cust-cat     EQ vCustCat
+         AND   acct.cust-id      EQ INT64 (iSurrogare)
+         AND  (acct.close-date   EQ ?
+            OR acct.close-date   GT vDate)
+      NO-LOCK:
+         vErrMsg = "У клиента есть открытые счета '" + acct.acct     + 
+                                      "' в валюте '" + acct.currency + "'.".
+      END.
+      IF vErrMsg EQ ""
+      THEN 
+      DO:   
+      vLoanList = FGetSetting("ЗакрКл","ДогБезКонтр","").
+      FOR FIRST loan WHERE
+               loan.cust-cat     EQ vCustCat
+         AND   loan.cust-id      EQ INT64 (iSurrogare)
+         AND  (loan.close-date   EQ ?
+            OR loan.close-date   GT vDate)
+         AND NOT CAN-DO(vLoanList,loan.Class-Code) 
+         NO-LOCK:
+         FIND FIRST class WHERE class.Class-Code EQ loan.Class-Code NO-LOCK 
+                                                                    NO-ERROR.
+         vErrMsg = "У клиента есть открытые договоры '" 
+                 + (IF CAN-DO("АХД,sf-in,sf-out",loan.contract)
+                    THEN loan.doc-num
+                    ELSE loan.cont-code) 
+                 + "' с классом '" + (IF AVAIL Class THEN class.NAME ELSE "")  
+                 + "("             + loan.Class-Code 
+                 + ")'.".
+      END.
+      END.
+   END.
+   IF vErrMsg NE ""
+      THEN RETURN ERROR vErrMsg.
+   RETURN.
+END PROCEDURE.
+
+/* Возвращает значение части адреса. */
+FUNCTION GetAdrStr RETURNS CHAR (
+   INPUT vAdrChar    AS CHAR,    /* символьная строка */
+   INPUT iFieldChar  AS CHAR     /* наименование части адреса */ 
+):
+   DEF VAR vEntryInt AS INT64  NO-UNDO.  /* кол-во частей в адресе */
+   DEF VAR vRetChar  AS CHAR NO-UNDO.  /* раб. перем. - возвращаемое значение */
+   vRetChar = "".
+   
+   vEntryInt = NUM-ENTRIES (vAdrChar).
+   IF iFieldChar EQ "индекс"   AND vEntryInt >= 1  THEN vRetChar = ENTRY (1, vAdrChar).
+   IF iFieldChar EQ "район"    AND vEntryInt >= 2  THEN vRetChar = ENTRY (2, vAdrChar).
+   IF iFieldChar EQ "город"    AND vEntryInt >= 3  THEN vRetChar = ENTRY (3, vAdrChar).
+   IF iFieldChar EQ "пункт"    AND vEntryInt >= 4  THEN vRetChar = ENTRY (4, vAdrChar).
+   IF iFieldChar EQ "улица"    AND vEntryInt >= 5  THEN vRetChar = ENTRY (5, vAdrChar).
+   IF iFieldChar EQ "дом"      AND vEntryInt >= 6  THEN vRetChar = ENTRY (6, vAdrChar).
+   IF iFieldChar EQ "корпус"   AND vEntryInt >= 7  THEN vRetChar = ENTRY (7, vAdrChar).
+   IF iFieldChar EQ "квартира" AND vEntryInt >= 8  THEN vRetChar = ENTRY (8, vAdrChar).
+   IF iFieldChar EQ "строение" AND vEntryInt >= 9  THEN vRetChar = ENTRY (9, vAdrChar).
+   RETURN vRetChar.
+END FUNCTION.
+
+/* преобразования форматированной строки адреса   */
+FUNCTION fGetStrAdr RETURNS CHAR (INPUT ipAdrChar AS CHAR):
+   DEF VAR opAdrChar AS CHAR NO-UNDO.
+
+   IF    NUM-ENTRIES(ipAdrChar) EQ 9
+      OR NUM-ENTRIES(ipAdrChar) EQ 8 
+   THEN
+      opAdrChar = /* индекс */
+                 (IF ENTRY(1, ipAdrChar) EQ "000000"
+                  THEN ""
+                  ELSE ENTRY(1, ipAdrChar) + ", ") +
+                 /* район */
+                 ENTRY(2, ipAdrChar) + (IF ENTRY(2, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* город */
+                 ENTRY(3, ipAdrChar) + (IF ENTRY(3, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* населенный пункт */
+                 ENTRY(4, ipAdrChar) + (IF ENTRY(4, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* улица */
+                 ENTRY(5, ipAdrChar) + (IF ENTRY(5, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* дом */
+                 (IF INDEX(ENTRY(6, ipAdrChar), "д") NE 0 OR ENTRY(6, ipAdrChar) EQ ""
+                  THEN ""
+                  ELSE "д.") +
+                 ENTRY(6, ipAdrChar) + (IF ENTRY(6, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* строение */
+                 (IF NUM-ENTRIES(ipAdrChar) EQ 9
+                 THEN ((IF INDEX(ENTRY(9, ipAdrChar), "стр") NE 0 OR ENTRY(9, ipAdrChar) EQ ""
+                        THEN ""
+                        ELSE "стр.") +
+                        TRIM(ENTRY(9, ipAdrChar)) + (IF ENTRY(9, ipAdrChar) EQ "" THEN "" ELSE ", "))
+                 ELSE "" ) +
+                 /* корпус */
+                 (IF INDEX(ENTRY(7, ipAdrChar), "к") NE 0 OR ENTRY(7, ipAdrChar) EQ ""
+                  THEN ""
+                  ELSE "к.") +
+                 ENTRY(7, ipAdrChar) + (IF ENTRY(7, ipAdrChar) EQ "" THEN "" ELSE ", ") +
+                 /* квартира */
+                 (IF INDEX(ENTRY(8, ipAdrChar), "к") NE 0 OR ENTRY(8, ipAdrChar) EQ ""
+                  THEN ""
+                  ELSE "кв.") +
+                 ENTRY(8, ipAdrChar)
+      .
+   ELSE
+      opAdrChar = ipAdrChar.
+   RETURN IF opAdrChar EQ ? THEN "?" ELSE opAdrChar.
+END FUNCTION.
+
+/* Устанавливает значение роль субъекта "клиент" / "нет". */
+PROCEDURE SetClientRole.
+   DEF INPUT  PARAM iHBuffer  AS HANDLE NO-UNDO.   /* Указатель на объект. */
+   DEF INPUT  PARAM iCustCat  AS CHAR   NO-UNDO.   /* Тип клиента. */
+   DEF INPUT  PARAM iClient   AS LOG    NO-UNDO.   /* Клиент / не клиент. */
+
+   DEF BUFFER cust-role FOR cust-role. /* Локализация буфера. */
+
+   DEF VAR vClassSrc AS CHAR   NO-UNDO. /* Класс для поиска. */
+   DEF VAR vClassCr  AS CHAR   NO-UNDO. /* Класс для создания. */
+   DEF VAR vCustId   AS INT64    NO-UNDO. /* Тип клиента. */
+   DEF VAR vFileName AS CHAR   NO-UNDO. /* Таблица связанного объекта. */
+   DEF VAR vSurr     AS CHAR   NO-UNDO. /* ID связанного объекта. */
+   DEF VAR vH        AS HANDLE NO-UNDO. /* Указатель на поле *-id. */
+                        /* Определеям тип клиента по полю *-id. */
+   CASE iCustCat:
+      WHEN "Ч"
+      THEN ASSIGN
+         vFileName   = "person"
+         vH          = iHBuffer:BUFFER-FIELD ("person-id")
+      NO-ERROR.
+      WHEN "Ю"
+      THEN ASSIGN
+         vFileName   = "cust-corp"
+         vH          = iHBuffer:BUFFER-FIELD ("cust-id")
+      NO-ERROR.
+      WHEN "Б"
+      THEN ASSIGN
+         vFileName   = "banks"
+         vH          = iHBuffer:BUFFER-FIELD ("bank-id")
+      NO-ERROR.
+   END CASE.
+                        /* Передан указатель не на субъект. */
+   IF NOT VALID-HANDLE (vH)
+      THEN RETURN ERROR.
+   ASSIGN
+      vClassSrc   = IF iClient   THEN {&NoBankClient} ELSE {&BankClient}
+      vClassCr    = IF iClient   THEN {&BankClient}   ELSE {&NoBankClient}
+      vCustId     = vH:BUFFER-VALUE
+      vSurr       = STRING (vCustId)
+      vFileName   = "branch"
+      vSurr       = ShFilial
+   .
+                        /* Поиск роли, которую необходимо создать. */
+   FIND FIRST cust-role WHERE
+            cust-role.cust-cat   EQ iCustCat
+      AND   cust-role.cust-id    EQ STRING (vCustId)
+      AND   cust-role.Class-Code EQ vClassCr
+      AND   cust-role.file-name  EQ vFileName
+      AND   cust-role.surrogate  EQ vSurr USE-INDEX cust-id
+   NO-LOCK NO-ERROR.
+                        /* Если роли нет, то создаем. */
+   IF NOT AVAIL cust-role THEN
+   DO
+   ON ERROR  UNDO, LEAVE
+   ON ENDKEY UNDO, LEAVE:
+                        /* Удаляем все старые роли. */
+      FOR EACH cust-role WHERE
+               cust-role.cust-cat   EQ iCustCat
+         AND   cust-role.cust-id    EQ STRING (vCustId)
+         AND   cust-role.Class-Code EQ vClassSrc
+         AND   cust-role.file-name  EQ vFileName
+         AND   cust-role.surrogate  EQ vSurr
+      EXCLUSIVE-LOCK:
+         DELETE cust-role.
+      END.
+                        /* Создаем роль. */
+      CREATE cust-role.
+      ASSIGN
+         cust-role.cust-cat   =  iCustCat
+         cust-role.cust-id    =  STRING (vCustId)
+         cust-role.class-code =  vClassCr
+         cust-role.file-name  =  vFileName
+         cust-role.surrogate  =  vSurr
+      .
+      RELEASE cust-role.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Выдает список обязательных для заполнения аттрибутов
+** в зависимости от набора ролей субъекта.*/
+PROCEDURE GetFieldManListByRole:
+   DEFINE INPUT  PARAMETER iFileName AS CHAR   NO-UNDO. /* название таблицы */
+   DEFINE INPUT  PARAMETER iSurrogate AS CHAR  NO-UNDO. /* Суррогат */
+   
+   DEFINE OUTPUT PARAMETER oList     AS CHAR   NO-UNDO. /* Список полей */
+
+   DEFINE VAR vCustCat    AS CHAR    NO-UNDO INIT "Ч".
+   DEFINE VAR vImaginRole AS CHAR    NO-UNDO. /* Список потенциальных ролей. */
+   DEFINE VAR vClass      AS CHAR    NO-UNDO. /* Список классов - ролей пользователя. */
+   DEFINE VAR vManFields  AS CHAR    NO-UNDO.
+   DEFINE VAR vCnt        AS INT64 NO-UNDO. /* Счетчик. */
+   DEFINE BUFFER xcust-role FOR cust-role. /* Локализация буфера. */
+
+   ASSIGN
+      vCustCat    = ENTRY(LOOKUP(iFileName,"cust-corp,person,banks"),"Ю,Ч,Б")
+      vImaginRole = GetXclassAllChilds ("ImaginRole")
+   .
+   /* Собираем потенциальные классы ролей по пользователю. */
+   FOR EACH xcust-role WHERE
+            xcust-role.cust-cat   EQ vCustCat
+      AND   xcust-role.cust-id    EQ iSurrogate
+      AND   CAN-DO (vImaginRole, xcust-role.class-code)
+   NO-LOCK:
+      {additem.i vClass xcust-role.class-code}
+   END.
+   /* Собираем обязательные для заполнения поля. */
+   DO vCnt = 1 TO NUM-ENTRIES(vClass):
+      vManFields = "".
+      vManFields = GetXAttrEx(ENTRY(vCnt,vClass),"ОбязПоля","Initial").
+      {additem.i oList vManFields}
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+/* Выдает незаполненное поле обязательное
+** в зависимости от набора ролей субъекта.*/
+PROCEDURE GetFirstUnassignedFieldManByRole:
+   DEFINE INPUT  PARAMETER iFileName     AS CHAR                   NO-UNDO. /* название таблицы */
+   DEFINE INPUT  PARAMETER iHBuffer      AS HANDLE                 NO-UNDO. /* Указатель на запись. */
+   DEFINE INPUT  PARAMETER iMain         AS CHAR                   NO-UNDO.  /* указатель на проверку основных/доп реквизитов 
+                                                                                "main" - только основные реквизиты  
+                                                                                "dp" - только доп реквизиты 
+                                                                                "all" - все реквизиты */   
+   DEFINE OUTPUT PARAMETER oXAttrCode    LIKE xattr.xattr-code     NO-UNDO. /* Код аттрибута */
+   DEFINE OUTPUT PARAMETER oXAttrName    LIKE xattr.name           NO-UNDO. /* Наименование аттрибута */
+
+   DEFINE VAR vFieldMan  AS CHAR    NO-UNDO. /* Список обязательных полей. */
+   DEFINE VAR vSurrogate AS CHAR    NO-UNDO.
+   DEFINE VAR vCnt       AS INT64 NO-UNDO. /* Счетчик. */
+   DEFINE VAR vErr       AS LOGICAL NO-UNDO. /* Флаг ошибки. */
+   DEFINE VAR vClXttr    AS CHAR    NO-UNDO. /* Класс очередного проверяемого реквизита */
+   DEFINE VAR vCdXttr    AS CHAR    NO-UNDO. /* Код очередного проверяемого реквизита */
+   DEFINE BUFFER xxattr FOR xattr. /* Локализация буфера. */
+
+   ASSIGN
+      oXAttrCode = ""
+      oXAttrName = ""
+   .
+   vSurrogate  = GetSurrogateBuffer(iFileName,iHBuffer).
+   RUN GetFieldManListByRole (iFileName, vSurrogate, OUTPUT vFieldMan).
+   IF NOT {assigned vFieldMan}
+      THEN RETURN.
+
+   /* Перебираем обязательные реквизиты субъекта. */
+   _check_fields:
+   DO vCnt = 1 TO NUM-ENTRIES(vFieldMan):
+      vClXttr = IF NUM-ENTRIES(ENTRY(vCnt, vFieldMan),".") > 1
+                THEN ENTRY(1,ENTRY(vCnt, vFieldMan),".")
+                ELSE iFileName.
+      vCdXttr = IF NUM-ENTRIES(ENTRY(vCnt, vFieldMan),".") > 1
+                THEN ENTRY(2,ENTRY(vCnt, vFieldMan),".")
+                ELSE ENTRY(1,ENTRY(vCnt, vFieldMan),".").
+      IF vClXttr NE iFileName
+         THEN NEXT.
+
+      FIND FIRST xxattr WHERE xxattr.class-code = vClXttr
+                          AND xxattr.xattr-code = vCdXttr
+      NO-LOCK NO-ERROR.
+      IF AVAIL xxattr THEN DO:
+
+         /* Для основных реквизитов таблицы. */          
+         IF iMain EQ "main" OR iMain EQ "all" THEN DO:
+            IF xxattr.Progress-Field THEN DO:
+               CASE xxattr.DATA-TYPE:
+                  WHEN "INTEGER"    THEN vErr = (0  = iHBuffer:BUFFER-FIELD (xxattr.xattr-code):BUFFER-VALUE).
+                  WHEN "DATE"       THEN vErr = (?  = iHBuffer:BUFFER-FIELD (xxattr.xattr-code):BUFFER-VALUE).
+                  WHEN "LOGICAL"    THEN vErr = (?  = iHBuffer:BUFFER-FIELD (xxattr.xattr-code):BUFFER-VALUE).
+                  WHEN "CHARACTER"  THEN vErr = ("" = iHBuffer:BUFFER-FIELD (xxattr.xattr-code):BUFFER-VALUE).
+                  WHEN "DECIMAL"    THEN vErr = (0  = iHBuffer:BUFFER-FIELD (xxattr.xattr-code):BUFFER-VALUE).
+               END CASE.
+               IF vErr THEN DO:
+                  ASSIGN
+                     oXAttrCode = xxattr.xattr-code
+                     oXAttrName = xxattr.name
+                  .
+                  LEAVE _check_fields.
+               END.
+            END.             
+         END.
+         /* Для дополнительных реквизитов таблицы. */
+         IF iMain EQ "dp" OR iMain EQ "all" THEN DO:
+            IF NOT xxattr.Progress-Field THEN DO:
+               IF GetXAttrValueEx (iFileName, vSurrogate, xxattr.xattr-code, ?) = ?
+               THEN DO:
+                  ASSIGN
+                     oXAttrCode = xxattr.xattr-code
+                     oXAttrName = xxattr.name
+                  .
+                  LEAVE _check_fields.
+               END.                 
+            END.              
+         END.
+
+      END.
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+/* Проверяет обязательность заполнения полей
+** в зависимости от набора ролей субъекта.*/
+PROCEDURE ChkFieldManByRole.
+   DEFINE INPUT PARAMETER iFileName AS CHAR   NO-UNDO. /* название таблицы */
+   DEFINE INPUT PARAMETER iHBuffer  AS HANDLE NO-UNDO. /* Указатель на запись. */
+   DEFINE VAR vXattrCode    LIKE xattr.xattr-code NO-UNDO.
+   DEFINE VAR vXattrName    LIKE xattr.name NO-UNDO.
+   DEFINE VAR vIsProgrField LIKE xattr.Progress-Field NO-UNDO.
+
+   RUN GetFirstUnassignedFieldManByRole (iFileName, iHBuffer, "all", OUTPUT vXattrCode, OUTPUT vXattrName).
+   IF {assigned vXattrCode} THEN DO:
+      RUN Fill-SysMes IN h_tmess ("", "", "0",
+         "Не заполнен обязательный реквизит """ + vXattrCode +
+         """ (" + vXattrName + ")."
+         ).
+      RETURN ERROR.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* если клиент имеет всего одно удостоверение личности - возвращается его код 
+   (аналогично возвращаемому значению в броузере документов)
+   
+   если удостоверений больше одного - возвращается ?.
+   если удостоверений нет ни осного - пустая строка */
+FUNCTION GetSingleDoc RETURNS CHARACTER
+  (INPUT          in-cat   AS CHAR,
+   INPUT          in-id    AS CHAR ):
+  
+  DEFINE BUFFER b-cust-ident FOR cust-ident.
+
+  /* FIND без модификатора оправдан */
+  FIND b-cust-ident WHERE b-cust-ident.cust-cat  = in-cat 
+                      AND b-cust-ident.cust-id   = INT64(in-id)
+                    NO-LOCK NO-ERROR.
+  IF AMBIGUOUS b-cust-ident THEN RETURN ?.
+  IF AVAILABLE b-cust-ident THEN DO:
+    RETURN b-cust-ident.cust-code-type        + "," + 
+           b-cust-ident.cust-code             + "," + 
+           STRING(b-cust-ident.cust-type-num) + "~001" + 
+           b-cust-ident.cust-cat              + "~001" + 
+           STRING(b-cust-ident.cust-id).
+  END. 
+  
+  RETURN "".
+END FUNCTION. 
+
+/* дополнительная проверка кодов адреса 
+   входящие параметры: код региона ГНИ
+                       код области
+                       код города
+                       код населенного пункта
+                       код улицы
+                        
+   возвращает:         коды адреса*/
+FUNCTION fChkDopGni RETURNS CHARACTER (
+   INPUT iRegGniChar    AS CHARACTER,
+   INPUT iCodeOblChar   AS CHARACTER,
+   INPUT iCodeGorChar   AS CHARACTER,
+   INPUT iCodePunktChar AS CHARACTER,
+   INPUT iCodeUlChar    AS CHARACTER  ):
+
+   IF iCodeOblChar <> "" AND
+      iRegGniChar  <> "" AND
+      iCodeOblChar BEGINS iRegGniChar
+   THEN.
+   ELSE iCodeOblChar   = "".
+
+   IF iCodeGorChar <> "" AND
+      iRegGniChar  <> "" AND
+      iCodeGorChar BEGINS (IF iCodeOblChar <> ""
+                           THEN SUBSTR(iCodeOblChar,1,5)
+                           ELSE iRegGniChar)
+   THEN .
+   ELSE iCodeGorChar   = "".
+
+   IF iCodePunktChar <> "" AND
+      iRegGniChar    <> "" AND
+      iCodePunktChar BEGINS (IF iCodeOblChar <> ""
+                              THEN SUBSTR(iCodeOblChar,1,5)
+                              ELSE iRegGniChar)
+   THEN .
+   ELSE iCodePunktChar   = "".
+
+   IF iCodeUlChar <> "" AND
+      iRegGniChar <> "" AND
+    ((IF iCodePunktChar <> "" THEN iCodeUlChar BEGINS SUBSTRING(iCodePunktChar,1,11) ELSE NO) OR
+     (IF iCodeGorChar   <> "" THEN iCodeUlChar BEGINS SUBSTRING(iCodeGorChar,1,11)   ELSE NO ))
+   THEN .
+   ELSE iCodeUlChar   = "".
+
+   RETURN (IF iCodeOblChar  = "" AND
+             iCodeGorChar   = "" AND
+             iCodePunktChar = "" AND
+             iCodeUlChar    = ""
+         THEN ""
+         ELSE (iCodeOblChar   + ","
+             + iCodeGorChar   + ","
+             + iCodePunktChar + ","
+             + iCodeUlChar)).
+
+END FUNCTION.
+
+/* Проверка существования у субъекта (Ч,Б,Ю) потенциальных ролей (потомков класса ImaginRole)
+** Создана для проверки перед удалением субъекта, поэтому при наличии таких ролей
+** задает вопрос "Удалять ли субъект?" */
+PROCEDURE CheckSubjectRole.
+   DEF INPUT  PARAM iCustCat  AS CHAR          NO-UNDO.  /* категория субъекта (Ч,Б,Ю) */
+   DEF INPUT  PARAM iCustId   AS INT64           NO-UNDO.  /* номер субъекта */
+   DEF OUTPUT PARAM oResult   AS LOG INIT YES  NO-UNDO.  /* результат (YES-удалять,NO-не удалять) */
+
+   DEF VAR vRoleList AS CHAR           NO-UNDO. /* список потенциальных ролей */
+   DEF VAR vINN      AS CHAR           NO-UNDO. /* ИНН */
+   DEF VAR vi        AS INT64            NO-UNDO. /* счетчик цикла */
+   DEF VAR vName     AS CHAR EXTENT 2  NO-UNDO. /* наименование субъекта */
+
+   /* собираем список потенц. ролей - потомков класса ImaginRole */
+   vRoleList = GetXclassAllChildsEx("ImaginRole").
+   /* поиск потенциальных ролей (список vRoleList) у субъекта */
+   CYCLE:
+   DO vi = 1 TO NUM-ENTRIES(vRoleList):
+      FOR EACH cust-role WHERE cust-role.cust-cat   EQ iCustCat
+                           AND cust-role.cust-id    EQ STRING(iCustId)
+                           AND cust-role.Class-Code EQ ENTRY(vi,vRoleList)
+      NO-LOCK:
+         /* определить наименование субъекта */
+         RUN GetCustName IN h_base(iCustCat,
+                                   iCustID,
+                                   ?,
+                                   OUTPUT vName[1],
+                                   OUTPUT vName[2],
+                                   INPUT-OUTPUT vINN).
+         pick-value = "NO". /* предустановить заранее ответ "НЕТ" */
+         RUN Fill-SysMes IN h_tmess ("", "", "4", "У субъекта <" + STRING(iCustID) +
+                                                  "> (" + TRIM(vName[1]) + " " + TRIM(vName[2]) +
+                                                  ") существуют роли.~n" +
+                                                  "Удалить субъект?").
+         oResult = pick-value EQ "YES".
+         LEAVE CYCLE.
+      END.  /* of FOR EACH cust-role */
+   END.  /* of DO vi = 1 */
+   RETURN.
+END PROCEDURE.
+
+/* Функция, определяющая является ли субъект клиентом банка */
+FUNCTION IsSubjClient RETURNS LOGICAL 
+   (INPUT iCustCat AS CHARACTER,
+    INPUT iCustId  AS INT64).
+   
+   DEFINE VARIABLE vResult AS LOGICAL NO-UNDO.
+
+   DEF BUFFER banks     FOR banks.     /* Локализация буфера. */
+   DEF BUFFER person    FOR person.    /* Локализация буфера. */
+   DEF BUFFER cust-corp FOR cust-corp. /* Локализация буфера. */
+   
+   vResult = ?.
+   CASE iCustCat:
+      WHEN "Б" THEN
+         FOR FIRST banks WHERE
+                   banks.bank-id EQ iCustId NO-LOCK:
+            vResult = banks.client.
+         END.
+      WHEN "Ч"
+   OR WHEN "Ю" THEN
+         vResult = GetValueByQuery ("cust-role",
+                                    "class-code",
+                                    "        cust-role.cust-cat   EQ '" + iCustCat + "'" + 
+                                    "  AND   cust-role.cust-id    EQ '" + STRING (iCustId) + "'" +
+                                    "  AND   cust-role.class-code EQ 'ImaginClient'"
+                                    ) NE ?.
+      OTHERWISE 
+         vResult = YES.
+   END CASE.
+   RETURN vResult.
+END FUNCTION.
+
+PROCEDURE GetCustAdr.
+   DEFINE INPUT PARAMETER iCustCat AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iCustID  AS INT64   NO-UNDO.
+   DEFINE INPUT PARAMETER iDate    AS DATE      NO-UNDO.
+   DEFINE INPUT PARAMETER iAdrType AS CHARACTER NO-UNDO.
+   
+   DEFINE OUTPUT PARAMETER TABLE FOR ttCustAddress.
+
+   
+   {cust-adr.obj
+      &def-vars     = YES
+   }
+   DEFINE BUFFER cust-ident FOR cust-ident. /* Локализация буфера. */   
+   IF NOT {assigned iAdrType} THEN
+      iAdrType = '*'.
+   IF iDate = ? THEN
+      iDate = gend-date.
+
+   {empty ttCustAddress}
+
+   FOR EACH cust-ident WHERE
+            cust-ident.Class-code = "p-cust-adr"
+        AND cust-ident.cust-cat   = iCustCat
+        AND cust-ident.cust-id    = iCustID
+        AND cust-ident.open-date  LE iDate
+        AND CAN-DO(iAdrType,cust-ident.cust-code-type)
+        AND (   cust-ident.close-date EQ ?
+             OR cust-ident.close-date GE iDate)
+   NO-LOCK:
+      CREATE ttCustAddress.
+      ASSIGN
+         ttCustAddress.fFlAdrStr  = GetCode("КодАдр",cust-ident.cust-code-type) NE "0"
+         ttCustAddress.fCodReg    = GetXattrValue("cust-ident",
+                                                   cust-ident.cust-code-type + ',' + 
+                                                   cust-ident.cust-code      + ',' + 
+                                                   STRING(cust-ident.cust-type-num),
+                                                   "КодРег"
+                                                 )
+         ttCustAddress.fCodRegGNI = GetXattrValue("cust-ident",
+                                                   cust-ident.cust-code-type + ',' + 
+                                                   cust-ident.cust-code      + ',' + 
+                                                   STRING(cust-ident.cust-type-num),
+                                                   "КодРегГНИ"
+                                                 )
+         ttCustAddress.fCountryID = GetXattrValue("cust-ident",
+                                                  cust-ident.cust-code-type + ',' + 
+                                                  cust-ident.cust-code      + ',' + 
+                                                  STRING(cust-ident.cust-type-num),
+                                                  "country-id"
+                                                 )
+         ttCustAddress.fAdrStr    = fGetStrAdr(cust-ident.issue) 
+         ttCustAddress.AdrStr    =  cust-ident.issue
+         ttCustAddress.fCustCat   = cust-ident.cust-cat
+         ttCustAddress.fCustID    = cust-ident.cust-id
+         ttCustAddress.fTypeAdr   = cust-ident.cust-code-type
+         ttCustAddress.fBegDate   = cust-ident.open-date 
+         ttCustAddress.fEndDate   = cust-ident.close-date
+         ttCustAddress.fCustNum   = cust-ident.cust-type-num
+      .
+      
+      {cust-adr.obj 
+         &addr-to-vars = YES
+         &tablefield   = "TRIM(cust-ident.issue)"
+      }
+      ASSIGN
+         ttCustAddress.fIndexInt  = vAdrIndInt
+         ttCustAddress.fOblChar   = vOblChar  
+         ttCustAddress.fGorChar   = vGorChar  
+         ttCustAddress.fPunktChar = vPunktChar
+         ttCustAddress.fUlChar    = vUlChar   
+         ttCustAddress.fDomChar   = vDomChar  
+         ttCustAddress.fKorpChar  = vKorpChar 
+         ttCustAddress.fKvChar    = vKvChar   
+         ttCustAddress.fStrChar   = vStrChar  
+      .
+   END.
+END PROCEDURE.
+
+/* Инструмент действует обратно GetCustAdr - сохраняет информацию из полей ttCustAddress в cust-ident в нужном формате. */
+PROCEDURE SetCustAdr.
+   DEFINE INPUT PARAMETER iCustCat AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iCustID  AS INT64   NO-UNDO.
+   DEFINE INPUT PARAMETER iDate    AS DATE      NO-UNDO.
+   DEFINE INPUT PARAMETER iAdrType AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER TABLE FOR ttCustAddress.
+   
+   {cust-adr.obj
+      &def-vars = YES
+   }
+
+   DEFINE VARIABLE mDateStr AS CHARACTER   NO-UNDO.
+
+   IF NOT {assigned iAdrType} THEN
+      iAdrType = '*'.
+   IF iDate = ? THEN
+      iDate = gend-date.
+
+   FOR EACH ttCustAddress WHERE  ttCustAddress.fCustCat EQ iCustCat
+                            AND  ttCustAddress.fCustID  EQ iCustID
+                            AND  ttCustAddress.fBegDate LE iDate
+                            AND (ttCustAddress.fEndDate EQ ?
+                             OR  ttCustAddress.fEndDate GE iDate)
+                            AND CAN-DO(iAdrType, ttCustAddress.fTypeAdr)
+   NO-LOCK:
+
+      mDateStr = STRING(YEAR(ttCustAddress.fBegDate), "9999") + STRING(MONTH(ttCustAddress.fBegDate), "99") + STRING(DAY(ttCustAddress.fBegDate), "99").
+
+      FIND FIRST cust-ident WHERE cust-ident.cust-code-type EQ ttCustAddress.fTypeAdr
+               AND cust-ident.cust-code      EQ mDateStr
+               AND cust-ident.cust-type-num  EQ ttCustAddress.fCustNum 
+                              EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+      IF NOT AVAIL cust-ident THEN
+         CREATE cust-ident.
+
+      ASSIGN
+         cust-ident.class-code     = "p-cust-adr"
+         cust-ident.cust-cat       = ttCustAddress.fCustCat
+         cust-ident.cust-id        = ttCustAddress.fCustID
+         cust-ident.cust-code-type = ttCustAddress.fTypeAdr
+         cust-ident.open-date      = ttCustAddress.fBegDate
+         cust-ident.close-date     = ttCustAddress.fEndDate
+         cust-ident.cust-code      = mDateStr
+         cust-ident.cust-type-num  = ttCustAddress.fCustNum
+         vAdrIndInt                = ttCustAddress.fIndexInt
+         vOblChar                  = ttCustAddress.fOblChar
+         vGorChar                  = ttCustAddress.fGorChar
+         vPunktChar                = ttCustAddress.fPunktChar
+         vUlChar                   = ttCustAddress.fUlChar
+         vDomChar                  = ttCustAddress.fDomChar
+         vKorpChar                 = ttCustAddress.fKorpChar
+         vKvChar                   = ttCustAddress.fKvChar
+         vStrChar                  = ttCustAddress.fStrChar
+      .
+      {cust-adr.obj 
+         &vars-to-addr = YES
+         &tablefield   = "cust-ident.issue"
+      }
+
+      VALIDATE cust-ident.
+
+      UpdateSigns(cust-ident.class-code,
+                  cust-ident.cust-code-type + ',' + cust-ident.cust-code + ',' + STRING(cust-ident.cust-type-num),
+                  "КодРег",
+                  ttCustAddress.fCodReg,
+                  ?).
+
+      UpdateSigns(cust-ident.class-code,
+                  cust-ident.cust-code-type + ',' + cust-ident.cust-code + ',' + STRING(cust-ident.cust-type-num),
+                  "КодРегГНИ",
+                  ttCustAddress.fCodRegGNI,
+                  ?).
+
+      UpdateSigns(cust-ident.class-code,
+                  cust-ident.cust-code-type + ',' + cust-ident.cust-code + ',' + STRING(cust-ident.cust-type-num),
+                  "country-id",
+                  ttCustAddress.fCountryID,
+                  ?).
+   END.
+END PROCEDURE.
+
+/* получение информации о типе главного адреса субъекте */
+PROCEDURE GetTypeMainAdr.
+   DEFINE INPUT  PARAMETER iCustCat     AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oAdrType     AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oAdrCntXattr AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE vAdrInit AS CHARACTER NO-UNDO.
+
+   oAdrType = fGetSetting(iCustCat + "ГлавАдр",?,"").
+   
+   CASE iCustCat:
+      WHEN 'Ю' THEN vAdrInit = "АдрЮр".
+      WHEN 'Ч' THEN vAdrInit = "АдрПроп".
+   END CASE.
+
+   IF NUM-ENTRIES(oAdrType) GT 1 THEN
+      ASSIGN
+         oAdrCntXattr = ENTRY(2,oAdrType)
+         oAdrType     = ENTRY(1,oAdrType)
+      .
+   ELSE
+      ASSIGN
+         oAdrCntXattr = "country-id2"
+         oAdrType     = vAdrInit
+      .
+   IF GetCode('КодАдр',oAdrType) = ? THEN
+      oAdrType = vAdrInit.
+   IF GetXattrEx(IF iCustCat = 'Ю' 
+                 THEN "cust-corp" 
+                 ELSE "person",oAdrCntXattr,"name") = ? THEN
+      oAdrCntXattr = "country-id2".
+END PROCEDURE.
+
+/* Синхронизация адресов с основной карточкой субъекта*/
+PROCEDURE SyncAdrSubjToCident.
+   DEFINE INPUT PARAMETER iHBuffer  AS HANDLE    NO-UNDO.   /* Указатель на объект. */
+   DEFINE INPUT PARAMETER iCustCat  AS CHARACTER NO-UNDO.   /* Тип клиента. */
+   DEFINE INPUT PARAMETER iDate     AS DATE      NO-UNDO.   /* дата ввода */
+   DEFINE INPUT PARAMETER iAdrType  AS CHARACTER NO-UNDO.   /* Тип адреса */
+   
+   DEFINE BUFFER bCustIdent FOR cust-ident. /* Локализация буфера. */
+   DEFINE BUFFER cust-ident FOR cust-ident. /* Локализация буфера. */
+
+   DEFINE VARIABLE vAdrType        AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vAdrCntXattr    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vFlagAv         AS LOGICAL   NO-UNDO.
+   DEFINE VARIABLE vFileName       AS CHARACTER NO-UNDO. /* Таблица связанного объекта. */
+   DEFINE VARIABLE vH              AS HANDLE    NO-UNDO. /* Указатель на поле *-id. */
+   DEFINE VARIABLE vCustId         AS INT64   NO-UNDO. /* Тип клиента. */
+   DEFINE VARIABLE vCustAdr        AS CHARACTER NO-UNDO. /* Адрес клиента из карточки */
+   DEFINE VARIABLE vCustCntry      AS CHARACTER NO-UNDO. /* Страна клиента */
+   
+   IF iDate = ?  THEN iDate = TODAY.
+
+
+   /* Определеям тип клиента по полю *-id. */
+   CASE iCustCat:
+      WHEN "Ч"
+      THEN ASSIGN
+         vFileName   = "person"
+         vH          = iHBuffer:BUFFER-FIELD ("person-id")
+         vCustAdr    = iHBuffer:BUFFER-FIELD ("address")   :BUFFER-VALUE(1)
+         vCustCntry  = iHBuffer:BUFFER-FIELD ("country-id"):BUFFER-VALUE
+      NO-ERROR.
+      WHEN "Ю"
+      THEN ASSIGN
+         vFileName   = "cust-corp"
+         vH          = iHBuffer:BUFFER-FIELD ("cust-id")
+         vCustAdr    = iHBuffer:BUFFER-FIELD ("addr-of-low"):BUFFER-VALUE(1)
+         vCustCntry  = iHBuffer:BUFFER-FIELD ("country-id"):BUFFER-VALUE
+      NO-ERROR.
+      WHEN "Б"
+      THEN ASSIGN
+         vFileName   = "banks"
+         vH          = iHBuffer:BUFFER-FIELD ("bank-id")
+      NO-ERROR.
+   END CASE.
+   /* Передан указатель не на субъект. */
+   IF NOT VALID-HANDLE (vH)
+      THEN RETURN ERROR.
+
+   vCustId     = vH:BUFFER-VALUE.
+   
+   IF NOT {assigned iAdrType} THEN
+      RUN GetTypeMainAdr (iCustCat,OUTPUT vAdrType,OUTPUT vAdrCntXattr).
+   ELSE
+      vAdrType = iAdrType.
+   
+   bl:
+   FOR EACH cust-ident WHERE 
+            cust-ident.cust-cat       EQ iCustCat
+        AND cust-ident.cust-id        EQ vCustId
+        AND cust-ident.cust-code-type EQ vAdrType 
+        AND cust-ident.class-code     EQ "p-cust-adr"
+   NO-LOCK:
+      IF cust-ident.cust-code  = GetXattrValue(vFileName,
+                                               STRING(vCustId),
+                                               "УникКодАдреса")
+      THEN DO:
+         vFlagAv = YES.
+         LEAVE bl.
+      END.
+
+   END.
+
+   /* обновим адрес */
+   IF vFlagAv  
+   THEN DO ON ERROR  UNDO, LEAVE
+           ON ENDKEY UNDO, LEAVE:
+      FIND FIRST bCustIdent WHERE 
+           ROWID(bCustIdent) = ROWID(cust-ident) 
+      EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+      IF AVAIL bCustIdent THEN DO:
+         bCustIdent.issue  = vCustAdr.
+         VALIDATE bCustIdent NO-ERROR.
+         IF    ERROR-STATUS:ERROR
+            OR RETURN-VALUE GT "" THEN
+            RETURN ERROR (IF RETURN-VALUE GT ""
+                          THEN RETURN-VALUE
+                          ELSE ERROR-STATUS:GET-MESSAGE(1)). 
+      END.
+   END.
+   ELSE 
+      DO ON ERROR  UNDO, LEAVE
+         ON ENDKEY UNDO, LEAVE:
+         CREATE cust-ident NO-ERROR.
+         ASSIGN
+            cust-ident.cust-cat       = iCustCat
+            cust-ident.cust-id        = vCustId
+            cust-ident.cust-code-type = vAdrType
+            cust-ident.cust-type-num  = NEXT-VALUE(cident-num-id)
+            cust-ident.cust-code      = STRING(YEAR (iDate),"9999") +
+                                        STRING(MONTH(iDate),"99")   +
+                                        STRING(DAY  (iDate),"99")
+            cust-ident.open-date      = iDate
+            cust-ident.issue          = vCustAdr
+            cust-ident.class-code     = "p-cust-adr"
+         .
+         VALIDATE cust-ident NO-ERROR.
+         IF    ERROR-STATUS:ERROR
+            OR RETURN-VALUE GT "" THEN
+            RETURN ERROR (IF RETURN-VALUE GT ""
+                          THEN RETURN-VALUE
+                          ELSE ERROR-STATUS:GET-MESSAGE(1)). 
+      END.
+
+
+   IF  NOT UpdateSigns(vFileName, 
+                       STRING(vCustId),
+                       "УникКодАдреса", 
+                       cust-ident.cust-code,
+                       ?)
+    OR NOT UpdateSigns("p-cust-adr", 
+                       {&CustIdntSurr},
+                       "КодыАдреса", 
+                       GetXattrValue(vFileName,
+                                     STRING(vCustId),
+                                     "КодыАдреса"
+                                    ),
+                       ?)
+    OR NOT UpdateSigns("p-cust-adr", 
+                       {&CustIdntSurr},
+                       "КодРег", 
+                       GetXattrValue(vFileName,
+                                     STRING(vCustId),
+                                     "КодРег"),
+                       ?) 
+    OR NOT UpdateSigns("p-cust-adr", 
+                       {&CustIdntSurr},
+                       "КодРегГНИ", 
+                       GetXattrValue(vFileName,
+                                     STRING(vCustId),
+                                     "КодРегГНИ"),
+                       ?) 
+    OR NOT UpdateSigns("p-cust-adr", 
+                       {&CustIdntSurr},
+                       "country-id", 
+                       GetXattrValueEx(vFileName,
+                                       STRING(vCustId),
+                                       vAdrCntXattr,vCustCntry),
+                       ?)   
+   THEN DO:
+      RETURN ERROR "Ошибка обновления ДР при создании адреса". 
+   END.
+   RETURN.
+
+END PROCEDURE.
+
+/* Получение по типу клиента и коду адреса код ДР для синхронизации*/
+
+PROCEDURE GetXattrAddress.
+   DEFINE INPUT  PARAMETER iCustCat   AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iAdrType   AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oXattrCode AS CHARACTER NO-UNDO.
+
+   CASE iCustCat:
+      WHEN 'Ю' THEN
+         CASE iAdrType:
+            WHEN "АдрФакт" THEN oXattrCode = 'PlaceOfStay'.
+            WHEN "АдрПочт" THEN oXattrCode = 'АдресП'.
+         END CASE.
+      WHEN 'Ч' THEN
+         CASE iAdrType:
+            WHEN 'АдрФакт' THEN oXattrCode = 'PlaceOfStay'.
+         END CASE.
+   END CASE.
+
+   IF GetXAttrEx(ENTRY(LOOKUP(iCustCat,'Ч,Ю,Б') + 1,',person,cust-corp,banks'),
+                 oXattrCode,
+                 'Xattr-Code') = ? 
+   THEN oXattrCode = "".
+
+   RETURN oXattrCode.
+
+END PROCEDURE.
+
+/* Получение по типу клиента и кодe ДР код адреса для синхронизации */
+PROCEDURE GetCidenAddress.
+   DEFINE INPUT  PARAMETER iCustCat   AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iXattrCode AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oAdrType   AS CHARACTER NO-UNDO.
+
+   CASE iCustCat:
+      WHEN 'Ю' THEN
+         CASE iXattrCode:
+            WHEN 'PlaceOfStay' THEN oAdrType = "АдрФакт".
+            WHEN 'АдресП'      THEN oAdrType = "АдрПочт".
+         END CASE.
+      WHEN 'Ч' THEN
+         CASE iXattrCode:
+            WHEN 'PlaceOfStay' THEN oAdrType = 'АдрФакт'.
+         END CASE.
+   END CASE.
+
+   IF GetCode("КодАдр",oAdrType) = ? THEN 
+      oAdrType = "".
+
+   RETURN oAdrType.
+
+END PROCEDURE.
+
+/* переводит неопределенное значение в знак "вопрос" ("?") */
+FUNCTION GetNotEmpty CHAR (ipString AS CHAR):
+   RETURN IF ipString EQ ? THEN "?" ELSE ipString.
+END FUNCTION.
+
+/* Процедура GetCustInfoBlock - возвращает информацию о клиенте одним блоком (в массиве)
+** Параметры:
+**        ipCustCat - тип клиента (Ю,Ч,Б)
+**        ipCustId  - код клиента
+** output opResult  - строка с данными разделенными символом chr(1)
+**    порядок данных:
+**    для физ.лица:  1  - Фамилия
+**                   2  - Имя, Отчетство
+**                   3  - Код страны
+**                   4  - Адрес
+**                   5  - тип документа
+**                   6  - код(номер) документа
+**                   7  - кем выдан (с к/п) + дата выдачи документа
+**                   8  - дата выдачи документа
+**                   9  - кем выдан (с к/п)
+**                   10 - кем выдан (без к/п)
+**                   11 - код подразделения
+**
+**                   13 - ИНН
+**    для юр. лиц
+**    и банков   :   1 - полное наименование
+**                   2 - пустое
+**                   3 - Код страны
+**                   4 - юридический адрес     
+*/
+PROCEDURE GetCustInfoBlock:
+   DEFINE INPUT  PARAMETER ipCustCat  AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER ipCustId   AS INT64    NO-UNDO.
+   DEFINE OUTPUT PARAMETER opResult   AS CHARACTER  NO-UNDO.
+   DEFINE VAR vCodReg AS CHARACTER NO-UNDO.
+   DEFINE VAR vBankInn AS CHARACTER NO-UNDO.
+   DEFINE BUFFER cust-corp FOR cust-corp.
+   DEFINE BUFFER banks FOR banks.
+   opResult = "".
+   vCodReg = GetXattrValueEx(IF ipCustCat EQ "Ч" THEN "person"
+                 ELSE IF ipCustCat EQ "Ю" THEN "cust-corp"
+                 ELSE IF ipCustCat EQ "Б" THEN "banks" ELSE "",
+                 STRING(ipCustId),
+                 "КодРег",
+                 "").   
+   CASE ipCustCat:
+      WHEN "Ч" THEN DO:
+         FIND FIRST person WHERE person.person-id = ipCustId NO-LOCK NO-ERROR.
+         IF AVAIL person
+         THEN opResult =
+                          GetNotEmpty(person.name-last)
+               + CHR(1) + GetNotEmpty(person.first-names)
+               + CHR(1) + GetNotEmpty(person.country-id)
+               + CHR(1) + GetNotEmpty(person.address[1] + " " + person.address[2])
+               + CHR(1) + GetNotEmpty(person.document)
+               + CHR(1) + GetNotEmpty(person.document-id)
+               + CHR(1) + fGetDocIssue(person.person-id)
+               + CHR(1) + fGetDocIssueDate(person.person-id)
+               + CHR(1) + fGetDocIssueOrg(person.person-id)
+               + CHR(1) + fGetDocIssueClear(person.person-id)
+               + CHR(1) + fGetDocIssueKP(person.person-id)
+               + CHR(1) + GetNotEmpty(FrmtAddrStr(person.address[1],vCodReg)) + " " + GetNotEmpty(FrmtAddrStr(person.address[2],vCodReg))
+               + CHR(1) + /*"ИНН " +*/ GetNotEmpty(person.inn).
+            .
+      END. /* when "Ч" */
+
+      WHEN "Ю" THEN DO:
+            FIND FIRST cust-corp WHERE cust-corp.cust-id = ipCustId 
+               NO-LOCK NO-ERROR.
+         IF AVAIL cust-corp 
+            THEN opResult = GetNotEmpty(cust-corp.name-corp) 
+                 + CHR(1) 
+                 + CHR(1) + GetNotEmpty(cust-corp.country-id)
+                 + CHR(1) + GetNotEmpty(cust-corp.addr-of-low[1]) 
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1)
+                 + CHR(1) + GetNotEmpty(FrmtAddrStr(cust-corp.addr-of-low[1],vCodReg)) 
+                 + CHR(1) + /*"ИНН " +*/ GetNotEmpty(cust-corp.inn) 
+                 .
+      END. /* when "Ю" */
+
+      WHEN "Б" THEN DO:
+         FIND FIRST banks WHERE banks.bank-id = ipCustId NO-LOCK NO-ERROR.
+          IF AVAIL banks 
+             THEN DO:
+                  vBankInn = GetBankInn ("bank-id", STRING (banks.bank-id)).
+                  IF NOT {assigned vBankInn} THEN
+                     vBankInn = "".
+                  opResult = GetNotEmpty(banks.NAME)
+                             + CHR(1)
+                             + CHR(1) + GetNotEmpty(banks.country-id)
+                             + CHR(1) + GetNotEmpty(banks.law-address)  
+                             + CHR(1) 
+                             + CHR(1) 
+                             + CHR(1)
+                             + CHR(1)
+                             + CHR(1)
+                             + CHR(1)
+                             + CHR(1)
+                             + CHR(1) + GetNotEmpty(FrmtAddrStr(banks.law-address,vCodReg)) 
+                             + CHR(1) + /*"ИНН " +*/ GetNotEmpty(vBankInn)
+                             .
+             END.
+      END. /* when "Б" */
+
+   END CASE.
+END PROCEDURE.
+
+
+/* Процедура GetCustInfo - возвращает информацию о клиенте (по строкам)
+** Параметры:
+**        ipType    - код требуемой информации (описано в ф.GetCustInfoBlock в соответствии с таблицей)
+**        ipCustCat - тип клиента (Ю,Ч,Б)
+**        ipCustId  - код клиента
+** output opResult  - строка с указанными данными
+*/
+PROCEDURE GetCustInfo:
+   DEFINE INPUT  PARAMETER ipType     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER ipCustCat  AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER ipCustId   AS INT64    NO-UNDO.
+   DEFINE OUTPUT PARAMETER opResult   AS CHARACTER  NO-UNDO.
+
+   IF ipType > 0 THEN DO:
+      RUN GetCustInfoBlock (ipCustCat, ipCustId, OUTPUT opResult).
+      IF NUM-ENTRIES(opResult, CHR(1)) < ipType
+      THEN opResult = "".
+      ELSE opResult = ENTRY(ipType, opResult, CHR(1)).
+   END.
+   ELSE opResult = "".
+END PROCEDURE.
+
+
+/* Процедура GetCustInfo2 - возвращает информацию о клиенте (по строкам), клиент определяется из счета
+** Параметры:
+**        ipType     - код требуемой информации (описано в ф.GetCustInfoBlock в соответствии с таблицей)
+**        ipAcct     - счет клиента
+**        ipCurrency - код валюты счета, если этот параметр неопределен (?)
+**                     то счет ищется только по лицевому счету
+** output opResult   - строка с указанными данными
+*/
+PROCEDURE GetCustInfo2:
+   DEFINE INPUT  PARAMETER ipType     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER ipAcct     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER ipCurrency AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER opResult   AS CHARACTER  NO-UNDO.
+
+   DEF VAR vCat AS CHAR   NO-UNDO.
+   DEF VAR vID  AS INT64    NO-UNDO.
+
+   IF ipCurrency NE ? THEN DO:
+       IF ipCurrency EQ FGetSetting("КодНацВал",?,"{&in-NC-Code}") THEN ipCurrency = "".
+       FIND FIRST acct WHERE acct.acct     EQ ipAcct     AND
+                             acct.currency EQ ipCurrency NO-LOCK NO-ERROR.
+   END.
+   ELSE DO:
+       FIND FIRST acct WHERE acct.acct     EQ ipAcct NO-LOCK NO-ERROR.
+   END.
+   IF NOT AVAIL acct THEN opResult = "".
+   ELSE 
+   DO: 
+      IF acct.cust-cat EQ "В" THEN
+         /*Вызов инструмента из 44276 для определения клиентских 
+           реквизитов внутреннего счета*/
+         RUN GetCustIdCli IN h_acct (acct.acct + "," + acct.currency,
+                                     OUTPUT vCat,
+                                     OUTPUT vID).
+      ELSE
+         ASSIGN vCat = acct.cust-cat
+                vID  = acct.cust-id.
+      RUN GetCustInfo (ipType, vCat, vID, OUTPUT opResult).
+   END.
+
+END PROCEDURE.
+
+/* Определяет, резидет ли клиент или нет */
+PROCEDURE IsResident.
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER        NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustId     AS INT64          NO-UNDO.
+   DEFINE OUTPUT PARAMETER oResident   AS LOGICAL   INIT ? NO-UNDO.
+
+   DEFINE VARIABLE vSCountry AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE vCCountry AS CHARACTER   NO-UNDO.
+
+   DEF BUFFER person    FOR person.
+   DEF BUFFER cust-corp FOR cust-corp.
+   DEF BUFFER banks     FOR banks.
+
+   MAIN:
+   DO ON ERROR  UNDO MAIN, LEAVE MAIN
+      ON ENDKEY UNDO MAIN, LEAVE MAIN:
+
+      /* Параметры функции не заданы */
+      IF    NOT {assigned iCustCat}
+         OR iCustId EQ ?
+         OR iCustId EQ 0 THEN
+         UNDO MAIN, LEAVE MAIN.
+      
+      /* определяем код страны резиденства */
+      vSCountry = FGetSetting("КодРез",?,"RUS").
+      
+      /* По iCustCat определяем таблицу */
+      CASE iCustCat:
+         /* находим реквизит Субъект клиента */
+         WHEN "Ч" THEN 
+         DO:
+            FIND FIRST person WHERE person.person-id EQ iCustId 
+               NO-LOCK NO-ERROR.
+            IF AVAILABLE person THEN 
+               vCCountry = person.country-id.
+         END.
+         WHEN "Ю" THEN 
+         DO:
+            FIND FIRST cust-corp WHERE cust-corp.cust-id EQ iCustId 
+               NO-LOCK NO-ERROR.
+            IF AVAILABLE cust-corp THEN 
+               vCCountry = cust-corp.country-id.
+         END.
+         WHEN "Б" THEN 
+         DO:
+            FIND FIRST banks WHERE banks.bank-id EQ iCustId 
+               NO-LOCK NO-ERROR.
+            IF AVAILABLE banks THEN 
+               vCCountry = banks.country-id.
+         END.
+      END CASE.
+   
+      IF vCCountry NE "" THEN
+      /* определяем резидентность клиента */
+         oResident = IF vCCountry EQ vSCountry THEN YES
+                                               ELSE NO.         
+   END.
+
+END PROCEDURE.
+
+/* Процедура GetRecipientValue - возвращает информацию картотеки получателей
+** Параметры:
+**        iBIK       - БИК по которому искать получателя
+**        iAcct      - Расч.счет по которому искать получателя
+**        iINN       - ИНН по которому искать получателя или CHR(4) если любой ИНН
+**        iFields    - Запрошенные поля, возвращаемые в oValues через CHR(2)
+**                     возможные значения: БИК РАСЧ_СЧЕТ ИНН ИМЯ КПП
+** output oValues    - Значение запрошенных полей
+*/
+PROCEDURE GetRecipientValue:
+   DEFINE INPUT  PARAMETER iBIK    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iAcct   AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iINN    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iFields AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oValues AS CHARACTER NO-UNDO.
+   DEFINE VAR vInt AS INT64 NO-UNDO.
+   DEFINE BUFFER xxcode FOR code.
+   /* Поиск */
+   IF {assigned iBIK} AND {assigned iAcct} THEN DO:
+      IF iINN = CHR(4)
+      /* CHR(4) - С любым ИНН */
+      THEN FIND FIRST xxcode WHERE xxcode.class  = "recipient"
+                               AND xxcode.parent = "recipient"
+                               AND xxcode.code   BEGINS iBIK + "," + iAcct
+           NO-LOCK NO-ERROR.
+      ELSE FIND FIRST xxcode WHERE xxcode.class  = "recipient"
+                               AND xxcode.parent = "recipient"
+                               AND xxcode.code   = iBIK + "," + iAcct + "," + iINN
+           NO-LOCK NO-ERROR.
+   END.
+   /* Возврат значений */
+   IF AVAIL xxcode
+   THEN DO vInt = 1 TO NUM-ENTRIES(iFields):
+      IF vInt > 1 THEN oValues = oValues + CHR(2).
+      CASE ENTRY(vInt,iFields):
+         WHEN "БИК"          THEN oValues = oValues + ENTRY(1,xxcode.code).
+         WHEN "РАСЧ_СЧЕТ"    THEN oValues = oValues + ENTRY(2,xxcode.code).
+         WHEN "ИНН"          THEN oValues = oValues + (IF xxcode.val     = ? THEN "" ELSE xxcode.val).
+         WHEN "ИМЯ"          THEN oValues = oValues + (IF xxcode.name    = ? THEN "" ELSE xxcode.name).
+         WHEN "КПП"          THEN oValues = oValues + (IF xxcode.misc[3] = ? THEN "" ELSE xxcode.misc[3]).
+         WHEN "СЧЕТ_В_БАНКЕ" THEN oValues = oValues + (IF xxcode.misc[2] = ? THEN "" ELSE xxcode.misc[2]).
+      END.
+   END.
+   ELSE oValues = FILL(CHR(2),NUM-ENTRIES(iFields) - 1).
+   RETURN.
+END PROCEDURE.
+
+/* Процедура CreateUpdateRecipient - добавление нового получателя в картотеку
+                                     получателей или обновление информации
+** Параметры:
+**        iBIK       - БИК получателя
+**        iAcct      - Расч.счет получателя
+**        iINN       - ИНН получателя
+**        iName      - Наименование получателя
+**        iKPP       - КПП получателя
+**        iBankAcct  - Счет получателя в банке
+**        iComm      - Комиссия получателя
+*/
+PROCEDURE CreateUpdateRecipient:
+   DEFINE INPUT PARAMETER iBIK      AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iAcct     AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iINN      AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iName     AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iKPP      AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iBankAcct AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iComm     AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iFldToUpd AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vComm    AS INT64 NO-UNDO.
+   DEFINE VARIABLE vInWrite AS LOGICAL NO-UNDO.
+   DEFINE VARIABLE vNew     AS LOGICAL NO-UNDO.
+   DEFINE BUFFER xxcode FOR code.
+
+   &SCOPED-DEFINE LOCK_RECIPIENT IF NOT vInWrite THEN DO: ~
+   FIND CURRENT xxcode EXCLUSIVE-LOCK NO-WAIT NO-ERROR. vInWrite = YES. END.
+
+   DO TRANSACTION ON ERROR  UNDO, RETURN ERROR
+                  ON ENDKEY UNDO, RETURN ERROR:
+      iBIK = STRING(INT64(iBIK),"999999999").
+      IF iINN = ? THEN iINN = "".
+      FIND FIRST xxcode WHERE xxcode.class = "recipient"
+                          AND xxcode.code  = STRING(INT64(iBIK),"999999999") + "," + iAcct + (IF iINN <> "" THEN "," + iINN ELSE "")
+      NO-LOCK NO-ERROR.
+      IF  NOT AVAIL xxcode
+      AND iINN <> ""
+      THEN FIND FIRST xxcode WHERE xxcode.class = "recipient"
+                               AND xxcode.code  = STRING(INT64(iBIK),"999999999") + "," + iAcct
+           NO-LOCK NO-ERROR.
+      IF NOT AVAIL xxcode THEN DO:
+         CREATE xxcode.
+         ASSIGN
+            vNew          = YES
+            vInWrite      = YES
+            xxcode.class  = "recipient"
+            xxcode.parent = "recipient"
+            xxcode.code   = STRING(INT64(iBIK),"999999999") + 
+            "," + iAcct + "," + iINN
+         .
+      END.
+      IF {assigned iName} THEN DO:
+         IF xxcode.name <> iName
+         AND (   vNew
+              OR CAN-DO(iFldToUpd,"ИМЯ")) THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.name = iName.
+         END.
+      END.
+      IF {assigned iINN} THEN DO:
+         IF xxcode.code <> STRING(INT64(iBIK),"999999999") + "," + iAcct + "," + iINN THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.code = STRING(INT64(iBIK),"999999999") + "," + iAcct + "," + iINN.
+         END.
+         IF xxcode.val <> iINN
+         AND (   vNew
+              OR CAN-DO(iFldToUpd,"ИНН")) THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.val = iINN.
+         END.
+      END.
+      IF {assigned iComm} THEN DO:
+         vComm = INT64(iComm) NO-ERROR.
+         iComm = (IF vComm = ? OR vComm = 0 THEN "Нет" ELSE STRING(vComm)).
+         IF xxcode.misc[1] <> iComm
+         AND (   vNew
+              OR CAN-DO(iFldToUpd,"КОМИССИЯ")) THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.misc[1] = iComm.
+         END.
+      END.
+      IF {assigned iBankAcct} THEN DO:
+         iBankAcct = REPLACE(iBankAcct,"-","").
+         IF xxcode.misc[2] <> iBankAcct
+         AND (   vNew
+              OR CAN-DO(iFldToUpd,"СЧЕТ_В_БАНКЕ")) THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.misc[2] = iBankAcct.
+         END.
+      END.
+      IF {assigned iKPP} THEN DO:
+         IF xxcode.misc[3] <> iKPP
+         AND (   vNew
+              OR CAN-DO(iFldToUpd,"КПП")) THEN DO:
+            {&LOCK_RECIPIENT}
+            xxcode.misc[3] = iKPP.
+         END.
+      END.
+      IF vInWrite THEN RELEASE xxcode.
+   END.
+   RETURN.
+END PROCEDURE.
+
+FUNCTION GetCustIDoc RETURNS CHARACTER (iCustCat AS CHARACTER,
+                                        iCustID  AS INT64,
+                                        iDate    AS DATE,
+                                        iDocType AS CHARACTER):
+   DEFINE BUFFER cust-ident FOR cust-ident.
+   FIND LAST cust-ident
+       WHERE cust-ident.cust-cat       EQ iCustCat
+         AND cust-ident.cust-id        EQ iCustID
+         AND cust-ident.class-code     EQ "p-cust-ident"
+         AND cust-ident.cust-code-type EQ iDocType
+         AND cust-ident.open-date      LE iDate
+      NO-LOCK NO-ERROR.
+   RETURN (IF AVAILABLE cust-ident
+           THEN cust-ident.cust-code
+           ELSE "").
+END FUNCTION.
+
+/* Поиск и создание (при необходимоти) УНКП для клиента */
+PROCEDURE SetUNKP.
+   DEFINE INPUT  PARAMETER iCustCat  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustID   AS INT64     NO-UNDO.
+   DEFINE INPUT  PARAMETER iPC       AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iUNKP     AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate     AS DATE        NO-UNDO.
+   DEFINE OUTPUT PARAMETER oChanged  AS LOGICAL     NO-UNDO.
+   DEFINE OUTPUT PARAMETER oCreated  AS LOGICAL     NO-UNDO.
+   DEFINE OUTPUT PARAMETER oUNKPRID  AS ROWID       NO-UNDO.
+
+   DEF BUFFER bCustIdent  FOR cust-ident.   
+
+   MAIN:
+   DO ON ERROR  UNDO MAIN, LEAVE MAIN
+      ON ENDKEY UNDO MAIN, LEAVE MAIN:
+
+      FIND LAST bCustIdent WHERE bCustIdent.cust-cat        EQ iCustCat
+                             AND bCustIdent.cust-id         EQ iCustID
+                             AND bCustIdent.cust-code-type  EQ iPC                             
+                             AND bCustIdent.class-code      EQ "УНКП"                             
+                             AND bCustIdent.open-date       LE iDate
+                             AND (    bCustIdent.close-date GE iDate
+                                  OR  bCustIdent.close-date EQ ?)
+         NO-LOCK NO-ERROR.
+      IF AVAIL bCustIdent THEN
+      DO:
+         IF     bCustIdent.cust-code NE ?
+            AND bCustIdent.cust-code NE iUNKP THEN
+         DO:
+            FIND CURRENT bCustIdent EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+            IF AVAIL bCustIdent THEN
+               ASSIGN
+                  bCustIdent.cust-code = iUNKP
+                  oChanged             = YES
+                  .
+         END.
+
+         oUNKPRID = ROWID(bCustIdent).
+      END.
+      ELSE
+      DO:
+         CREATE bCustIdent.
+         ASSIGN
+            bCustIdent.cust-cat       = iCustCat
+            bCustIdent.cust-id        = iCustID
+            bCustIdent.cust-code-type = iPC
+            bCustIdent.cust-code      = iUNKP
+            bCustIdent.open-date      = iDate
+            bCustIdent.class-code     = "УНКП"
+            bCustIdent.issue          = "ГОТ"
+            oCreated                  = YES
+            oUNKPRID                  = ROWID(bCustIdent)
+            .
+      END.
+   END.
+
+END PROCEDURE.
+
+/* Формирует "Кем выдан" на клиенте */
+PROCEDURE MakeIssue:
+   DEFINE INPUT  PARAMETER iIssue    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iPodrazd  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oIssueTot AS CHARACTER NO-UNDO.
+   IF  {assigned iIssue}
+   AND {assigned iPodrazd}
+   THEN DO:
+      IF NUM-ENTRIES(iIssue) < 2
+      OR TRIM(ENTRY(NUM-ENTRIES(iIssue),iIssue)) <> TRIM(iPodrazd)
+      THEN iIssue = iIssue + "," + iPodrazd.
+   END.
+   oIssueTot = iIssue.
+END PROCEDURE.
+
+FUNCTION GetCustIDRWD RETURNS ROWID (iCustCat AS CHARACTER,
+                                     iCustID  AS INT64  ,
+                                     iDate    AS DATE,
+                                     iDocType AS CHARACTER):
+
+   DEFINE BUFFER cust-ident FOR cust-ident.
+
+   FIND LAST cust-ident WHERE cust-ident.cust-cat       EQ iCustCat
+                          AND cust-ident.cust-id        EQ iCustID
+                          AND cust-ident.class-code     EQ "p-cust-ident"
+                          AND cust-ident.cust-code-type EQ iDocType
+                          AND cust-ident.open-date      LE iDate
+      NO-LOCK NO-ERROR.
+
+   IF AVAILABLE cust-ident THEN
+      RETURN ROWID(cust-ident).
+   ELSE
+      RETURN ?.
+
+END FUNCTION.
+
+FUNCTION GetCustIDNom RETURNS CHARACTER (iRWD AS ROWID):
+
+   DEFINE BUFFER cust-ident FOR cust-ident.
+
+   FIND FIRST cust-ident WHERE ROWID(cust-ident) EQ iRWD
+      NO-LOCK NO-ERROR.
+
+   IF AVAILABLE cust-ident THEN
+      RETURN cust-ident.cust-code.
+   ELSE
+      RETURN "".
+END FUNCTION.
+
+FUNCTION GetCustIDIssue RETURNS CHARACTER (iRWD AS ROWID):
+
+   DEFINE BUFFER cust-ident FOR cust-ident.
+
+   FIND FIRST cust-ident WHERE ROWID(cust-ident) EQ iRWD
+      NO-LOCK NO-ERROR.
+
+   IF AVAILABLE cust-ident THEN
+      RETURN cust-ident.issue.
+   ELSE
+      RETURN "".
+END FUNCTION.
+
+FUNCTION GetCustIDOpenDate RETURNS DATE (iRWD AS ROWID):
+
+   DEFINE BUFFER cust-ident FOR cust-ident.
+
+   FIND FIRST cust-ident WHERE ROWID(cust-ident) EQ iRWD
+      NO-LOCK NO-ERROR.
+
+   IF AVAILABLE cust-ident THEN
+      RETURN cust-ident.open-date.
+   ELSE
+      RETURN ?.
+END FUNCTION.
+
+FUNCTION CalcSrokForDocument RETURNS DATE
+      (iFormula   AS CHARACTER,
+       iDateDoc   AS DATE,  /* Дата выдачи документа*/
+       iBirthDate AS DATE  /* Дата рождения*/
+      ):
+   DEFINE VAR vFirstSrok  AS INT64 NO-UNDO.
+   DEFINE VAR vSecondSrok AS INT64 NO-UNDO.
+   DEFINE VAR vLastSrok   AS INT64 NO-UNDO.
+   DEFINE VAR vFormula    AS CHAR  NO-UNDO.
+   DEFINE VAR i AS INTEGER NO-UNDO.
+   DEFINE VAR oDate       AS DATE  NO-UNDO.
+   DEFINE VAR oDate1      AS DATE  NO-UNDO.
+   DEFINE VAR oDate2      AS DATE  NO-UNDO.
+   DEFINE VAR oDate3      AS DATE  NO-UNDO.   
+   
+   IF iFormula   BEGINS "В" THEN DO:
+      vFirstSrok  = INT64(REPLACE(ENTRY(1,iFormula),"В","")).
+      vSecondSrok = IF NUM-ENTRIES(iFormula) GE 2 
+                    THEN INT64(REPLACE(ENTRY(2,iFormula),"В",""))
+                    ELSE 0.
+      oDate = DATE(IF MONTH(iDateDoc) + vSecondSrok GT 12 
+                   THEN (MONTH(iDateDoc) + vSecondSrok - 12)
+                   ELSE (MONTH(iDateDoc) + vSecondSrok),
+                   1,
+                   YEAR(iDateDoc) + vFirstSrok + IF MONTH(iDateDoc) + vSecondSrok GT 12 THEN 1 ELSE 0).
+      oDate = DATE(MONTH(oDate),DAY(iDateDoc),YEAR(oDate)) NO-ERROR.
+      i = 1.
+      DO WHILE ERROR-STATUS:ERROR:
+         oDate = DATE(MONTH(oDate),DAY(iDateDoc) - i,YEAR(oDate)) NO-ERROR.
+         i = i + 1.
+      END.
+   END.
+   ELSE IF iFormula BEGINS "Р" THEN DO:
+      vFormula = SUBSTRING(iFormula,2).
+      DO i = 1 TO NUM-ENTRIES(vFormula,";"):
+         vFirstSrok =  INT64(ENTRY(i,vFormula,";")) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN DO:
+            RUN Fill-SysMes IN h_tmess ("","","-1",
+               "Неправильно задана формула расчета" + iFormula +
+               " даты окончания документа ").
+            LEAVE.   
+         END.
+         oDate1 = DATE(MONTH(iBirthDate),DAY(iBirthDate),YEAR(iBirthDate) 
+                + vFirstSrok) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN DO:  /* день рождения 29.02 */
+            oDate1 = DATE(MONTH(iBirthDate),DAY(iBirthDate) - 1,
+                     YEAR(iBirthDate) + vFirstSrok) 
+                     NO-ERROR.
+         END.
+         IF iDateDoc LT oDate1 THEN DO:
+            oDate = oDate1.
+            LEAVE.
+         END.
+      END.
+   END.   
+   RETURN oDate.   
+END FUNCTION.
+
+/* Формирует наименование с кодом организационно-правовой формы
+   с учетом реквизита ФорматНаим клиента и НП ФорматНаим */
+/* 0185863  с учетом ДР ФорматНаим на транзакции и процедуре*/
+PROCEDURE GetCustNameFormatted:
+   DEFINE INPUT  PARAMETER iCustCat  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustId   AS INT64   NO-UNDO.
+   DEFINE OUTPUT PARAMETER oName     AS CHARACTER INIT ? NO-UNDO.
+
+   DEFINE VAR vFormatNaim AS CHARACTER NO-UNDO.
+   DEFINE VAR vEntry1     AS CHARACTER NO-UNDO.
+   DEFINE VAR vEntry2     AS CHARACTER NO-UNDO.
+   DEFINE VAR vDefFN      AS CHARACTER NO-UNDO.
+   DEFINE VAR vCode       AS CHARACTER NO-UNDO.
+   DEFINE VAR vNumProc    AS INT64   NO-UNDO.
+   DEFINE VAR vOpKind     AS CHARACTER NO-UNDO.
+   DEFINE VAR vTmplId     AS INT64   NO-UNDO.
+   DEFINE BUFFER xcust-corp FOR cust-corp.
+
+   vOpKind = GetBaseOpKind().
+   vTmplID = GetBaseTemplate().
+   vNumProc  = INT64(GETSYSCONF("user-proc-id")).
+
+   IF iCustCat <> "Ю" THEN RETURN ERROR.
+
+   IF  {assigned iCustCat}
+   AND iCustId > 0 THEN DO:
+      vFormatNaim = GetXAttrValueEx("cust-corp", STRING(iCustId), "ФорматНаим", "").
+      IF NOT {assigned vFormatNaim}
+      THEN ASSIGN
+         vEntry1 = ?
+         vEntry2 = ?
+      .
+      ELSE ASSIGN
+         vEntry1 = ENTRY(1,vFormatNaim)
+         vEntry2 = (IF NUM-ENTRIES(vFormatNaim) >= 2 THEN ENTRY(2,vFormatNaim) ELSE ?)
+      .
+
+      /*185863*/
+     IF vEntry1 EQ ? AND vEntry2 EQ ? THEN DO:
+         IF vOpKind EQ "" THEN DO: /*user-proc*/
+            FIND FIRST user-proc WHERE RECID(user-proc) EQ vNumProc NO-LOCK NO-ERROR.
+            IF AVAIL (user-proc) THEN DO:
+               vFormatNaim = GetXAttrValueEx("user-proc", STRING(user-proc.public-number) , "ФорматНаим", "").
+                  IF NOT {assigned vFormatNaim} THEN 
+                     ASSIGN
+                        vEntry1 = ?
+                        vEntry2 = ?
+                     .
+                  ELSE ASSIGN
+                     vEntry1 = ENTRY(1,vFormatNaim)
+                     vEntry2 = (IF NUM-ENTRIES(vFormatNaim) >= 2 THEN ENTRY(2,vFormatNaim) ELSE ?)
+                     .
+            END.
+         END.     /*end "user-proc" */
+     END.
+
+     IF vEntry1 EQ ? AND vEntry2 EQ ? THEN DO:  /*op-template*/
+            FIND FIRST op-kind WHERE op-kind.op-kind EQ vOpKind NO-LOCK NO-ERROR.
+            IF AVAIL(op-kind) THEN DO:
+               FIND FIRST op-template 
+                  WHERE op-template.op-kind EQ vOpKind AND op-template.op-template EQ vTmplID NO-LOCK NO-ERROR.
+               IF AVAIL (op-template) THEN DO:
+                  vFormatNaim = GetXAttrValueEx("op-template", STRING(op-template.op-kind) + "," + STRING(op-template.op-template), "ФорматНаим", "").
+                  IF NOT {assigned vFormatNaim}
+                     THEN ASSIGN
+                     vEntry1 = ?
+                     vEntry2 = ?
+                     .
+                  ELSE ASSIGN
+                     vEntry1 = ENTRY(1,vFormatNaim)
+                     vEntry2 = (IF NUM-ENTRIES(vFormatNaim) >= 2 THEN ENTRY(2,vFormatNaim) ELSE ?)
+                     .
+               END.
+            END.                 /*end op-template*/
+      END.
+     /*185863*/
+
+      IF NOT {assigned vEntry1}
+      OR NOT CAN-DO("К,П",vEntry1)
+      OR NOT {assigned vEntry2}
+      OR NOT CAN-DO("К,П",vEntry2)
+      THEN DO:
+         vDefFN = FGetSetting("ФорматНаим",?,"").
+         IF NOT {assigned vEntry1}
+         OR NOT CAN-DO("К,П",vEntry1)
+         THEN DO:
+            vEntry1 = ENTRY(1,vDefFN).
+            IF vEntry1 = ?
+            OR NOT CAN-DO(",К,П",vEntry1)
+            THEN vEntry1 = "К".
+         END.
+         IF NOT {assigned vEntry2}
+         OR NOT CAN-DO("К,П",vEntry2)
+         THEN DO:
+            vEntry2 = (IF NUM-ENTRIES(vDefFN) >= 2 THEN ENTRY(2,vDefFN) ELSE ?).
+            IF NOT {assigned vEntry2}
+            OR NOT CAN-DO("К,П",vEntry2)
+            THEN vEntry2 = "П".
+         END.
+      END.
+
+      FIND FIRST xcust-corp WHERE xcust-corp.cust-id = iCustId NO-LOCK NO-ERROR.
+      IF AVAIL xcust-corp THEN DO:
+         IF {assigned xcust-corp.cust-stat} THEN DO:
+            IF vEntry1 = "П"
+            THEN DO:
+               vCode = GetCodeVal("КодПредп",TRIM(xcust-corp.cust-stat)).
+               vCode = GetCodeName("КодПредп",vCode).
+               IF {assigned vCode}
+               THEN oName = vCode.
+               ELSE oName = xcust-corp.cust-stat.
+            END.
+            ELSE IF vEntry1 EQ "К" THEN
+               oName = xcust-corp.cust-stat.
+            ELSE
+               oName = "".
+         END.
+         ELSE oName = "".
+         IF {assigned oName} THEN oName = oName + " ".
+         IF  vEntry2 = "П"
+         AND {assigned xcust-corp.name-corp}
+         THEN DO:
+            IF xcust-corp.name-corp BEGINS oName THEN
+               oName = xcust-corp.name-corp.
+            ELSE
+               oName = oName + xcust-corp.name-corp.
+         END.
+         ELSE DO: 
+            IF xcust-corp.name-short BEGINS oName THEN
+               oName = xcust-corp.name-short.
+            ELSE
+               oName = oName + xcust-corp.name-short.
+         END.
+      END.
+      ELSE oName = ?.
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+/* Формирует наименование с кодом организационно-правовой формы
+   с учетом реквизита ФорматНаим клиента и НП ФорматНаим */
+PROCEDURE GetCustNameFormattedByAcct:
+   DEFINE PARAMETER BUFFER xacct FOR acct.
+   DEFINE INPUT PARAMETER iAcctNamePrior AS LOGICAL NO-UNDO.
+   DEFINE OUTPUT PARAMETER oName AS CHARACTER INIT ? NO-UNDO.
+   IF  (   iAcctNamePrior
+        OR CAN-DO(FGetSetting("БалСчНаим",?,""),STRING(xacct.bal-acct,"99999")))
+   AND {assigned xacct.details}
+   THEN ASSIGN oName = xacct.details.
+   ELSE RUN GetCustNameFormatted (xacct.cust-cat, xacct.cust-id, OUTPUT oName).
+   oName = TRIM(oName).
+   RETURN.
+END PROCEDURE.
+/*******************************************************************************************/
+/* определение клиента и категории                                                        */
+/*******************************************************************************************/
+PROCEDURE GetAcctCat.
+   def param buffer b-acct for acct.
+   DEF OUTPUT PARAM oCat AS CHARACTER.
+   DEF OUTPUT PARAM oId  LIKE acct.cust-id.
+   IF b-acct.cust-cat EQ "В" THEN
+   ASSIGN
+       oCat = GetXAttrValueEx ("acct", b-acct.acct + "," + b-acct.currency, "ТипКл",  "В")
+       oId  = INT64(GetXAttrValueEx ("acct", b-acct.acct + "," + b-acct.currency, "IDCust",?)).
+   ELSE ASSIGN
+         oCat = b-acct.cust-cat
+         oId  = b-acct.cust-id.
+END PROCEDURE.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='11/02/2015 10:58:36.346+04:00' */
+/* $LINTUSER='BIS' */
+/* $LINTMODE='1' */
+/* $LINTFILE='pp-cust.p' */
+/*prosign3lab/VtGK101hhgIRUXPwQ*/

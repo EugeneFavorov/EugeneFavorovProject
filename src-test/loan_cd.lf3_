@@ -1,0 +1,4 @@
+loan.currency
+balsum          &if {&nowith} eq "yes" &then when balsum ne ? &endif
+prosr   
+str-recid

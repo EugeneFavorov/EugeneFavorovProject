@@ -1,0 +1,136 @@
+IF {assigned mDiasoftId} AND
+   mDiasoftId NE "0"     AND
+   ERROR-STATUS:ERROR EQ NO AND
+   (mCount EQ 0 OR
+    (mCount EQ 1 AND
+     NOT CAN-FIND(FIRST person WHERE person.person-id EQ INT64(mSurr))
+    ) OR
+    (mCount EQ 2 AND
+     NOT CAN-FIND(FIRST cust-corp WHERE cust-corp.cust-id EQ INT64(mSurr))
+    )
+   )
+   THEN
+DO:
+   mError = (      IF mCount EQ 1 THEN ("Нет физлица с кодом " + mSurr)
+              ELSE IF mCount EQ 2 THEN ("Нет юрлица с кодом " + mSurr)
+              ELSE ("Нет клиента с кодом " + mDiasoftId)                ) 
+            + "~n" + "Лицевой счёт: " + mAcct.
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF FStrEmpty(mAcct) THEN
+DO:
+   mError = "Отсутствует номер лицевого счета.".
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF GetISOCode(mCurr) EQ ? THEN
+DO:
+   mError = "Нет такого кода валюты: " + mCurr.
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF SUBSTR(mAcct,6,3) NE mCurr
+   AND mCurr              NE "" 
+   OR  SUBSTR(mAcct,6,3)  NE "{&in-NC-Code}" 
+   AND mCurr              EQ "" THEN
+DO:
+   mError = "Не соответствие валюты: " + mCurr +
+            " и лицевого счета: " + mAcct.
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+
+ELSE IF AVAIL xacct AND
+   GetCloseDate() EQ ? THEN
+DO:
+   mError = "Лицевой счет " + mAcct + " уже открыт.".
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF AVAIL xacct AND
+   GetCloseDate() EQ xacct.close-date THEN
+DO:
+   mError = "Лицевой счет " + mAcct + " уже закрыт.".
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF NOT AVAIL bal-acct THEN
+DO:
+   mError = "Нет такого счета второго порядка: " + string(mBAcct).
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF INT64(SUBSTR(STRING(mAcct),1,5)) NE mBAcct THEN
+DO:
+   mError = "Номер лицевого счета: " + mAcct +
+            ", не соответствует счету второго порядка: " + string(mBAcct).
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF NOT CAN-FIND(FIRST branch WHERE branch.branch-id EQ mBranch) THEN
+DO:
+   mError = "Нет такого кода подразделения: " + string(mBranch).
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF mAcctCat NE "" AND
+   GetCode("acct-cat", mAcctCat) EQ ? THEN
+DO:
+   mError = "Нет такой категории счетов: " + mAcctCat.
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF bal-acct.acct-cat NE mAcctCat AND
+        mAcctCat NE "" THEN
+DO:
+   mError = "Категория счета: " + mAcctCat +
+            ", не соответствует счету второго порядка: " + string(mBAcct).
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF INDEX(bal-acct.side, mSide) EQ 0 AND
+        mSide NE "" THEN
+DO:
+   mError = "Пpизнак актива/пассива: " + mSide +
+            ", не соответствует счету второго порядка: " + string(mBAcct).
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF bal-acct.foreign-cur NE ? AND
+   (   (NOT bal-acct.foreign-cur AND mCurr GT "") 
+       OR
+       (    bal-acct.foreign-cur AND mCurr EQ "") 
+   ) THEN
+DO:
+   mError = "Валюта счета не соответствует счету второго порядка.".
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE IF mStatus NE "" AND
+   GetCode("acct-status", mStatus) EQ ? THEN
+DO:
+   mError = "Нет такого кода блокировки лицевых счетов: " + mStatus.
+/* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+END.
+ELSE DO:
+   mAcctF = AddFilToAcct(mAcct,shFilial).
+
+   IF FGetSetting("Ключ" ,? , "") NE ? AND
+      NOT CAN-DO(FGetSetting("КлючаНет",? , ""), string(mBAcct)) THEN
+   DO:
+      RUN key-tst.p (mAcct, bank-mfo-9, OUTPUT mKey).
+      IF mKey NE ?                               AND
+         mKey NE INT64(substr(mAcct,9,1)) THEN
+      DO:
+         mError = "Ошибка ключа лицевого счета " + mAcct + ".".
+      /* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+      END.
+   END.
+/*
+   FIND FIRST op-entry WHERE
+          op-entry.acct-db  EQ     mAcctF
+      AND op-entry.currency BEGINS mCurr
+      AND op-entry.op-date  LT     xacct.open-date
+      NO-LOCK NO-ERROR.
+   IF NOT AVAILABLE op-entry THEN
+      FIND FIRST op-entry WHERE
+             op-entry.acct-cr  EQ     mAcctF 
+         AND op-entry.currency BEGINS mCurr 
+         AND op-entry.op-date  LT     xacct.open-date 
+         NO-LOCK NO-ERROR.
+   IF AVAILABLE op-entry THEN
+   DO:
+      mError = "Дата откpытия позже даты пеpвой пpоводки по счету: " +
+               string(op-entry.op-date,"99/99/9999").
+   /* UNDO CRT-ACCT, RETRY CRT-ACCT. */
+   END.
+*/
+END.

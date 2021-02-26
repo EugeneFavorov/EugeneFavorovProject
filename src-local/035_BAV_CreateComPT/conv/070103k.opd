@@ -1,0 +1,92 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0500BAV 02/11/2016 19:26:30 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+070103k:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// 07.0701.070103k
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Карт-ка N1 - оплата при поступлении акцепта (с комиссией)
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// 0701
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// BASE
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core21=Отменить
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   DO BEFORE:
+      ТРАНЗАКЦИЯ("070103");
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS filter ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// ПТ
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: tables (константа) #1
+      @tables = [op,op-entry,history]
+      // РЕКВИЗИТ: buffers (константа) #2
+      @buffers = [op,oe,history]
+      // РЕКВИЗИТ: fields (константа) #3
+      @fields = [op.op,op.ben-acct,oe.acct-cr,oe.type]
+      // РЕКВИЗИТ: where (формула) #4
+      @where =
+      DO:
+         "FOR EACH op
+           WHERE CAN-DO('02,016', op.doc-type)
+             AND op.op-date   EQ " + ДАТА() + "
+             AND op.op-kind   EQ '070103'
+             AND op.op-status EQ 'ФБК'
+             AND op.user-id   EQ '" + ПОЛЬЗОВАТЕЛЬ() + "'
+           NO-LOCK,
+         FIRST oe OF op
+           NO-LOCK,
+         LAST history
+           WHERE history.file-name  EQ 'op'
+             AND history.field-ref  EQ STRING(op.op)
+             AND history.modif-date EQ " + TODAY() + "
+           NO-LOCK BY history.modif-time DESCENDING:"
+      END.
+
+
+      DO AFTER:
+         ГР_ТРАНЗАКЦИЯ('070103k1')
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ 070103k - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

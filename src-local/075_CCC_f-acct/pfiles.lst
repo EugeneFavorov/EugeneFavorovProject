@@ -1,0 +1,14 @@
+acctbrw.p
+base-pp.p
+cons-mn.p
+cons-mnv.p
+cons-mo_ops.p
+f-acct.p
+memorn.p
+memornv.p
+memornv_ops.p
+memorn_err.p
+memorn_ops.p
+memorn_ops_err.p
+memorn_st(clb).p
+memorn_st(in).p

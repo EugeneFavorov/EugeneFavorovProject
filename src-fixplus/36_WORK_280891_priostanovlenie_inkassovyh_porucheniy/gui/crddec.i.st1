@@ -1,0 +1,38 @@
+   op.doc-type         WHEN work-op.op EQ ? OR NUM-ENTRIES(op.doc-type) GT 1
+                op.doc-num          WHEN work-op.op EQ ?
+                op.doc-date         WHEN work-op.op EQ ?
+                op.order-pay
+                op.due-date
+                op-entry.acct-db    WHEN op-entry.acct-db EQ ? OR acct-db-enable
+                op-entry.acct-cr    WHEN op-entry.acct-cr EQ ? OR acct-cr-enable
+                op-entry.value-date WHEN work-op.value-date NE ? OR
+                                         op-templ.ent-value-date NE "-"
+                op-entry.currency   WHEN op-entry.currency NE ""
+                op-entry.amt-cur    WHEN op-entry.currency NE ""
+                                    validate(work-op.amt-cur  EQ ? OR
+                                             op-entry.amt-cur LE work-op.amt-cur,
+                                             "Сумма не должна превышать " +
+                                             string(work-op.amt-cur) + " !")
+                op-entry.amt-rub VALIDATE(IF op-entry.currency EQ "" THEN
+                                          (work-op.amt-rub EQ ? OR
+                                          op-entry.amt-rub LE work-op.amt-rub)
+                                          ELSE YES
+                                          ,
+                                          "Сумма не должна превышать " +
+                                          string(work-op.amt-rub) + " !")
+                                 WHEN work-op.amt-rub-enable
+              op-entry.symbol    WHEN op-template.symbol NE "-"
+              op-entry.prev-year           WHEN (op-entry.op-date LE dt-zo AND mNeedZO)
+              &IF DEFINED(LIKE-BIS) &THEN
+              op.name-ben
+              op.inn
+              &ENDIF
+              vmfo                         WHEN work-op.mfo  NE ? OR op-templ.mfo-needed
+              vcorr-acct validate(true,"") WHEN work-op.mfo  NE ? OR op-templ.mfo-needed
+              op.ben-acct                  WHEN work-op.mfo  NE ? OR op-templ.mfo-needed
+              &IF DEFINED(LIKE-DIASOFT) &THEN
+              op.name-ben
+              op.inn
+              &ENDIF
+              op.details
+            with frame opreq

@@ -1,0 +1,57 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 11/04/2016 17:06:21 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+sbLogIt:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.07PB.u07PB.sbLogIt
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Печать сообщения в лог
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// u07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   DO BEFORE:
+      // При вызове транзакции д.б.определены переменные:DO BEFORE:
+      // - @iLog   - лог-файл
+      // - @__mess - сообщение = неск.строк через CHR(10)
+      
+      IF (@__mess == ?) THEN @__mess = "?"; ELSE; ENDIF;
+      
+      IF (@__mess == "") THEN
+        writeln(" ", @iLog);
+      ELSE
+        @__logerr = @iLog;
+        ЦИКЛ("sbLogIt1", 1, NUM-ENTRIES(@__mess, CHR(10)));
+      ENDIF;
+   END BEFORE.
+
+END TRANSACTION. // ТРАНЗАКЦИЯ sbLogIt - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

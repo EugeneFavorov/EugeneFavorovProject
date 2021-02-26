@@ -1,0 +1,428 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2011 ТОО "Банковские информационные системы"
+     Filename: prt-morprice.p
+      Comment: Печать "Ордер по передаче ценностей"
+   Parameters: RID
+         Uses:
+      Used by:
+      Created: 03.05.2011 kraa (0143738)   
+*/
+
+{globals.i}
+{get_set.i "банк"}
+{intrface.get prnvd}
+{intrface.get instrum}
+{intrface.get cust}
+{intrface.get db2l}
+{intrface.get xclass}
+{date.fun}
+{signature.pro}
+
+DEFINE INPUT PARAM RID AS RECID NO-UNDO.
+
+DEFINE VARIABLE vAmt          AS DECIMAL   NO-UNDO.
+DEFINE VARIABLE vDragSum      AS DECIMAL   NO-UNDO. /* Масса металла документа */
+DEFINE VARIABLE vI            AS INT64     NO-UNDO.
+DEFINE VARIABLE vAmtStr       AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vAmtStr1      AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vCur          AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vDrag         AS CHARACTER NO-UNDO. /* Валюта драг. металла  */
+DEFINE VARIABLE vClDoc        AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vCustName     AS CHARACTER EXTENT 2 NO-UNDO.
+DEFINE VARIABLE vINNCl        AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vCode         AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vXAtrrNominal AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vAcctLstCr    AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vAcctLstDb    AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vRecidLst     AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vResultCur    AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vCodeDoc      AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vBhPost       AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vBhName LIKE _user._user-name NO-UNDO.
+DEFINE VARIABLE vKsPost       AS CHARACTER NO-UNDO.
+DEFINE VARIABLE vKsName LIKE _user._user-name NO-UNDO.
+DEFINE VARIABLE vNaimCenn     AS CHARACTER NO-UNDO.
+
+DEFINE BUFFER xop-entry FOR op-entry.
+DEFINE BUFFER doc-type  FOR doc-type.
+
+DEFINE TEMP-TABLE ttCickleChek NO-UNDO
+   FIELD name   AS CHARACTER
+   FIELD qty    AS INT64
+   FIELD Amt    AS DECIMAL
+.
+DEFINE TEMP-TABLE ttop-entry LIKE op-entry.
+
+FIND FIRST op WHERE RECID(op) = RID AND op.Class-Code EQ "opo" NO-LOCK NO-ERROR.
+
+IF NOT AVAIL(op) THEN DO:
+   MESSAGE "Нет данных для формирования отчета" VIEW-AS ALERT-BOX.
+   RETURN.
+END.
+
+IF (op.op-date  NE ? AND
+    op.op-date  LT DATE("01/11/2014")) OR
+    op.doc-date LT DATE("01/11/2014")
+THEN
+   RUN GetUserNames(BUFFER op, OUTPUT vBhName, OUTPUT vKsName).
+ELSE DO:
+   /* Выводим подписную часть */
+   RUN GetRepFioByRef(ENTRY(1,THIS-PROCEDURE:FILE-NAME, "."),
+                      GetUserBranchID(USERID('bisquit')),
+                      ?,
+                      ?) NO-ERROR.
+   ASSIGN
+      vBhPost = mPostInRep[1]
+      vBhName = mFIOInRep[1]
+      vKsPost = mPostInRep[2]
+      vKsName = mFIOInRep[2]
+   .
+   IF NOT {assigned vBhPost} OR NOT {assigned vBhName} THEN
+   DO:
+   FIND FIRST _user WHERE _user._userid = op.user-id NO-LOCK NO-ERROR.
+   IF AVAIL _user THEN
+      ASSIGN
+         vBhPost = GetXAttrValueEx("_user", _user._userid, "Должность", "Бухгалтер")
+         vBhName  = _user._user-Name
+      .
+   END.
+   IF NOT {assigned vKsPost} OR NOT {assigned vKsName} THEN
+   DO:
+   FIND FIRST _user WHERE _user._userid = op.user-inspector NO-LOCK NO-ERROR.
+   IF AVAIL _user THEN
+      ASSIGN
+         vKsPost = GetXAttrValueEx("_user", _user._userid, "Должность", "Кассир")
+         vKsName = _user._user-Name
+      .
+   END.
+END.
+
+{empty ttop-entry}
+{empty ttCickleChek}
+
+FIND FIRST doc-type WHERE
+           doc-type.doc-type EQ op.doc-type
+NO-LOCK NO-ERROR.
+IF AVAIL(doc-type) THEN
+   vCodeDoc = doc-type.digital.
+ELSE
+   vCodeDoc = "".
+
+/*RUN Insert_TTName("bank",setting.val).*/
+RUN Insert_TTName("d",ENTRY(1,STRING(op.op-date),"/")).
+RUN Insert_TTName("m",getMonthString(INT64(ENTRY(2,STRING(op.op-date),"/")))).
+RUN Insert_TTName("y",ENTRY(3,STRING(op.op-date),"/")).
+RUN Insert_TTName("doc",STRING(op.doc-num)).
+RUN Insert_TTName("codedoc",vCodeDoc).
+FOR EACH op-entry OF op NO-LOCK:
+   FOR EACH xop-entry OF op WHERE RECID(xop-entry) NE RECID(op-entry)                                 
+   NO-LOCK:
+      IF (op-entry.acct-cr EQ xop-entry.acct-cr AND 
+         op-entry.acct-cr NE "") OR
+         (op-entry.acct-db EQ xop-entry.acct-db AND
+         op-entry.acct-db NE "")
+      THEN DO:
+         IF NOT CAN-FIND (FIRST ttop-entry WHERE ttop-entry.op-entry EQ op-entry.op-entry)
+         THEN DO:
+            CREATE ttop-entry.
+            BUFFER-COPY op-entry TO ttop-entry.
+         END.
+      END.
+   END.
+END.
+IF NOT CAN-FIND(FIRST ttop-entry) THEN DO:
+   FIND FIRST op-entry OF op NO-LOCK.
+   CREATE ttop-entry.
+   BUFFER-COPY op-entry TO ttop-entry.
+END.
+
+RUN BeginCircle_TTName ("db").   
+FOR EACH ttop-entry NO-LOCK:
+   IF NOT CAN-DO(vAcctLstDb,ttop-entry.acct-db) THEN DO:
+      RUN Insert_TTName("acctDb[db]",ttop-entry.acct-db).
+      RUN NextCircle_TTName ("db").                
+      vAcctLstDb = vAcctLstDb + "," + ttop-entry.acct-db.
+   END.
+END.
+RUN EndCircle_TTName ("db").  
+
+RUN BeginCircle_TTName ("cr").   
+FOR EACH ttop-entry NO-LOCK:
+   IF NOT CAN-DO(vAcctLstCr,ttop-entry.acct-cr) THEN DO:
+      RUN Insert_TTName("acctCr[cr]",ttop-entry.acct-cr).
+      RUN NextCircle_TTName ("cr").                
+      vAcctLstCr = vAcctLstCr + "," + ttop-entry.acct-cr.
+   END.
+END.
+RUN EndCircle_TTName ("cr").  
+
+FOR EACH ttop-entry NO-LOCK:
+   vDrag = GetXAttrValueEx("currency",ttop-entry.currency,"Драг","").
+   IF ttop-entry.currency EQ "" THEN
+      vAmt = vAmt + ttop-entry.amt-rub.
+   ELSE IF vDrag EQ "Да" THEN
+      ASSIGN
+         vAmt     = vAmt + ttop-entry.amt-rub
+         vDragSum = vDragSum + ttop-entry.amt-cur
+      .
+   ELSE 
+      vAmt = vAmt + ttop-entry.amt-cur.
+
+   {find-act.i
+      &acct = ttop-entry.acct-db
+   }   
+   IF AVAIL(acct) THEN DO:
+      vCode = GetXAttrValue ("acct", acct.acct + "," + acct.currency,"form-type-code").
+      IF NOT {assigned vCode} THEN DO:  
+         {find-act.i
+          &acct = ttop-entry.acct-cr
+         }   
+         vCode = GetXAttrValue ("acct", acct.acct + "," + acct.currency,"form-type-code").
+      END.
+   END.
+   ELSE DO:
+      {find-act.i
+         &acct = ttop-entry.acct-cr
+      }   
+      vCode = GetXAttrValue ("acct", acct.acct + "," + acct.currency,"form-type-code").
+   END.
+   vNaimCenn = GetXAttrValueEx("op",STRING(op.op),"НаимЦенн","").
+   IF {assigned vNaimCenn} THEN
+   DO:
+      IF NOT CAN-FIND (FIRST ttCickleChek WHERE ttCickleChek.name EQ vNaimCenn) THEN DO:
+         CREATE ttCickleChek.
+         ttCickleChek.name = vNaimCenn.
+         IF {assigned STRING(ttop-entry.qty)} THEN 
+            ttCickleChek.qty = ttop-entry.qty.
+         ttCickleChek.amt = (IF ttop-entry.currency EQ "" THEN
+                                ttop-entry.amt-rub
+                             ELSE
+                                ttop-entry.amt-cur).
+      END.
+      ELSE DO:
+         FIND FIRST ttCickleChek WHERE ttCickleChek.name EQ vNaimCenn NO-LOCK NO-ERROR.
+         IF {assigned STRING(ttop-entry.qty)} THEN 
+            ttCickleChek.qty = ttCickleChek.qty + ttop-entry.qty.
+         
+         ttCickleChek.amt = ttCickleChek.amt + (IF ttop-entry.currency EQ "" THEN
+                                                   ttop-entry.amt-rub
+                                                ELSE
+                                                   ttop-entry.amt-cur).
+      END.
+   END.
+   ELSE IF {assigned vCode} THEN DO:
+      FIND FIRST code WHERE code.class EQ "КодТипаБланков" AND
+                 code.code EQ vCode
+      NO-LOCK NO-ERROR.
+      IF AVAIL(code) THEN DO:
+         IF NOT CAN-FIND (FIRST ttCickleChek WHERE ttCickleChek.name EQ code.name) THEN DO:
+            CREATE ttCickleChek.
+            ttCickleChek.name = code.name.
+            IF {assigned STRING(ttop-entry.qty)} THEN 
+               ttCickleChek.qty = ttop-entry.qty.
+            ttCickleChek.amt = (IF ttop-entry.currency EQ "" THEN
+                                   ttop-entry.amt-rub
+                                ELSE
+                                   ttop-entry.amt-cur).
+         END.
+         ELSE DO:
+            FIND FIRST ttCickleChek WHERE ttCickleChek.name EQ code.name NO-LOCK NO-ERROR.
+            IF {assigned STRING(ttop-entry.qty)} THEN 
+               ttCickleChek.qty = ttCickleChek.qty + ttop-entry.qty.
+            
+            ttCickleChek.amt = ttCickleChek.amt + (IF ttop-entry.currency EQ "" THEN
+                                                      ttop-entry.amt-rub
+                                                   ELSE
+                                                      ttop-entry.amt-cur).
+         END.
+         
+      END. 
+   END.
+   ELSE DO:
+     RUN GetCurrName IN h_instrum (ttop-entry.currency, OUTPUT vResultCur).
+     vXAtrrNominal = GetXAttrValue("op",STRING(op.op),"Номиналы_купюр").
+     IF vXAtrrNominal NE "" THEN
+     DO: 
+        DO vI = 1 TO NUM-ENTRIES(vXAtrrNominal,";"):
+           IF ENTRY(vI,vXAtrrNominal,";") EQ "" THEN NEXT.
+           IF NOT CAN-FIND (FIRST ttCickleChek WHERE ENTRY(2,ttCickleChek.name,",") EQ ENTRY(vI,vXAtrrNominal,";"))
+           THEN DO:   
+              CREATE ttCickleChek.
+              ASSIGN
+                 ttCickleChek.name = vResultCur + "," + ENTRY(vI,vXAtrrNominal,";")
+                 ttCickleChek.qty = 1
+                 ttCickleChek.amt = (IF ttop-entry.currency EQ "" THEN
+                                         ttop-entry.amt-rub
+                                      ELSE
+                                         ttop-entry.amt-cur) 
+              .
+           END.
+           ELSE DO:
+              ASSIGN
+                 ttCickleChek.qty = ttCickleChek.qty + 1.             
+                 ttCickleChek.amt = ttCickleChek.amt + (IF ttop-entry.currency EQ "" THEN
+                                                           ttop-entry.amt-rub
+                                                        ELSE
+                                                           ttop-entry.amt-cur)
+              .
+           END.
+       END.
+     END.
+     ELSE DO:
+        IF NOT CAN-FIND (FIRST ttCickleChek WHERE ttCickleChek.name EQ vResultCur)
+        THEN DO:
+           CREATE ttCickleChek.
+           ASSIGN
+              ttCickleChek.name = vResultCur
+              ttCickleChek.qty = ttop-entry.qty
+                 ttCickleChek.amt = (IF ttop-entry.currency EQ "" THEN
+                                         ttop-entry.amt-rub
+                                      ELSE
+                                        ttop-entry.amt-cur) 
+              .
+           END.
+        ELSE DO:
+           ASSIGN
+              ttCickleChek.qty = ttCickleChek.qty + ttop-entry.qty.             
+              ttCickleChek.amt = ttCickleChek.amt + (IF ttop-entry.currency EQ "" THEN
+                                                       ttop-entry.amt-rub
+                                                     ELSE
+                                                        ttop-entry.amt-cur)
+           .
+        END.
+     END.
+   END.
+END.
+
+FIND FIRST ttop-entry NO-LOCK NO-ERROR.
+vCur  = ttop-entry.currency.
+{find-act.i
+   &acct = ttop-entry.acct-cr
+}   
+IF AVAIL(acct) THEN DO:
+  IF op.name-ben NE ? AND TRIM(op.name-ben) NE "" THEN RUN Insert_TTName("Name",op.name-ben). /* VPA 0151828 */
+  ELSE DO:   
+   IF acct.cust-id EQ ? OR acct.cust-id EQ 0 THEN DO: /* VPA 0151828 */
+      /* ayv в поле "кому пренадлежат" проставляется полное название банка
+    	 в "наименовании банка" проставляется филиал */
+	  FIND FIRST branch WHERE branch.branch-Id EQ acct.branch-id NO-LOCK NO-ERROR. /* VPA 0151828 */
+      IF AVAIL(branch) THEN
+         RUN Insert_TTName("bank", branch.name).
+	  RUN Insert_TTName("Name",setting.val).
+	  /**/
+   END.
+   ELSE DO:
+      RUN GetCustName IN h_base
+          (acct.cust-cat,acct.cust-id,acct.acct,
+           OUTPUT vCustName[1],
+           OUTPUT vCustName[2],
+           INPUT-OUTPUT vINNCl).
+      RUN Insert_TTName("Name",vCustName[1] + " " + vCustName[2]).
+   END.
+ END.  
+END.
+RUN Insert_TTName("Det", op.details).  
+RUN Insert_TTName("amt",STRING(vAmt,">>,>>>,>>9.99")).
+RUN Insert_TTName("dragsum",IF vDragSum NE 0 THEN STRING(vDragSum,">>>,>>9.99") ELSE "").
+RUN x-amtstr.p (vAmt,vCur,YES,YES,OUTPUT vAmtStr,OUTPUT vAmtStr1).
+RUN Insert_TTName("AmtStr",vAmtStr + " " + vAmtStr1).
+
+RUN BeginCircle_TTName ("Cickle").   
+FOR EACH ttCickleChek NO-LOCK:
+   RUN Insert_TTName("name[Cickle]",ttCickleChek.name).    
+   RUN Insert_TTName("qty[Cickle]",STRING(ttCickleChek.qty)).    
+   RUN Insert_TTName("amt[Cickle]",STRING(ttCickleChek.amt,"->>>,>>>,>>>,>>9.99")).    
+   RUN NextCircle_TTName ("Cickle").                
+END.
+RUN EndCircle_TTName ("Cickle").  
+
+RUN Insert_TTName("BhPost", vBhPost).
+RUN Insert_TTName("BhName", vBhName).
+RUN Insert_TTName("KsPost", vKsPost).
+RUN Insert_TTName("KsName", vKsName).
+RUN Insert_TTName("ClName",GetXAttrValue("op",STRING(Op.op),"ФИО")).    
+
+vClDoc = GetXAttrValueEx("op", STRING(op.op), "document-id", "") + "," 
+                        + GetXAttrValueEx("op", STRING(op.op), "Докум", "") + ","
+                        + GetXAttrValueEx("op", STRING(op.op), "cust-doc-who", "") + ","
+                        + GetXAttrValueEx("op", STRING(op.op), "Document4Date_vid", "").
+
+RUN Insert_TTName("ClDoc", TRIM(vClDoc,",")).    
+
+IF (op.op-date  NE ? AND
+    op.op-date  LT DATE("01/11/2014")) OR
+    op.doc-date LT DATE("01/11/2014")
+THEN
+   RUN printvd.p ("MORPRICE", INPUT TABLE ttNames).
+ELSE
+   RUN printvd.p ("MORPRICEн", INPUT TABLE ttNames).
+
+{intrface.del}          /* Выгрузка инструментария. */ 
+
+PROCEDURE GetUserNames.
+    DEFINE PARAMETER BUFFER op      FOR  op.
+    DEFINE OUTPUT PARAMETER oBhName LIKE _user._user-name NO-UNDO.
+    DEFINE OUTPUT PARAMETER oKsName LIKE _user._user-name NO-UNDO.
+
+    DEFINE VARIABLE vSettings AS CHARACTER            NO-UNDO.
+    DEFINE VARIABLE vStr      AS CHARACTER            NO-UNDO.
+    DEFINE VARIABLE vKey      AS CHARACTER            NO-UNDO.
+    DEFINE VARIABLE vValue    AS CHARACTER            NO-UNDO.
+    DEFINE VARIABLE vI        AS INT64                NO-UNDO.
+    DEFINE VARIABLE vBhSet    AS LOGICAL   INITIAL NO NO-UNDO.
+    DEFINE VARIABLE vKsSet    AS LOGICAL   INITIAL NO NO-UNDO.
+
+    vSettings = FGetSetting("ПлатДок", "ПодписиОПЦ", "").
+    DO vI = 1 TO NUM-ENTRIES(vSettings, ";"):
+        vStr = ENTRY(vI, vSettings, ";").
+        IF vStr MATCHES "*=*" THEN DO:
+            ASSIGN
+                vKey   = TRIM(SUBSTRING(vStr, 1, INDEX(vStr, "=") - 1))
+                vValue = TRIM(SUBSTRING(vStr, INDEX(vStr, "=") + 1))
+            .
+            CASE vKey:
+                WHEN "БухРаб" THEN DO:
+                    RUN GetUsrName(BUFFER op, vValue, OUTPUT oBhName).
+                    vBhSet = YES.
+                END.
+                WHEN "КасРаб" THEN DO:
+                    RUN GetUsrName(BUFFER op, vValue, OUTPUT oKsName).
+                    vKsSet = YES.
+                END.
+            END.
+        END.
+    END.
+    IF NOT vBhSet THEN
+        RUN GetUsrName(BUFFER op, "user-id", OUTPUT oBhName).
+    IF NOT vKsSet THEN
+        RUN GetUsrName(BUFFER op, "user-inspector", OUTPUT oKsName).
+END PROCEDURE.
+
+PROCEDURE GetUsrName.
+    DEFINE PARAMETER BUFFER op        FOR  op.
+    DEFINE INPUT  PARAMETER iAttrName AS   CHARACTER        NO-UNDO.
+    DEFINE OUTPUT PARAMETER oUserName LIKE _user._user-name NO-UNDO.
+
+    DEFINE VARIABLE vUserId LIKE _user._userid.
+
+    IF iAttrName BEGINS "op." THEN
+        iAttrName = SUBSTRING(iAttrName, LENGTH("op.") + 1).
+
+    vUserId = DYNAMIC-FUNCTION(IF IsValidField("op", iAttrName) THEN
+                                   "GetValueAttr"
+                               ELSE
+                                   "GetXAttrValue",
+                               "op",
+                               Surrogate(BUFFER op:HANDLE),
+                               iAttrName).
+    FIND FIRST _user WHERE _user._userid = vUserId NO-LOCK NO-ERROR.
+    IF AVAILABLE _user THEN
+        oUserName = _user._user-name.
+END PROCEDURE.
+/* $LINTUSER='SASA' */
+/* $LINTENV ='dpl' */
+/* $LINTVSS ='$/ws3-dpl/bq' */
+/* $LINTDATE='12/11/2014 12:19:18.444+04:00' */
+/* $LINTFILE='prt-morprice.p' */
+/*prosignGSzBS2mTuI/Omw/R+Maw5g*/

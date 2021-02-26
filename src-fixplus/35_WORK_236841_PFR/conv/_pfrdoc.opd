@@ -1,0 +1,38 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 05/11/2015 12:45:37 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+_pfrdoc:
+DO TRANSACTION NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PFR._pfrdoc
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Вспомогательные транзакции
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// EXCH-PFR
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// 
+   /// </tr_proc>
+
+   /// <tr_сс_выводнаэкран>
+   /// Нет
+   /// </tr_сс_выводнаэкран>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+END TRANSACTION. // ТРАНЗАКЦИЯ _pfrdoc - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

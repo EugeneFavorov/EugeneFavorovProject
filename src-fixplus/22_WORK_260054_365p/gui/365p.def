@@ -1,0 +1,122 @@
+
+/* +++ 365p.def was humbly modified by (c)blodd converter v.1.09 on 10/16/2015 7:10am +++ */
+
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2012 ЗАО "Банковские информационные системы"
+     Filename: 365p.def
+      Comment: Объявления констант для реализации Положения 365-П.
+   Parameters:
+      Created: 24.02.2012 krok
+     Modified: 19.06.2015 12:44 KSV     
+*/
+
+&IF DEFINED(DEF_365P_DEF_) = 0 &THEN
+
+&GLOBAL-DEFINE DEF_365P_DEF_       YES
+
+/* Типы информации */
+&GLOBAL-DEFINE INFO-TYPE-UNDEFINED ""
+&GLOBAL-DEFINE INFO-TYPE-RPO       "РЕШЕНПРИОСТ"
+&GLOBAL-DEFINE INFO-TYPE-ROO       "РЕШЕНОТМЕНА"
+&GLOBAL-DEFINE INFO-TYPE-PNO       "ПОРУЧЕНИЕНО"
+&GLOBAL-DEFINE INFO-TYPE-TRB       "ТРЕБОВАНИЕНО"
+&GLOBAL-DEFINE INFO-TYPE-TRG       "ТРЕБОВАНИЕБГ"
+&GLOBAL-DEFINE INFO-TYPE-ZNO       "ЗАПРОСНО"
+&GLOBAL-DEFINE INFO-TYPE-TICLAC    "НАЛСЧЕТОВ"
+&GLOBAL-DEFINE INFO-TYPE-TICLAS    "ОСТАТКИ"
+&GLOBAL-DEFINE INFO-TYPE-TICLAM    "ОПЕРАЦИИПОСЧ"
+
+&GLOBAL-DEFINE INFO-TYPES          {&INFO-TYPE-RPO}    + "," + ~
+                                   {&INFO-TYPE-ROO}    + "," + ~
+                                   {&INFO-TYPE-PNO}    + "," + ~
+                                   {&INFO-TYPE-TRB}    + "," + ~
+                                   {&INFO-TYPE-TRG}    + "," + ~
+                                   {&INFO-TYPE-ZNO}    + "," + ~
+                                   {&INFO-TYPE-TICLAC} + "," + ~
+                                   {&INFO-TYPE-TICLAS} + "," + ~
+                                   {&INFO-TYPE-TICLAM}
+
+/* Виды запросов */
+&GLOBAL-DEFINE REQ-KIND-UNDEFINED  0
+&GLOBAL-DEFINE REQ-KIND-TICLAC     1
+&GLOBAL-DEFINE REQ-KIND-TICLAS     2
+&GLOBAL-DEFINE REQ-KIND-TICLAM     3
+
+&GLOBAL-DEFINE REQ-KINDS           STRING({&REQ-KIND-TICLAC}) + "," + ~
+                                   STRING({&REQ-KIND-TICLAS}) + "," + ~
+                                   STRING({&REQ-KIND-TICLAM})
+
+/* Типы запросов */
+&GLOBAL-DEFINE REQ-TYPE-UNDEFINED  0
+&GLOBAL-DEFINE REQ-TYPE-ALL        1
+&GLOBAL-DEFINE REQ-TYPE-SELECTED   2
+
+&GLOBAL-DEFINE REQ-TYPES           STRING({&REQ-TYPE-ALL}) + "," + ~
+                                   STRING({&REQ-TYPE-SELECTED})
+
+/* Категории клиентов */
+&GLOBAL-DEFINE SUPPORTED-CUST-CATS "Ч,Ю,Б"
+&GLOBAL-DEFINE BANKRUPCY-CUST-CATS "Ч,Ю"
+
+/* ИНН */
+&GLOBAL-DEFINE INN-LENGTH-PERSON  12
+&GLOBAL-DEFINE INN-LENGTH-CORP    10
+&GLOBAL-DEFINE INN-LENGTH-FCORP   5
+
+/* Коды ошибок */
+&GLOBAL-DEFINE ERR-SUCCESS        "10"
+&GLOBAL-DEFINE ERR-FILIAL         "31"
+&GLOBAL-DEFINE ERR-ACCT           "32"
+&GLOBAL-DEFINE ERR-CUST           "33"
+&GLOBAL-DEFINE ERR-OTHER          "35"
+&GLOBAL-DEFINE ERR-SPECIAL        "99"
+
+/* Характеристики счетов по результатам проверки */
+&GLOBAL-DEFINE FEAT-UNDEFINED     ?
+&GLOBAL-DEFINE FEAT-ERROR         -1
+&GLOBAL-DEFINE FEAT-UNKNOWN       0
+&GLOBAL-DEFINE FEAT-OK            1
+&GLOBAL-DEFINE FEAT-NOT-FOUND     2
+&GLOBAL-DEFINE FEAT-WRONG-CUST    3
+&GLOBAL-DEFINE FEAT-NOT-OPEN      4
+&GLOBAL-DEFINE FEAT-CLOSED        5
+&GLOBAL-DEFINE FEAT-DUPLICATE     6
+&GLOBAL-DEFINE FEAT-FALSE-365P    7
+&GLOBAL-DEFINE FEAT-TRANS-365P    8
+
+/* Типы остатков для справок */
+
+&GLOBAL-DEFINE BALANCE-BF         "входящий"
+&GLOBAL-DEFINE BALANCE-CF         "исходящий"
+&GLOBAL-DEFINE BALANCE-TYPES      {&BALANCE-BF} + "," + ~
+                                  {&BALANCE-CF}
+
+/* Разное */
+&GLOBAL-DEFINE ZNO-FORMAT-VERSION         "2.01"
+&GLOBAL-DEFINE DATE-FORMAT-365P           "99.99.9999"
+&GLOBAL-DEFINE MAX-ERROR-TEXT-LENGTH-365P 512
+&GLOBAL-DEFINE special-cust-name-chars    '"' + ~
+                                          " _@#№$&'`.,;:+-*^=/|\%?!()<>[]{}"
+&GLOBAL-DEFINE CONDITIONAL-ATTRS-365P     "НаимПП,ФИОПП"
+&GLOBAL-DEFINE ZNO-MAX-PARTS              99
+&GLOBAL-DEFINE SEPARATOR-365P             ":"
+&GLOBAL-DEFINE RESTRICTED-CHARS-365P      CHR(10) + CHR(13)
+&GLOBAL-DEFINE OP-DETAILS-CHAR-WHITESPACE "<SPACE>"
+&GLOBAL-DEFINE OP-DETAILS-CHAR-NONE       "<EMPTY>"
+&GLOBAL-DEFINE NO-INN                     "<NONE>"
+
+/* Макросы */
+&GLOBAL-DEFINE RAISE-ERROR NO-ERROR.                     ~
+                           IF ERROR-STATUS:ERROR THEN    ~
+                               RETURN ERROR {&RETURN_VALUE}
+
+&ENDIF /* DEF_365P_DEF_ */
+/* $LINTENV ='dvp' */
+/* $LINTVSS ='$/ws1-dvp/bq/' */
+/* $LINTDATE='22/06/2015 12:57:55.766+04:00' */
+/* $LINTUSER='anba' */
+/* $LINTMODE='1' */
+/* $LINTFILE='365p.def' */
+/*prosignyLvtNNr1NGwu2m1nDE8r3Q*/
+/* --- 365p.def was humbly modified by (c)blodd converter v.1.09 on 10/16/2015 7:10am --- */

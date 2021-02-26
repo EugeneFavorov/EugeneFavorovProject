@@ -1,0 +1,195 @@
+/*
+              Банковская интегрированная система БИСквит
+ Copyright:
+ Filename:    getomskop2.p
+ Comment:     Ищем клиента в базе BANK и создаем в БИСе
+ Parameters:
+ Uses:
+ Used by:
+ Created:
+ Modified:
+*/
+
+ROUTINE-LEVEL ON ERROR UNDO, THROW.
+{globals.i}
+{intrface.get xclass}
+{getopomsk.i}
+
+DEFINE INPUT PARAMETER hNo AS INT.
+
+DEF VAR iCnt AS INT NO-UNDO.
+DEF VAR iCntLoaded AS INT NO-UNDO.
+DEF VAR iCntDeleted AS INT NO-UNDO.
+DEF VAR vStartTime AS DATETIME NO-UNDO.
+DEF VAR shF AS CHAR NO-UNDO.
+DEF BUFFER vpost_change FOR bank.post_change_h.
+DEF BUFFER vpost FOR bank.post-banker.
+
+iCnt = 0.
+iCntLoaded = 0.
+iCntDeleted = 0.
+vStartTime = NOW.
+shF = shFilial.
+etime(TRUE).
+
+DEF VAR qh AS HANDLE.
+CREATE QUERY qh.
+
+CASE hNo:
+  WHEN 1 THEN DO:
+    qh:SET-BUFFERS(BUFFER bank.post-h1-mfr:HANDLE).
+    qh:QUERY-PREPARE("FOR EACH post-h1-mfr NO-LOCK BY post-h1-mfr.date_modify QUERY-TUNING ( NO-INDEX-HINT)").
+  END.
+  WHEN 2 THEN DO:
+    qh:SET-BUFFERS(BUFFER bank.post-h2-mfr:HANDLE).
+    qh:QUERY-PREPARE("FOR EACH post-h2-mfr NO-LOCK BY post-h2-mfr.date_modify QUERY-TUNING ( NO-INDEX-HINT)").
+  END.
+  WHEN 3 THEN DO:
+    qh:SET-BUFFERS(BUFFER bank.post-h3-mfr:HANDLE).
+    qh:QUERY-PREPARE("FOR EACH post-h3-mfr NO-LOCK BY post-h3-mfr.date_modify QUERY-TUNING ( NO-INDEX-HINT)").
+  END.
+END.
+
+qh:QUERY-OPEN.
+REPEAT:
+  qh:GET-NEXT().
+  IF qh:QUERY-OFF-END THEN LEAVE.
+
+  DO TRANSACTION ON ERROR UNDO, THROW:
+     FIND FIRST bank.post_change_h
+       WHERE post_change_h.id EQ qh:GET-BUFFER-HANDLE(1):BUFFER-FIELD("id"):BUFFER-VALUE /* vpost_change.id */
+       USE-INDEX IN_POST_CHANGE_H_ID
+        EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+     IF NOT AVAIL post_change_h OR post_change_h.status_ NE 0 THEN NEXT.
+
+     DO ON ERROR UNDO, THROW: /* ERR */
+     FOR FIRST bank.post-mfr
+        WHERE post-mfr.docno EQ post_change_h.docno
+        NO-LOCK QUERY-TUNING ( NO-INDEX-HINT):
+        LEAVE.
+     END.
+     IF AVAIL bank.post-mfr THEN DO:
+       IF CAN-DO("0000,0300,0500", post-mfr.deb_filial_id)
+         /* CAN-DO("0300", post-mfr.deb_filial_id) OR CAN-DO("0300", post-mfr.cred_filial_id) */
+         THEN
+       DO:
+         RUN LoadPostMfr(BUFFER post-mfr).
+         iCntLoaded = iCntLoaded + 1.
+       END.
+     END. ELSE DO:
+       /* запись не найдена, значит надо удалить */
+       FIND FIRST signs
+         WHERE signs.dec-value EQ post_change_h.docno
+           AND signs.FILE-NAME EQ 'op-entry'
+           AND signs.CODE EQ 'link-docno'
+         NO-LOCK NO-ERROR.
+       IF AVAIL signs THEN DO:
+          DEF VAR vSurr AS CHAR NO-UNDO.
+          vSurr = signs.surrogate.
+          FIND FIRST op-entry
+            WHERE op-entry.op = INTEGER(ENTRY(1,vSurr))
+              AND op-entry.op-entry EQ INTEGER(ENTRY(2,vSurr)) NO-ERROR.
+          IF AVAIL op-entry THEN DO:
+            shFilial = op-entry.filial-id.
+            FIND FIRST op WHERE op.op EQ INTEGER(ENTRY(1,vSurr)) NO-LOCK NO-ERROR.
+            IF op.user-id NE 'SYNC' THEN
+               UNDO, THROW NEW Progress.Lang.AppError( "документ введен не пользователем SYNC").
+
+	    /* проверка на существование связей на документе */
+            FOR EACH xlink WHERE xlink.class-code EQ op.class-code NO-LOCK,
+              EACH qbis.links WHERE qbis.links.link-id = xlink.link-id
+                           AND (qbis.links.source-id = STRING(op.op)
+                                OR qbis.links.target-id = STRING(op.op)
+                                ) NO-LOCK:
+               UNDO, THROW NEW Progress.Lang.AppError( "документ имеет связи и не может быть удален").
+            END.
+
+            /* проверка на закрытый день */
+            IF ClDay( op-entry.filial-id, op.op-date, op-entry.acct-cat) THEN
+               UNDO, THROW NEW Progress.Lang.AppError( "день " + (IF op-entry.op-date EQ ? THEN "?" ELSE STRING( op-entry.op-date)) + " закрыт по филиалу " + op-entry.filial-id + " удаление невозможно").
+            IF op-entry.filial-id = '0000' AND op.op-date < date( 2, 10, 2015) THEN
+               UNDO, THROW NEW Progress.Lang.AppError( "день " + STRING( post-mfr.postdate) + " запрещен. изменения ГО  из АБС невозможны.").
+
+            FOR EACH signs
+              WHERE signs.FILE-NAME EQ 'op-entry'
+                AND signs.surrogate EQ STRING(vSurr):
+              DELETE signs. 
+            END.
+	    PUT UNFORMATTED "удалена проводка docno=" bank.post_change_h.docno " " op-entry.op " " op-entry.op-entry " "
+		op-entry.acct-db " "
+		op-entry.acct-cr " "
+		op-entry.amt-cur " "
+		op-entry.amt-rub " "
+		SKIP.
+            DELETE op-entry.
+
+            DEF BUFFER bop-entry1 FOR op-entry.
+            FIND last bop-entry1 use-index op-entry
+               WHERE bop-entry1.op = INTEGER(ENTRY(1,vSurr)) no-lock no-error.
+            IF NOT AVAIL bop-entry1 THEN DO:
+               FIND FIRST op WHERE op.op EQ INTEGER(ENTRY(1,vSurr)) EXCLUSIVE-LOCK NO-ERROR.
+               IF AVAIL op THEN DO:
+                  FOR EACH op-bank
+                    WHERE op-bank.op EQ INTEGER(ENTRY(1,vSurr)):
+                     DELETE op-bank.
+                  END.
+                  FOR EACH signs
+                    WHERE signs.FILE-NAME EQ 'op'
+                      AND signs.surrogate EQ ENTRY(1,vSurr):
+                       DELETE signs.
+                  END.
+                  DELETE op.
+               END.
+            END. /* IF NOT AVAIL bop-entry1 */
+            iCntDeleted = iCntDeleted + 1.
+          END. /* IF AVAIL op-entry */
+       END. /* IF AVAIL signs  */
+    END. /* IF AVAIL bank.post-mfr */
+    /*ASSIGN
+       bank.post_change_h.status_ = 1.
+    VALIDATE bank.post_change_h.*/
+    DELETE bank.post_change_h.
+    RELEASE bank.post_change_h.
+    CATCH eAnyError AS Progress.Lang.Error:
+       /* IF INDEX(RETURN-VALUE + " " + eAnyError:GetMessage(1), 'filial') < 1 THEN */
+          PUT UNFORMATTED 'docno='
+             qh:GET-BUFFER-HANDLE(1):BUFFER-FIELD("docno"):BUFFER-VALUE
+             /* vpost_change.docno */
+              ": " + RETURN-VALUE + " " + eAnyError:GetMessage(1) SKIP.
+       IF AVAIL bank.post_change_h THEN DO:
+         ASSIGN
+           bank.post_change_h.status_ = -1
+           bank.post_change_h.errortext = RETURN-VALUE + " " + eAnyError:GetMessage(1)
+          .
+         VALIDATE bank.post_change_h.
+         RELEASE bank.post_change_h.
+       END.
+    END CATCH.
+    END. /* ERR */
+  END. /* DO TRANSACTION */
+  iCnt = iCnt + 1.
+  IF iCnt >= 1000 THEN LEAVE.
+  IF INTERVAL( NOW, vStartTime, 'seconds') > 155 THEN LEAVE.
+
+  END.
+ 
+  qh:QUERY-CLOSE().
+  DELETE OBJECT qh.
+ 
+
+   shFilial = shF.
+   
+   IF iCnt GT 0
+   THEN
+   PUT UNFORMATTED
+      STRING(NOW,"99/99/9999 HH:MM:SS") +
+      ' обработано проводок ' + STRING(iCnt) +
+	   ', загружено '          + STRING(iCntLoaded) + 
+	   ', удалено '            + STRING(iCntDeleted) +
+	   ', время '              + STRING(etime(false)) + ' мсек.' SKIP.
+	ELSE
+	PUT UNFORMATTED
+      STRING(NOW,"99/99/9999 HH:MM:SS")
+   SKIP.
+
+RETURN.

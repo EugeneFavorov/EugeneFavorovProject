@@ -1,0 +1,83 @@
+
+         op.doc-type WHEN fl_editOP AND (op.doc-type = "" or num-entries(op-templ.doc-type) > 1)
+         op.doc-num  WHEN fl_editOP 
+         &IF DEFINED(opreq-OP-DOC-NUM-SET) &THEN
+            AND ( {&opreq-OP-DOC-NUM-SET})
+         &ENDIF
+         op.doc-date WHEN fl_editOP
+         op.op-value-date WHEN fl_editOP AND need-valdate
+         op.ins-date      WHEN fl_editOP
+         &IF DEFINED(OFcash) = 0 &THEN
+            op.order-pay  WHEN fl_editOP
+            op.due-date   WHEN fl_editOP
+         &ENDIF
+         &IF DEFINED(browse-entry) = 0 &THEN
+            op-entry.acct-db WHEN op-entry.acct-db = ? OR op-entry.currency = ? OR flag-edit-acct
+            op-entry.acct-cr WHEN op-entry.acct-cr = ? OR op-entry.currency = ? OR flag-edit-acct
+            op-entry.value-date WHEN op-templ.ent-value-date = ?
+            op-entry.currency WHEN op-templ.currency = ? AND op-entry.currency = ?
+            op-entry.amt-cur  WHEN (op-entry.currency = ? OR op-entry.currency <> "")
+                                   &IF DEFINED(Ofsum) EQ 0 &THEN
+                                   AND fl_edit_cur
+                                   &ENDIF
+            op-entry.amt-rub &IF DEFINED(Ofsum) EQ 0 &THEN WHEN fl_edit_rub &ENDIF
+            &IF DEFINED(ONqty) &THEN
+               op-entry.qty when need-qty
+            &ENDIF
+            &IF DEFINED(g_cash1_sym) <> 0 &THEN
+               mSymbol WHEN op-templ.symbol <> "-"
+            &ELSE
+               op-entry.symbol WHEN op-templ.symbol <> "-"
+            &ENDIF
+            op-entry.prev-year when (op-entry.op-date <= dt-zo and mNeedZO)
+            op-entry.op-cod when op-entry.op-cod eq ?
+         &ENDIF
+         &IF DEFINED(likeDiaSoft) = 0 &THEN
+            &IF DEFINED(NOben) = 0 &THEN
+               op.name-ben WHEN fl_editOP AND (
+                                &IF DEFINED(NOCheck) EQ 0 &THEN
+                                   (op.name-ben = ? or op.name-ben = "") AND
+                                &ENDIF
+                            NOT transit
+                            AND mRecip-data EQ "")
+               op.inn      WHEN fl_editOP AND (
+                                &IF DEFINED(NOCheck) EQ 0 &THEN
+                                   (op.inn = ? or op.inn = "" ) AND
+                                &ENDIF
+                            NOT transit
+                            AND mRecip-data EQ "")
+            &ENDIF
+         &ENDIF
+         &IF DEFINED(Nomfo) = 0 &THEN
+            vmfo WHEN mforeq
+               &IF DEFINED(NOCheck) EQ 0 &THEN
+                  AND (TRIM(vmfo,"0") = "" OR RETRY) AND NOT transit
+                  AND mRecip-data EQ ""
+               &ENDIF
+            vcorr-acct WHEN mforeq AND
+                       &IF DEFINED(NOCheck) EQ 0 &THEN
+                          (vcorr-acct = ? or vcorr-acct = "" OR RETRY) AND
+                       &ENDIF
+                       NOT transit
+            op.ben-acct WHEN fl_editOP AND (
+                        mforeq  and
+                        &IF DEFINED(NOCheck) EQ 0 &THEN
+                           (op.ben-acct = ? or op.ben-acct = "") and
+                        &ENDIF
+                        NOT transit
+                        AND mRecip-data EQ "")
+         &ENDIF
+         &IF DEFINED(likeDiaSoft) &THEN
+            &IF DEFINED(NOben) = 0 &THEN
+               op.name-ben WHEN fl_editOP AND (&IF DEFINED(NOCheck) EQ 0 &THEN
+                                   (op.name-ben = ? or op.name-ben = "") AND
+                                &ENDIF
+                            NOT transit)
+               op.inn      WHEN fl_editOP AND (&IF DEFINED(NOCheck) EQ 0 &THEN
+                                   (op.inn = ? or op.inn = "" )  and
+                                &ENDIF
+                            NOT transit)
+            &ENDIF
+         &ENDIF
+         op.details WHEN fl_editOP AND not transit
+      

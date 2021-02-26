@@ -1,0 +1,53 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: dopcnclb.nau
+      Comment: Собственная форма просмотра классификатора 
+               "ДопКонтрКЛБ"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 06.08.2015 IT    
+*/
+
+IF FRAME-FIELD EQ "val" THEN
+DO:
+   pick-value = ?.
+   {messmenu
+      &CHOICES = """ + mLogCh + """
+      &TITLE = "[Выбор значения]"
+      }
+   IF (LASTKEY EQ 10 OR LASTKEY EQ 13) AND pick-value NE ? THEN
+      code.val:SCREEN-VALUE IN FRAME edit = ENTRY(INT64(pick-value),mLogCh).
+END.
+
+ELSE
+IF FRAME-FIELD EQ "misc" AND
+   FRAME-INDEX EQ 2 THEN
+DO:
+   pick-value = ?.
+   RUN browseld.p("user-config",
+                  "SetReturnVal" + CHR(1) + "proc-name",
+                  "1" + CHR(1) + "dps-op.p",
+                  "",
+                  level + 1).
+
+   IF (LASTKEY = 10 OR LASTKEY = 13)
+      AND pick-value <> ?
+   THEN
+      code.misc[2]:SCREEN-VALUE IN FRAME edit = pick-value.
+END.
+
+
+ELSE
+IF FRAME-FIELD EQ "misc" AND
+   FRAME-INDEX EQ 3 THEN
+DO:
+   pick-value = ?.
+   RUN pclass.p("mess-error","mail", "СООБЩЕНИЯ ОБ ОШИБКАХ",4).
+
+   IF (LASTKEY = 10 OR LASTKEY = 13)
+      AND pick-value <> ?
+   THEN
+      code.misc[3]:SCREEN-VALUE IN FRAME edit = ENTRY(1,pick-value).
+END.

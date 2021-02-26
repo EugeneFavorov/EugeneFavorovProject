@@ -1,0 +1,17 @@
+
+mCustCat                            /* Тип */
+mCustID                             /* Код  */
+code.{&WhiteINN}                    /* ИНН */
+code.{&ShortName}                   /* Краткое наименование */  
+code.{&WhiteName}                   /* ФИО/Наименование */
+mRaschAcct                          /* Расчетный счет */
+code.{&BankBIC}
+code.{&BankName}
+code.{&CorrAcct}
+code.{&Telefax}
+code.{&DocType}
+code.{&DocCustCode}
+code.{&DocOpenDate}
+code.{&DocIssue}
+code.{&BirthDay}
+code.{&Address}

@@ -1,0 +1,16 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: dopcnclb.edf
+      Comment: Собственная форма просмотра классификатора 
+               "ДопКонтрКЛБ"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 06.08.2015 IT    
+*/
+
+FORM
+   {dopcnclb.uf}
+WITH FRAME edit.
+

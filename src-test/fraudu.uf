@@ -1,0 +1,22 @@
+   DataLine.Sym1
+      FORMAT       "x(12)"
+      LABEL "ИНН"
+      HELP         "ИНН получателя"
+   DataLine.Sym2
+      FORMAT       "x(9)"
+      LABEL "БИК"
+      HELP         "БИК банка получателя"
+   DataLine.Sym3
+      FORMAT       "x(20)"
+      LABEL "Счёт"
+      HELP         "Счёт получателя"
+   DataLine.Sym4
+      FORMAT       "x(200)"
+      VIEW-AS EDITOR SIZE 50 BY 4
+      LABEL "Наименование"
+      HELP         "Наименование получателя"
+   Txt[1]
+      FORMAT       "x(1000)"
+      LABEL "Назначение"
+      VIEW-AS EDITOR SIZE 60 BY 6
+      HELP         "Назначение"

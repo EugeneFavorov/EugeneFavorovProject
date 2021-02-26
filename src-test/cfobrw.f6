@@ -1,0 +1,47 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: cfobrw.F6
+      Comment: ЦФО - фильтрация
+   Parameters:
+         Uses:
+      Used by:
+      Created: ayv
+     Modified:  
+*/
+
+ELSE IF LASTKEY EQ KEYCODE("F6") THEN
+DO ON ERROR UNDO, LEAVE
+   ON ENDKEY UNDO,LEAVE : 
+   PAUSE 0.
+   UPDATE
+      mFltBranchID
+	  mFltShortName
+	  mFltCFO
+	  mFltStatus
+	  mFltStartDate1
+	  mFltStartDate2
+	  mFltEndDate1
+	  mFltEndDate2
+	  mFltProdType 
+   WITH FRAME flt-fr.
+   HIDE FRAME flt-fr NO-PAUSE.
+   {relq {&files}}
+   NEXT REFRESH.
+END.
+ELSE IF LASTKEY EQ KEYCODE("Ctrl-F6") THEN
+DO:
+   ASSIGN
+	  mFltBranchID	 = "*"
+	  mFltShortName  = "*"
+	  mFltCFO		 = "*"
+	  mFltStatus   	 = "*"
+	  mFltStartDate1 = ?
+	  mFltStartDate2 = ?
+	  mFltEndDate1   = ?
+	  mFltEndDate2   = ?
+	  mFltProdType   = "*"
+   .
+   {relq {&files}}
+   NEXT REFRESH.
+END.

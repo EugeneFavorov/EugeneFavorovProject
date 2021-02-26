@@ -1,0 +1,188 @@
+&IF DEFINED(DEF_LIBRARY) &THEN
+	{kautools.lib} /*Библиотека процедур для работы с картотекой
+						  объявление временной таблицы ttkau
+      	         */
+
+DEF VAR mAcctFltN  AS INT64 INIT 1 NO-UNDO.
+DEF VAR mUsrBranch AS CHAR         NO-UNDO.
+
+DEF VAR vAcctFlt AS CHARACTER FORMAT "X(23)" INITIAL "По счетам ОИ"
+        VIEW-AS COMBO-BOX INNER-LINES 3
+        LIST-ITEMS "По счетам ОИ","По счетам отделения ОИ", "По всем счетам" 
+        DROP-DOWN-LIST
+        NO-UNDO.
+
+
+
+FORM
+   vAcctFlt   LABEL  "Фильтр по счетам " 
+              FORMAT "x(23)"
+              HELP   "Фильтр по счетам картотеки блокированных счетов"
+WITH FRAME frAcct OVERLAY CENTERED ROW 8 SIDE-LABELS 1 COL
+TITLE "Постановка на картотеку".
+
+ON GO OF FRAME frAcct DO:
+
+   CASE vAcctFlt:SCREEN-VALUE IN FRAME frAcct:
+      WHEN "По счетам ОИ" THEN
+      DO:
+         mAcctFltN = 1.
+      END.
+      WHEN "По счетам отделения ОИ" THEN
+      DO:
+         mUsrBranch = GetUserBranchID(userid("bisquit")).
+         mAcctFltN = 2.
+      END.
+      WHEN "По всем счетам" THEN
+      DO:
+         mAcctFltN = 3.
+      END.
+   END CASE.
+END.
+
+
+&ENDIF
+
+&IF DEFINED(QUERY_OPEN) &THEN
+RUN SelectAcctOfKauId(ipKauIdChar). /*Выбор счетов по Kau-id запись в ttKau*/
+/*Выбор документов, у которых плановая дата списания равна дате просмотра */
+
+UPDATE vAcctFlt
+WITH FRAME frAcct.
+
+
+&glob oqry0  OPEN QUERY qry0 FOR EACH  ttkau                                  ~
+                             WHERE ttkau.fTbName EQ "ACCT" NO-LOCK,           ~
+                                FIRST acct                                    ~
+                                WHERE RECID(acct) EQ ttKau.fRecId             ~
+                                  AND ((acct.user-id EQ USERID("bisquit") AND ~
+                                        mAcctFltN EQ 1) OR                    ~
+                                       (acct.branch-id EQ mUsrBranch AND      ~
+                                        mAcctFltN EQ 2) OR                    ~
+                                        mAcctFltN EQ 3)                       ~
+                                NO-LOCK,                                      ~
+				EACH  kau                                     ~
+                                WHERE kau.acct        EQ acct.acct            ~
+                                  AND kau.currency    EQ acct.currency        ~
+                                  AND NOT kau.zero-bal                        ~
+				  AND kau.sort        BEGINS vViewDateChar    ~
+                                  AND kau.kau-id      EQ ipKauIdChar NO-LOCK.
+/*Выбор всех не списанных документов*/
+&glob oqry1  OPEN QUERY qry0 FOR EACH  ttkau                                  ~
+                             WHERE ttkau.fTbName EQ "ACCT" NO-LOCK,           ~
+				FIRST acct                                    ~
+                                WHERE RECID(acct) EQ ttKau.fRecId             ~
+                                AND acct.close-date EQ ?                      ~
+                                  AND ((acct.user-id EQ USERID("bisquit") AND ~
+                                        mAcctFltN EQ 1) OR                    ~
+                                       (acct.branch-id EQ mUsrBranch AND      ~
+                                        mAcctFltN EQ 2) OR                    ~
+                                        mAcctFltN EQ 3)                       ~
+                                NO-LOCK,                                      ~
+				EACH  kau                                     ~
+                                WHERE kau.acct     EQ acct.acct               ~
+                                  AND kau.currency EQ acct.currency           ~
+                                  AND NOT kau.zero-bal                        ~
+											 AND kau.kau-id      EQ ipKauIdChar          ~
+                                                                  NO-LOCK     ~
+                                                                  BY kau.sort.
+&ENDIF
+
+/*Поиск дополнительных таблиц*/
+&IF DEFINED(POSTFIND) &THEN
+   RELEASE op.
+   RELEASE op-bank.
+	RELEASE op-entry.
+   RELEASE bop.
+   RELEASE bacct.
+   ASSIGN
+      kau1      = ""
+      mDataPlan = ""
+      mAmrRubIn = 0.0
+      mAcctBal  = ""
+      mNameSh   = ""
+   .
+
+ 	IF AVAIL kau THEN DO:
+		IF SUBSTRING(ENTRY(1, kau.sort),5,1) EQ "." AND
+	      SUBSTRING(ENTRY(1, kau.sort),8,1) EQ "." THEN
+			kau1 = SUBSTRING(ENTRY(1,kau.sort),9,2) + "/" +
+	 	          SUBSTRING(ENTRY(1,kau.sort),6,2) + "/" +
+	 	          SUBSTRING(ENTRY(1,kau.sort),3,2).
+		ELSE
+			kau1 = TRIM(ENTRY(1,kau.sort)).
+
+		FIND op-entry WHERE op-entry.op       EQ INT64(ENTRY(1,kau.kau))
+   		             AND op-entry.op-entry EQ INT64(ENTRY(2,kau.kau))
+      									                   NO-LOCK NO-ERROR.
+	   long-acct = {out-fmt.i kau.acct fmt}.
+	   IF AVAIL op-entry THEN DO:
+	 		FIND FIRST op OF op-entry
+                  NO-LOCK NO-ERROR.
+ 			FIND FIRST op-bank OF op
+              WHERE op-bank.op-bank-type EQ ""
+         NO-LOCK NO-ERROR.
+         mDataPlan = kau1.
+
+         IF AVAILABLE op THEN
+         DO:
+            mStrTMP = GetXAttrValueEx("op",
+                                      STRING(op.op),
+                                      "op-bal",
+                                      "").
+
+            IF mStrTMP NE "" THEN
+               FIND FIRST bop WHERE bop.op EQ INT64(mStrTMP)
+                  NO-LOCK NO-ERROR.
+
+            mAmrRubIn = DECIMAL(GetXAttrValueEx("op",
+                                                mStrTMP,
+                                                "amt-rub",
+                                                STRING(kau.balance))).
+            mAcctBal = GetXAttrValueEx("op",
+                                       mStrTMP,
+                                       "acctbal",
+                                       "").
+
+            IF AVAILABLE bop THEN
+            DO:
+               /* op.op-DATE.*/
+               /* kau1 */
+               /* mAmrRubIn */
+               /* mAcctBal */
+               /* mNameSh */
+            END.
+
+            IF mAcctBal NE "" THEN
+            DO:
+               {find-act.i
+                  &bact = bacct
+                  &acct  = mAcctBal
+                  &curr  = ""
+               }
+
+               IF AVAILABLE bacct THEN
+               DO:
+                  mNameSh = GetCliName (bacct.cust-cat,
+                                        STRING(bacct.cust-id),
+                                        OUTPUT mAddr,
+                                        OUTPUT mINN,
+                                        OUTPUT mKPP,
+                                        INPUT-OUTPUT mType,
+                                        OUTPUT mCode,
+                                        OUTPUT mAcct).
+               END.
+            END.
+         END.
+		END.
+	END.
+&ENDIF
+
+/*Возвращение выбранного документа в процедуру*/
+&IF DEFINED(RETURN_KAU) &THEN
+ 	IF LASTKEY EQ 10 AND TRANSACTION THEN DO:
+  		pick-value = "KAU" + "," + STRING(RECID(kau)).
+  		LEAVE REFRESH.
+	END.
+&ENDIF
+

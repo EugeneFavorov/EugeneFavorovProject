@@ -1,0 +1,572 @@
+/*
+               Банковская интегрированная система QBIS
+    Copyright: (C) 1992-2016 ЗАО "Банковские информационные системы"
+     Filename: pb2-create-grp.p
+      Comment: Групповая процедура формирования PB2 в случае возврата инкассовых после
+               списания с картотеки 2 без оплаты.
+   Parameters: нет
+      Created: 24.06.2016 soda
+     Modified: <date> <who>
+*/
+
+{globals.i}
+{tmprecid.def}
+{tmpobj.def}
+{topkind.def}
+{intrface.get tmess}
+{intrface.get pack}
+{intrface.get xclass}
+{intrface.get filex}
+{intrface.get mail}
+{intrface.get netw}     /* Отправка в bispc */
+{pb_exf_exl.i}          /** Библиотека для выгрузки в XL */
+
+DEFINE INPUT  PARAMETER iParam  AS CHARACTER NO-UNDO.   /* Расположение ИП: Картотека / Опердень */
+
+DEFINE VARIABLE mCnt        AS INT64  NO-UNDO.
+DEFINE VARIABLE mKind       AS CHAR   NO-UNDO.
+DEFINE VARIABLE mPacketID   AS INT64  NO-UNDO.
+DEFINE VARIABLE mText       AS CHAR   NO-UNDO.
+DEFINE VARIABLE mLabel      AS CHAR   NO-UNDO.
+DEFINE VARIABLE mBank       AS CHAR   NO-UNDO.
+DEFINE VARIABLE mUser       AS CHAR   NO-UNDO.
+DEFINE VARIABLE mNow        AS CHAR   NO-UNDO.
+DEFINE VARIABLE mToday      AS DATE   NO-UNDO.
+DEFINE VARIABLE mPackFile   AS CHAR   NO-UNDO.
+DEFINE VARIABLE mOpKind     AS CHAR   NO-UNDO INIT "e-pb2crt".
+DEFINE VARIABLE mSeanceCnt  AS INT64  NO-UNDO.
+DEFINE VARIABLE cAcctK      AS CHAR   NO-UNDO.
+
+DEFINE TEMP-TABLE tt-acct NO-UNDO
+   FIELD acct      AS CHAR FORMAT "x(20)"   /* бал.счет */
+   FIELD kau       AS CHAR
+   FIELD acctk     AS CHAR                  /* счет картотеки */
+   FIELD is-proper AS LOGICAL
+   FIELD is-select AS LOGICAL
+   FIELD is-done   AS LOGICAL
+   FIELD op        LIKE op.op
+   FIELD op-status AS CHAR FORMAT "x(3)"
+   FIELD doc-type  AS CHAR FORMAT "x(5)"
+   FIELD details   AS CHAR FORMAT "x(30)"
+   FIELD cust-name AS CHAR FORMAT "x(60)"
+   FIELD inn       AS CHAR FORMAT "x(14)"
+   FIELD amt       AS CHAR FORMAT "x(17)"     /*"->>>,>>>,>>>,>>9.99"*/
+   FIELD num       AS CHAR FORMAT "x(7)"
+   FIELD doc-date  AS CHAR FORMAT "x(14)"
+   FIELD dt        AS DATETIME
+   FIELD old-file  AS CHAR FORMAT "x(46)"
+   FIELD file-name AS CHAR
+   FIELD file-rec  AS RECID
+   FIELD txt       AS CHAR
+   INDEX acct acct
+   .
+
+DEFINE BUFFER xPackObject   FOR PackObject.
+DEFINE BUFFER xPacket       FOR Packet.
+DEFINE BUFFER xFileExch     FOR FileExch.
+DEFINE BUFFER xPacketText   FOR PacketText.
+DEFINE BUFFER xSeance       FOR Seance.
+DEFINE BUFFER bPacket       FOR Packet.
+
+DEFINE VARIABLE cLog        AS CHARACTER    NO-UNDO INIT "/home/aborisov/pb2/pb2.log".
+{pb_logit.i}
+RUN LogIt(" ", cLog).
+
+{empty tmprecid}
+mToday  = TODAY.
+
+/* Отбор Инкассовых поручений ************************************************* */
+mCnt = 0.
+IF (iParam EQ "Картотека")
+THEN DO:
+    RUN browseld.p ("acctb","","","",4).
+    IF (LASTKEY = 13 OR LASTKEY = 10)
+    THEN DO:
+        FOR EACH tmprecid,
+        FIRST acct WHERE RECID(acct) = tmprecid.id
+            NO-LOCK:
+
+            /* В Картотеке 2 */
+            cAcctK = GetXAttrValue("acct", acct.acct + "," + acct.currency, "Карт2ВнСчет").
+            IF (cAcctK NE "")
+            THEN DO:
+                FOR EACH kau
+                    WHERE (kau.acct             EQ ENTRY(1, cAcctK))
+                      AND (kau.currency         EQ ENTRY(2, cAcctK))
+                      AND (kau.zero-bal         EQ NO)
+                    NO-LOCK,
+                FIRST signs
+                    WHERE (signs.file-name      EQ 'op')
+                      AND (signs.surrogate      EQ ENTRY(1,kau.kau))
+                      AND (signs.code           EQ 'op-bal')
+                    NO-LOCK,
+                FIRST op
+                    WHERE (op.op                EQ INT64(signs.code-value))
+                      AND (op.doc-type          EQ '015')
+                    NO-LOCK,
+                EACH PackObject
+                    WHERE (PackObject.File-Name EQ "op")
+                      AND (PackObject.Surrogate EQ signs.xattr-value)
+                    NO-LOCK,
+                EACH Packet
+                    WHERE (Packet.PacketID      EQ PackObject.PacketID)
+                    NO-LOCK,
+                EACH FileExch
+                    WHERE (FileExch.FileExchID  EQ Packet.FileExchID)
+                      AND CAN-DO("PNO*", FileExch.Name)
+                    NO-LOCK:
+
+                    FIND FIRST op-entry OF op
+                        NO-LOCK NO-ERROR.
+                    RUN OneDoc.
+                END. /* FOR EACH kau */
+            END. /* "Карт2ВнСчет" */
+
+            /* В КБС */
+            cAcctK = GetXAttrValue("acct", acct.acct + "," + acct.currency, "КартБВнСчет").
+            IF (cAcctK NE "")
+            THEN DO:
+                FOR EACH kau
+                    WHERE (kau.acct             EQ ENTRY(1, cAcctK))
+                      AND (kau.currency         EQ ENTRY(2, cAcctK))
+                      AND (kau.zero-bal         EQ NO)
+                    NO-LOCK,
+                FIRST signs
+                    WHERE (signs.file-name      EQ 'op')
+                      AND (signs.surrogate      EQ ENTRY(1,kau.kau))
+                      AND (signs.code           EQ 'op-bal')
+                    NO-LOCK,
+                FIRST op
+                    WHERE (op.op                EQ INT64(signs.code-value))
+                      AND (op.doc-type          EQ '015')
+                    NO-LOCK,
+                EACH PackObject
+                    WHERE (PackObject.File-Name EQ "op")
+                      AND (PackObject.Surrogate EQ signs.xattr-value)
+                    NO-LOCK,
+                EACH Packet
+                    WHERE (Packet.PacketID      EQ PackObject.PacketID)
+                    NO-LOCK,
+                EACH FileExch
+                    WHERE (FileExch.FileExchID  EQ Packet.FileExchID)
+                      AND CAN-DO("PNO*", FileExch.Name)
+                    NO-LOCK:
+
+                    FIND FIRST op-entry OF op
+                        NO-LOCK NO-ERROR.
+                    RUN OneDoc.
+                END. /* FOR EACH kau */
+            END. /* "КартБВнСчет" */
+        END. /* FOR EACH tmprecid */
+    END. /* IF (LASTKEY = 13 */
+    ELSE RETURN.
+END. /* IF (iParam EQ "Картотека") */
+ELSE DO:
+    /* Еще не проведенные */
+    beg-date = fGetLastClsDate(?, "*"). /* Последний закрытый опердень */
+    FOR EACH op-entry
+        WHERE (op-entry.op-date     GT beg-date)
+          AND CAN-DO("В,ОШ,ФБК", op-entry.op-status)
+        NO-LOCK,
+    FIRST op OF op-entry
+        NO-LOCK,
+    FIRST acct
+        WHERE (acct.acct            EQ op-entry.acct-db)
+        NO-LOCK,
+    EACH PackObject
+        WHERE (PackObject.File-Name EQ "op")
+          AND (PackObject.Surrogate EQ STRING(op.op))
+        NO-LOCK,
+    EACH Packet
+        WHERE (Packet.PacketID      EQ PackObject.PacketID)
+        NO-LOCK,
+    EACH FileExch
+        WHERE (FileExch.FileExchID  EQ Packet.FileExchID)
+          AND CAN-DO("PNO*", FileExch.Name)
+        NO-LOCK:
+
+        RUN OneDoc.
+    END.
+END.
+
+IF mCnt = 0 THEN
+DO:
+   RUN Fill-Sysmes IN h_tmess ("", "", "0", "Отсутствуют документы для обработки!").
+   RETURN.
+END.
+
+RELEASE tt-acct.
+FIND FIRST _user WHERE _user._userid   EQ  USERID("bisquit") NO-LOCK NO-ERROR.
+IF AVAIL _user  THEN mUser = _user._user-name.
+
+/* Ручной отбор найденных ИП ************************************************** */
+FOR EACH tt-acct
+    WHERE tt-acct.is-proper
+    NO-LOCK,
+FIRST op
+    WHERE (op.op    EQ tt-acct.op)
+    NO-LOCK:
+
+    CREATE TmpObj.
+    TmpObj.rid = RECID(op).
+END.
+
+mTmpObjHand = TEMP-TABLE TmpObj:HANDLE.
+
+/* Запускаем стандартный браузер документов */
+RUN browseld.p ("op",
+                'Title'
+              + CHR(1) + 'UseTmpObjInQuery'
+              + CHR(1) + 'flag-date'
+              + CHR(1) + 'SetFirstFrm'
+              + CHR(1) + 'op-date1'
+              + CHR(1) + 'op-date2',
+                '[ ВЫБОР ИП ]'
+              + CHR(1) + STRING(mTmpObjHand)
+              + CHR(1) + 'YES'
+              + CHR(1) + '5'
+              + CHR(1) + (IF (iParam EQ "Картотека") THEN '?' ELSE STRING(beg-date + 1))
+              + CHR(1) + (IF (iParam EQ "Картотека") THEN '?' ELSE STRING(TODAY)),
+                "", 4).
+IF (LASTKEY EQ KEYCODE("ESC")) THEN RETURN.
+mCnt = 0.
+FOR EACH tmprecid 
+    NO-LOCK,
+FIRST op
+    WHERE (RECID(op)    EQ tmprecid.id)
+    NO-LOCK,
+FIRST tt-acct
+    WHERE (tt-acct.op   EQ op.op)
+    NO-LOCK:
+
+    tt-acct.is-select = YES.
+    mCnt = mCnt + 1.
+END.
+IF mCnt = 0 THEN
+DO:
+   RUN Fill-Sysmes IN h_tmess ("", "", "0", "Ни один документ не выбран!").
+   RETURN.
+END.
+
+/* Причина невозможности исполнения ******************************************* */
+mText   = "Возврат без исполнения. Основание: "
+        + IF (acct.close-date NE ?) THEN ("счет плательщика закрыт " + STRING(acct.close-date,"99.99.9999"))
+                                    ELSE "(Сводный) Отзыв ФНС РФ №  от .".
+mLabel  = "Введите текст сообщения для счета " + SUBSTRING(tt-acct.acct, 1, 20) + ":".
+FORM
+    mLabel VIEW-AS EDITOR INNER-CHARS 78 INNER-LINES 2
+    mText  VIEW-AS EDITOR INNER-CHARS 78 INNER-LINES 16
+           WITH FRAME f1 OVERLAY CENTERED NO-LABEL ROW 3 TITLE COLOR bright-white
+           "[ ПРИЧИНА НЕВОЗМОЖНОСТИ ИСПОЛНЕНИЯ ]".
+DO  ON ERROR  UNDO, RETURN
+    ON ENDKEY UNDO, RETURN WITH FRAME f1:
+
+    DISPLAY mLabel
+        WITH FRAME f1.
+    UPDATE  mText
+        WITH FRAME f1 NO-ERROR.
+END.
+
+/* Формирование ответа PB2 **************************************************** */
+FOR EACH tt-acct
+    WHERE tt-acct.is-select:
+
+    MAIN:
+    DO TRANSACTION ON ERROR UNDO MAIN, RETRY MAIN:
+        IF RETRY
+        THEN LEAVE MAIN.
+
+        FIND FIRST op-kind
+            WHERE op-kind.op-kind       EQ mOpKind
+            NO-LOCK NO-ERROR.
+        IF NOT AVAIL op-kind
+        THEN UNDO MAIN, RETRY MAIN.
+
+        FIND FIRST mail-user
+            WHERE mail-user.op-kind-exp EQ mOpKind
+              AND mail-user.filial-id   EQ shFilial
+            NO-LOCK NO-ERROR.
+        IF NOT AVAIL mail-user
+        THEN UNDO MAIN, RETRY MAIN.
+
+        FOR EACH xSeance
+            WHERE xSeance.op-kind    EQ mOpKind
+              AND xSeance.SeanceDate EQ TODAY
+              AND (IF shMode THEN
+                  xSeance.Filial-ID  EQ shFilial ELSE YES)
+            NO-LOCK:
+
+            IF mSeanceCnt LE INT64(xSeance.Number)
+            THEN mSeanceCnt = INT64(xSeance.Number).
+        END.
+        {inc mSeanceCnt}
+
+        tt-acct.txt = ENTRY(1,tt-acct.old-file,".") + "###~n"
+                    + "35;" + mText                 + "@@@~n"
+                    + STRING( YEAR(TODAY),"9999")   + "-"
+                    + STRING(MONTH(TODAY),"99")     + "-"
+                    + STRING(  DAY(TODAY),"99")     + "@@@~n"
+                    + STRING(TIME, "HH:MM:SS")      + "@@@~n===~n"
+                    .
+        CREATE Seance.
+        ASSIGN
+            Seance.op-kind      = mOpKind
+            Seance.SeanceDate   = TODAY
+            Seance.SeanceTime   = TIME
+            Seance.Direct       = "Экспорт"
+            Seance.Number       = STRING(mSeanceCnt)
+            Seance.user-id      = _user._userid
+            Seance.TripID       = 0
+            Seance.Filial-ID    = ShFilial
+            NO-ERROR.
+        mKind = "ETAXFile".
+        RUN PacketCreate IN h_pack (INPUT  Seance.SeanceID,
+                                    INPUT  -1,
+                                    INPUT  Mail-User.Mail-User-Num,
+                                    INPUT  mKind,
+                                    OUTPUT mPacketID) NO-ERROR.
+        IF NOT UpdateSigns("Packet", STRING(mPacketID), "FileName", tt-acct.file-name, ?)
+        THEN UNDO MAIN, RETRY MAIN.
+
+        RUN PacketCreateLink IN h_pack (mPacketID, "op", STRING(tt-acct.op), "ETAX").
+        RUN PacketTextSave   IN h_pack (mPacketID, tt-acct.txt).
+
+        tt-acct.is-done = YES.
+        RUN LogIt("Отправлен: " + tt-acct.old-file + " " + tt-acct.file-name, cLog).
+
+        /* Удаление ИП ************************** */
+        IF (iParam EQ "Картотека")
+        THEN DO:
+/*
+            CREATE op.
+            {auto-num.i &DefCount  = "op.op"
+                        &DefNum    = "''"
+                        &DateCount = "mToday"
+                        &AssignVar = "op.doc-num"
+            }
+            ASSIGN
+                op.class-code       = "opo"
+                op.doc-type         = "ВБО"                                     
+                op.order-pay        = "5"    
+                op.acct-cat         = "o"
+                op.op-date          = mToday
+                op.doc-date         = mToday
+                op.ins-date         = mToday
+                op.due-date         = mToday
+                op.contract-date    = mToday
+                op.op-value-date    = mToday
+                op.op-status        = "√"
+                op.details          = "Списание с картотеки 1. Возврат: не получено согласие на акцепт"
+                op.filial-id        = ShFilial
+                op.op-transaction   = NEXT-VALUE(op-transaction-id)
+                op.op-kind          = "070105m"
+                op.user-id          = USERID('bisquit')
+                op.user-inspector   = USERID('bisquit')
+            NO-ERROR.
+
+            CREATE op-entry.
+            ASSIGN
+                op-entry.op         = op.op
+                op-entry.amt-rub    = tt-acct.amt
+                op-entry.amt-cur    = 0.0 
+                op-entry.acct-cat   = "o"
+                op-entry.op-cod     = "000000" 
+                op-entry.currency   = ""
+                op-entry.acct-db    = GetRefVal("99999", mToday, "99999" + "," + ShFilial)
+                op-entry.acct-cr    = tt-acct.acct
+                op-entry.op-status  = op.op-status
+                op-entry.op-date    = op.op-date
+                op-entry.filial-id  = ShFilial
+                NO-ERROR.
+
+            FOR EACH kau
+                WHERE (kau.acct     EQ tt-acct.acct)
+                  AND (kau.currency EQ "")
+                  AND (kau.kau      EQ tt-acct.kau)
+                EXCLUSIVE-LOCK:
+
+                ASSIGN
+                    kau.balabce     = 0.0
+                    kau.zero-bal    = YES
+                    .
+            END.
+*/
+            DEFINE VARIABLE cTranz      AS CHARACTER NO-UNDO INIT "sbk_ret".
+            DEFINE VARIABLE lOk         AS LOGICAL   NO-UNDO.
+            DEFINE VARIABLE cErrMsg     AS CHARACTER NO-UNDO.
+
+            {empty tOpKindParams}     /* очистить таблицу параметров */
+            ASSIGN
+                lOk =   TDAddParam("__acct"  , tt-acct.acctk)
+                    AND TDAddParam("__kau"   , tt-acct.kau)
+                    AND TDAddParam("__amt"   , REPLACE(TRIM(tt-acct.amt), ",", ""))
+                    AND TDAddParam("__det"   , "Списание с Картотеки "
+                                             + (IF (tt-acct.acct BEGINS "90902") THEN "2" ELSE "блокированных счетов")
+                                             + " документа " + tt-acct.num + ". " + mText)
+                    AND TDAddParam("__op-bal", STRING(tt-acct.op))
+                NO-ERROR.
+            RUN ex-trans.p (cTranz, TODAY, TABLE tOpKindParams, OUTPUT lOk, OUTPUT cErrMsg).
+
+            IF NOT lOk
+            THEN RUN Fill-Sysmes IN h_tmess ("", "", "0", "Не списан документ " + tt-acct.num + " с Картотеки " + SUBSTRING(tt-acct.acct, 1, 20)).
+        END.
+        ELSE DO:    /* Аннулируем документ в опердне */
+            FOR FIRST op
+                WHERE (op.op    EQ tt-acct.op)
+                EXCLUSIVE-LOCK:
+
+                op.op-status = "А".
+                UpdateSigns ("op", STRING(op.op), "Примечание", mText, NO).
+            END.
+        END.
+    END.    /* MAIN */
+END.
+
+/* Формирование протокола ***************************************************** * /
+{setdest.i}
+mBank = FGetSetting("Банк", "", "").
+mToday = TODAY.
+mNow = STRING(TIME,"HH:MM:SS").
+PUT UNFORMATTED mBank SKIP.
+PUT UNFORMATTED "           Возврат инкассовых поручений налоговых органов" SKIP(2).
+PUT UNFORMATTED "--------------------------------------------------------------------------"
+                "--------------------------------------------------------------------------"
+                "---------------------------------------------------------------------"
+                SKIP.
+PUT UNFORMATTED "|   Дата и время    |                  Наименование клиента                       |"
+                "      ИНН      |          Счет        |  Номер  |"
+                "     Дата       |       Сумма       |                  Исходный файл                 |"
+                SKIP.
+PUT UNFORMATTED "--------------------------------------------------------------------------"
+                "--------------------------------------------------------------------------"
+                "---------------------------------------------------------------------"
+                SKIP.
+FOR EACH tt-acct WHERE tt-acct.is-done:
+   PUT
+      "| " mToday " " mNow " | "
+      tt-acct.cust-name "| "
+      tt-acct.inn "| "
+      tt-acct.acct " | "
+      tt-acct.num " | "
+      tt-acct.doc-date " | "
+      tt-acct.amt " | "
+      tt-acct.old-file " | "
+      SKIP.
+END.
+PUT UNFORMATTED "--------------------------------------------------------------------------"
+                "--------------------------------------------------------------------------"
+                "---------------------------------------------------------------------"
+                SKIP.
+
+FIND FIRST _user WHERE _user._userid   EQ  USERID("bisquit") NO-LOCK NO-ERROR.
+IF AVAIL _user  THEN mUser = _user._user-name.
+
+PUT UNFORMATTED "Выполнил: " mUser "." SKIP.
+
+{preview.i}
+*/
+/* Формирование протокола XL ************************************************** */
+DEFINE VARIABLE cXL   AS CHARACTER NO-UNDO.
+DEFINE VARIABLE cFl   AS CHARACTER NO-UNDO.
+mNow    = STRING(TIME,"HH:MM:SS").
+cFl     = "./pb_pb2-grp_log.xml".
+OUTPUT TO VALUE(cFl).
+
+PUT UNFORMATTED XLHead("PNO", "CCCCCDNC", "127,400,77,150,49,71,90,260").
+PUT UNFORMATTED XLRowH(0, 34) XLCellHat("Возврат инкассовых поручений налоговых органов", 7) XLRowEnd().
+cXL = XLCellHead("Дата и время",0,0,0)
+    + XLCellHead("Наименование клиента",0,0,0)
+    + XLCellHead("ИНН",0,0,0)
+    + XLCellHead("Счет",0,0,0)
+    + XLCellHead("Номер",0,0,0)
+    + XLCellHead("Дата",0,0,0)
+    + XLCellHead("Сумма",0,0,0)
+    + XLCellHead("Исходный файл",0,0,0)
+    .
+PUT UNFORMATTED XLRow(0) cXL XLRowEnd().
+
+FOR EACH tt-acct
+    WHERE tt-acct.is-done
+    NO-LOCK:
+
+    cXL = XLCell(STRING(mToday, "99.99.9999") + " " + mNow)
+        + XLCellWrap(tt-acct.cust-name)
+        + XLCell(tt-acct.inn)
+        + XLCell(tt-acct.acct)
+        + XLCell(tt-acct.num)
+        + XLDateCell(DATE(tt-acct.doc-date))
+        + XLNumCell(DEC(REPLACE(tt-acct.amt,",","")))
+        + XLCell(tt-acct.old-file)
+        .
+    PUT UNFORMATTED XLRow(0) cXL XLRowEnd().
+END.
+
+PUT UNFORMATTED XLEnd().
+OUTPUT CLOSE.
+
+/* Перед отправкой отчета проверим, запущен ли bispc */
+DEFINE VARIABLE mRet        AS CHARACTER    NO-UNDO INIT "".
+DO WHILE (mRet EQ ""):
+    RUN IsUserServReady IN h_netw ("", OUTPUT mRet).
+    IF (mRet EQ "")
+    THEN MESSAGE "Запустите программу bispc и нажмите ОК" VIEW-AS ALERT-BOX.
+END.
+/* Отправляем протокол */
+RUN sndbispc.p ("file=" + cFl + ";class=bq").
+
+{intrface.del}
+
+
+/* Процедура  ***************************************************************** */
+PROCEDURE OneDoc:
+
+    CREATE tt-acct.
+    ASSIGN
+        tt-acct.acct        = acct.acct
+        tt-acct.kau         = IF (AVAIL kau) THEN kau.kau  ELSE ""
+        tt-acct.acctk       = IF (AVAIL kau) THEN kau.acct ELSE ""
+        tt-acct.op          = op.op
+        tt-acct.op-status   = op.op-status
+        tt-acct.doc-type    = op.doc-type
+        tt-acct.details     = op.details
+        tt-acct.is-proper   = YES
+        tt-acct.is-select   = NO
+        tt-acct.num         = op.doc-num
+        tt-acct.doc-date    = STRING(op.doc-date, "99.99.9999")
+        tt-acct.amt         = STRING(IF (AVAIL kau) THEN kau.balance ELSE (
+                                     IF (AVAIL op-entry AND op-entry.amt-rub NE 0)
+                                     THEN op-entry.amt-rub
+                                     ELSE DEC(GetXAttrValue("op", STRING(op.op), "amt-rub")))
+                                     , ">>,>>>,>>>,>>9.99")
+        tt-acct.cust-name   =     GetXAttrValue("op", STRING(op.op), "name-send")
+        tt-acct.inn         =     GetXAttrValue("op", STRING(op.op), "inn-send")
+        tt-acct.file-rec    = RECID(FileExch)
+        tt-acct.old-file    = FileExch.Name
+        tt-acct.file-name   = "PB2_" + ENTRY(1, FileExch.Name, ".") + ".txt"
+        .
+    FOR EACH xPackObject
+        WHERE xPackObject.File-Name EQ "op"
+          AND xPackObject.Surrogate EQ string(op.op)
+        NO-LOCK,
+    EACH xPacket
+        WHERE xPacket.PacketID EQ xPackObject.PacketID
+        NO-LOCK:
+
+        IF (GetXAttrValue("Packet", STRING(xPacket.PacketID), "FileName") BEGINS "PB2")
+        THEN tt-acct.is-proper = NO.
+    END.
+
+    IF tt-acct.is-proper
+    THEN mCnt = mCnt + 1.
+
+    RUN LogIt("Создан tt-acct: " + STRING(tt-acct.is-proper)
+            + " " + tt-acct.old-file + " " + tt-acct.file-name, cLog).
+END PROCEDURE.
+
+/* $LINTFILE='pb2-create-grp.p' */
+/* $LINTMODE='1,3,6,3' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTUSER='paus' */
+/* $LINTDATE='22/08/2016 12:01:03.012+03:00' */
+/*prosignneNiRTKbpElFNscoVkCbDw*/

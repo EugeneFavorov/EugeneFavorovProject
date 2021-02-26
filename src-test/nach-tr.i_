@@ -1,0 +1,1190 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2006 ЗАО "Банковские информационные системы"
+     Filename: tt-56438.p
+      Comment: График платежей по процентам в настоящее время 
+               представляет собой таблицу с расчетом процентов 
+               на остаток по всем ссудным счетам, которые ведутся 
+               на отдельных траншах. 
+               При этом не учитывается плановая сумма погашения 
+               ссудной задолженности по каждому траншу.
+               
+               Необходимо реализовать график плановых платежей по процентам 
+               по транщевым кредитным линиям.
+               
+               
+               
+   Parameters:
+         Uses:
+      Used by:
+      Created: 1/2/2006 mitr tt 56438
+     Modified: 17.02.2007 15:58 OZMI     (0071737)
+     Modified: 23.04.2008 jadv - (75633) подъем из спецверсии заявок 62630 и 64185     
+*/
+
+&IF DEFINED(DBG) &THEN
+
+   /*{{{ Тестовый запуск*/
+   {def_work.i NEW}      
+   {tmprecid.def}       
+
+   {getdates.i}
+   {setdest.i  } /* &filename="'tt-56438.tmp'" */ 
+   def VAR i AS INT64 NO-UNDO.
+   DO i = 1 TO 1 /* EXTENT(most) */:
+      
+      FIND FIRST tmprecid NO-ERROR.
+      FIND FIRST loan WHERE 
+         RECID(loan) EQ tmprecid.id 
+      NO-LOCK NO-ERROR.
+      
+      IF NOT AVAIL loan THEN
+      DO:
+         message
+            PROGRAM-NAME(1) SKIP
+            "Договор не найден"
+         VIEW-AS ALERT-BOX.
+         RETURN.      
+      END.      
+      
+      RUN main  ( 
+         loan.contract, 
+         loan.cont-code,
+         beg-date,
+         end-date,
+         i) NO-ERROR.
+      IF ERROR-STATUS:ERROR THEN
+         message
+            PROGRAM-NAME(1) SKIP
+            ERROR-STATUS:GET-MESSAGE(1)
+         VIEW-AS ALERT-BOX.
+      
+   END.
+   {preview.i /* &filename="'tt-56438.tmp'" */}
+   
+   /*}}}*/
+&ELSE
+
+   
+&ENDIF
+
+
+/*{{{ FORWARD */
+
+FUNCTION  delta-tt RETURN DECIMAL 
+   (in-contract AS CHAR, 
+   in-cont-code AS CHAR, 
+   in-end-date AS DATE, 
+   in-idnt AS INT64) FORWARD .
+
+/*Плановая сумма за дату*/
+FUNCTION plan-tt RETURNS DECIMAL
+      (in-contract AS CHAR, 
+      in-cont-code AS CHAR, 
+      in-end-date AS DATE, 
+      in-idnt AS INT64) FORWARD .
+   
+
+FUNCTION add-tt-tr RETURN LOGICAL (
+   in-contract AS CHAR,
+   in-cont-code AS CHAR,
+   in-date AS DATE,
+   in-db AS DEC,
+   in-cr AS DEC,
+   in-pl-ost AS DEC /*плановый остаток*/   
+   ) FORWARD.
+
+/* плановая дата выдачи транша */   
+FUNCTION get1Date RETURN DATE (
+   in-contract AS CHAR, 
+   in-cont-code AS CHAR
+   ) forward.
+   
+/*}}}*/   
+
+/*{{{  tt */
+
+DEFINE TEMP-TABLE tt-loan NO-UNDO
+   FIELD cont-code LIKE loan.cont-code
+   INDEX pkey IS PRIMARY UNIQUE cont-code
+.
+
+/*данные по траншам*/
+DEFINE TEMP-TABLE tt-tr NO-UNDO
+  
+   /*транш*/
+   FIELD cont-code LIKE loan.cont-code
+   FIELD since AS DATE
+   
+   /*остатки и обороты за дату расчета транша*/
+   FIELD in-bal LIKE acct-pos.balance COLUMN-LABEL 'tt-tr.in-bal'
+   FIELD db     LIKE acct-pos.debit COLUMN-LABEL 'tt-tr.db'
+   FIELD cr     LIKE acct-pos.credit COLUMN-LABEL 'tt-tr.cr'
+   FIELD bal    LIKE acct-pos.balance COLUMN-LABEL 'tt-tr.bal'
+   
+   /*плановый остаток*/
+   FIELD pl-ost LIKE acct-pos.balance COLUMN-LABEL 'tt-tr.pl-ost'
+   
+   INDEX pkey IS PRIMARY UNIQUE cont-code since
+   INDEX since since
+.
+
+DEFINE TEMP-TABLE tt-acct NO-UNDO
+   FIELD acct LIKE acct.acct      
+   /*Исходящие остатки*/
+   FIELD since       AS DATE
+   FIELD bal         AS DECIMAL INITIAL 0
+   FIELD type        AS CHAR
+   INDEX pkey IS PRIMARY UNIQUE acct since type
+.
+
+/*}}}*/
+
+PROCEDURE main:
+   DEFINE INPUT PARAMETER in-contract AS CHAR NO-UNDO.
+   DEFINE INPUT PARAMETER in-cont-code AS CHAR NO-UNDO.   
+   
+   DEFINE INPUT PARAMETER in-date1 AS DATE LABEL "Начало расчета" NO-UNDO.
+   DEFINE INPUT PARAMETER in-date2 AS DATE LABEL "Конец расчета " NO-UNDO.
+   
+   DEFINE INPUT PARAMETER in-cod-par AS INT64 NO-UNDO.
+   
+   DEFINE VARIABLE vRate      AS DEC  NO-UNDO.
+   DEFINE VARIABLE modeOfCalc AS LOG  NO-UNDO.
+   DEFINE VARIABLE vTmp       AS CHAR NO-UNDO.
+   DEFINE VARIABLE vSince     AS DATE NO-UNDO.
+   DEFINE VARIABLE vMainSince AS DATE NO-UNDO.
+   DEFINE VARIABLE m-in-bal   AS DEC  NO-UNDO.
+   DEFINE VARIABLE m-db       AS DEC  NO-UNDO.
+   DEFINE VARIABLE m-cr       AS DEC  NO-UNDO.
+   DEFINE VARIABLE vDb        AS DEC  NO-UNDO.
+   DEFINE VARIABLE f-bal      AS DEC  NO-UNDO.
+   DEFINE VARIABLE f-db       AS DEC  NO-UNDO.
+   DEFINE VARIABLE f-cr       AS DEC  NO-UNDO.
+   DEFINE VARIABLE pl-bal     AS DEC  NO-UNDO.
+   DEFINE VARIABLE pl-db      AS DEC  NO-UNDO.
+   DEFINE VARIABLE pl-cr      AS DEC  NO-UNDO.
+   DEFINE VARIABLE v1Date     AS DATE NO-UNDO. 
+   DEFINE VARIABLE pl-ost     AS DEC  NO-UNDO.
+   DEFINE VARIABLE vAcctType  AS CHAR NO-UNDO. /*Роль счета, для 
+                                                 переданного параметра*/
+
+   DEFINE BUFFER loan      FOR loan.
+   DEFINE BUFFER bloan-c   FOR loan-cond.
+   DEFINE BUFFER loan-acct FOR loan-acct.
+   DEFINE BUFFER acct      FOR acct.
+   
+   DEFINE BUFFER tt2    FOR tt-acct.
+   DEFINE BUFFER tt3    FOR tt-acct.
+   DEFINE BUFFER tt-tr3 FOR tt-tr.
+
+   {empty tt-loan}
+   {empty tt-tr}
+   {empty tt-acct}
+   {empty fost}
+
+   DEFINE VARIABLE vdate1 AS DATE NO-UNDO.
+   DEFINE VARIABLE vdate2 AS DATE NO-UNDO.
+
+   ASSIGN
+      vdate1 = in-date1
+      vdate2 = in-date2.
+/* НА УСЛОВИИ МОГУТ ИЗМЕНЯТЬСЯ СТАВКИ */   
+FOR EACH loan-cond WHERE loan-cond.contract  EQ in-contract
+                     AND loan-cond.cont-code EQ in-cont-code
+                     AND loan-cond.since LE vdate2 NO-LOCK:
+   IF CAN-FIND(FIRST bloan-c WHERE bloan-c.contract  EQ in-contract
+                               AND bloan-c.cont-code EQ in-cont-code
+                               AND bloan-c.since GT loan-cond.since
+                               AND bloan-c.since LE vdate1) THEN 
+      NEXT. /* до начала периода vDate1 могли быть еще условия со сменой ставки, берем последнее*/
+
+   IF loan-cond.since LT in-date1 THEN
+      in-date1 = MIN(vdate1, loan-cond.since + 1).
+   ELSE
+      in-date1 = loan-cond.since. /*если новое условие после даты начала периода, то считаем от него*/
+
+   FIND FIRST bloan-c WHERE bloan-c.contract  EQ in-contract
+                        AND bloan-c.cont-code EQ in-cont-code
+                        AND bloan-c.since GT loan-cond.since
+                        AND bloan-c.since LE vdate2 NO-LOCK NO-ERROR.
+   in-date2 = IF avail bloan-c THEN bloan-c.since
+                               ELSE vdate2.
+   /*
+     если есть условие позднее, то ограничиваем им.
+     Т.е. по сути разбиение интервала [in-date1;in-date2]
+     на несколько: от условия до условия.
+     Хотя почему-то in-date1 раньше не менялось
+     см. выше 
+
+   */
+
+   /*{{{ Экономими время - Если не определена % ставка, то сразу return*/
+   
+   FIND FIRST loan WHERE 
+          loan.contract  EQ in-contract
+      AND loan.cont-code EQ in-cont-code
+   NO-LOCK NO-ERROR.
+   IF AVAIL loan THEN
+   DO:
+      vRate = GET_COMM  (
+         lrate[lr-st + pick-rate[in-cod-par]], 
+         ?,   
+         loan.currency, 
+         loan.contract + "," + loan.cont-code,    
+         0.0 , 
+         0,    
+         in-date1)
+      .
+      FIND FIRST loan WHERE 
+             loan.contract  EQ in-contract
+         AND loan.cont-code EQ ENTRY(1, in-cont-code, " ")
+      NO-LOCK NO-ERROR.
+            /*дата пересчета охватывающего договора*/      
+      IF AVAIL loan THEN
+         vMainSince = loan.since.
+            /* Если нет индивидуальной ставки, то ищем на охватывающем */   
+      IF vRate EQ ? THEN 
+         vRate = GET_COMM  (
+            lrate[lr-st + pick-rate[in-cod-par]], 
+            ?,   
+            loan.currency, 
+            loan.contract + "," + loan.cont-code,    
+            0.0 , 
+            0,    
+            in-date1)
+         .
+      &if defined(dbg) &then            
+            PUT UNFORMATTED "Договор " loan.cont-code SKIP(1).       
+            PUT UNFORMATTED "Процентная ставка " vRate SKIP(1).       
+      &endif
+                                           
+                                                       
+      IF vRate EQ ? THEN 
+      DO:   
+         IF in-date2 = vdate2 THEN RETURN.
+                              ELSE NEXT.
+      END.
+   END.
+   ELSE
+      RETURN.
+
+   /*{{{ Режим расчета - С/без отсрочки погасительных платежей по основному долгу  */
+   vTmp = getXAttrValueEx("loan",
+                          loan.contract + "," + loan.cont-code, 
+                          "РежимОтсрПлатежа", ?).
+   IF vTmp EQ ? THEN
+   DO:   
+      vTmp = GetXattrInit (loan.class-code, "РежимОтсрПлатежа").
+   END.
+   modeOfCalc = CAN-DO("да,yes,true,ok", vTmp).
+   &if defined(dbg) &then
+      PUT UNFORMATTED "РежимОтсрПлатежа = " modeOfCalc SKIP .      
+   &endif
+   
+   vAcctType = IF in-contract EQ "Кредит" THEN lacct[in-cod-par]
+                                          ELSE lacct1[in-cod-par]. 
+
+   IF     mIsSetBase THEN
+      RUN pFillTable (in-contract,
+                      in-cont-code,
+                      in-date1,
+                      in-date2,
+                      in-cod-par,
+                      vMainSince,
+                      modeOfCalc).
+   ELSE
+   DO:
+      IF GetXattrInit(loan.Class-Code, "РежимДинамики") EQ "да" THEN
+      DO:
+         IF    in-cod-par EQ 1  /* Для основных процентов*/
+            OR in-cod-par EQ 13 THEN /* Для %КрКом */
+         DO:
+            RUN GetDynPos(in-contract,
+                          in-cont-code,
+                          in-date1,
+                          in-date2,
+                          vAcctType,
+                          vMainSince,
+                          YES).
+            RUN GetPlanDyn(in-contract,
+                           in-cont-code,
+                           most[in-cod-par],
+                           vMainSince,
+                           modeOfCalc).
+         END.
+         ELSE /* для остальных %% */
+            RUN GetDynPos(in-contract,
+                          in-cont-code,
+                          in-date1,
+                          in-date2,
+                          vAcctType,
+                          vMainSince,
+                          NO).     
+      END.
+      ELSE DO:
+         RUN GetFactDynPar(in-contract,
+                           in-cont-code,
+                           in-date1,
+                           in-date2,
+                           most[in-cod-par]
+                           ).
+         IF    in-cod-par EQ 1  /* Для основных процентов*/
+            OR in-cod-par EQ 13 THEN /* Для %КрКом */
+            RUN GetPlanDyn(in-contract,
+                           in-cont-code,
+                           most[in-cod-par],
+                           vMainSince,
+                           modeOfCalc).
+      END.
+   END. /* mIsSetBase */ 
+END.
+   
+   &IF DEFINED(DBG) &THEN 
+   /*{{{  preview*/
+      
+      PUT UNFORMATTED
+         SKIP(3)
+         
+      "------- start: " PROGRAM-NAME(1) "---------------------" SKIP
+         
+      
+      'in-cont-code = 'in-cont-code SKIP      
+      'in-date1 = ' in-date1 SKIP
+      'in-date2 = ' in-date2 SKIP
+      "in-cod-par = " in-cod-par SKIP
+      "comm = " lrate[lr-st + pick-rate[in-cod-par]] SKIP
+      
+      '% ставка = ' 
+          GET_COMM  (
+             lrate[lr-st + pick-rate[in-cod-par]], 
+             ?,   /* Идентификатор счета */
+             "",    /* Код приведенной валюты (? - пу) */
+             in-contract + "," + in-cont-code,    /* Код КАУ                ("" - пу) */
+             0.0 , /* Минимальный остаток    (0 - пу) */
+             0,     /* Период/срок            (0 - пу) */
+             in-date1)    /* Дата, на которую требуется получить %% */      
+      SKIP
+      'Код параметра = ' most[in-cod-par] SKIP
+      
+      '--------------------------' SKIP.
+         
+         
+      FOR EACH tt-tr
+      BREAK BY tt-tr.cont-code:
+         DISPLAY tt-tr WITH SCROLLABLE .
+         IF LAST-OF(tt-tr.cont-code) THEN
+            PUT UNFORMATTED "-------------------------------------" SKIP .
+      END.   
+      
+      FOR EACH fost:
+         DISPLAY fost.since fost.balance  WITH SCROLLABLE .
+      END.
+      
+      
+     /*}}}*/  
+   &ENDIF 
+
+END PROCEDURE . /*main*/
+
+
+/*{{{ FUNCTION add-tt-tr */
+FUNCTION add-tt-tr RETURN LOGICAL (
+   in-contract AS CHAR,
+   in-cont-code AS CHAR,
+   in-date AS DATE,
+   in-db AS DEC,
+   in-cr AS DEC,
+   in-pl-ost AS DEC /*плановый остаток*/
+) :
+   
+   DEFINE BUFFER tt-tr FOR tt-tr .
+   FIND FIRST tt-tr WHERE      
+      tt-tr.cont-code = in-cont-code
+      AND tt-tr.since     = in-date
+   NO-ERROR.
+   IF NOT AVAIL tt-tr THEN
+   DO:
+   
+      CREATE tt-tr.
+      ASSIGN
+         tt-tr.since     = in-date
+         tt-tr.cont-code = in-cont-code
+      .
+   END.
+   ASSIGN
+      tt-tr.db = tt-tr.db + in-db 
+      tt-tr.cr = tt-tr.cr + in-cr 
+      tt-tr.pl-ost = tt-tr.pl-ost + in-pl-ost 
+   .
+   RELEASE tt-tr.
+   
+   RETURN YES.
+END FUNCTION.
+/*}}}*/
+
+/*{{{ FUNCTION delta-tt: Находит изменение параметра за день*/
+FUNCTION delta-tt RETURN DECIMAL 
+   (in-contract AS CHAR, 
+   in-cont-code AS CHAR, 
+   in-end-date AS DATE, 
+   in-idnt AS INT64):
+   
+   DEFINE VARIABLE vAmt-rub AS DECIMAL INITIAL 0 EXTENT 2 NO-UNDO.
+   DEFINE VARIABLE vRet AS DECIMAL NO-UNDO.
+   DEF VAR i AS INT64 NO-UNDO.
+
+   DEFINE BUFFER term-obl FOR term-obl.
+   
+   
+   DO i = 1 TO 2:      
+      RUN RE_TERM_OBL IN h_loan (
+         in-contract,
+         in-cont-code,
+         in-idnt,
+         in-end-date - 2 + i ,
+         BUFFER term-obl).
+      IF AVAIL term-obl THEN
+      DO:
+         vAmt-rub[i] = term-obl.amt-rub .
+      END.
+   END.
+   
+   vRet = vAmt-rub[2] - vAmt-rub[1] . 
+   
+   RETURN vRet.   
+END FUNCTION.   
+/*}}}*/
+
+/*{{{ FUNCTION plan-tt: Плановая сумма (оборот) за дату*/
+FUNCTION plan-tt RETURNS DECIMAL
+      (in-contract AS CHAR, 
+      in-cont-code AS CHAR, 
+      in-end-date AS DATE, 
+      in-idnt AS INT64):
+
+   DEFINE VARIABLE vRet AS DECIMAL NO-UNDO.
+
+   DEFINE BUFFER term-obl FOR term-obl.
+
+   vRet = 0.
+   FIND FIRST term-obl WHERE
+              term-obl.contract  = in-contract 
+      AND     term-obl.cont-code = in-cont-code
+      AND     term-obl.idnt      = in-idnt
+      AND     term-obl.end-date  = in-end-date
+      NO-LOCK NO-ERROR.
+   IF AVAIL term-obl THEN
+      vRet = (IF term-obl.amt-rub EQ ? THEN 0 ELSE term-obl.amt-rub ).   
+
+   RETURN vRet.
+END FUNCTION.
+/*}}}*/
+
+
+/*{{{ FUNCTION get1Date:  плановая дата выдачи транша */
+FUNCTION get1Date RETURN DATE (in-contract AS CHAR, in-cont-code AS CHAR) :
+   DEFINE VARIABLE vDate AS DATE NO-UNDO INITIAL ? .
+   DEFINE BUFFER term-obl FOR term-obl.
+
+   FIND FIRST term-obl WHERE   
+              term-obl.contract  = in-contract 
+      AND     term-obl.cont-code = in-cont-code
+      AND     term-obl.idnt      = 2 /*это плановый остаток*/
+      NO-LOCK NO-ERROR .
+   IF AVAIL term-obl THEN
+      vDate = term-obl.end-date .   
+
+   RETURN vDate.
+   
+END FUNCTION.   
+
+/*------------------------------------------------------------------------------
+  Purpose: Расчитывает фактическую динамику договора по остаткам на счетах договора
+------------------------------------------------------------------------------*/
+PROCEDURE GetDynPos.
+   DEF INPUT  PARAM in-contract  AS CHARACTER   NO-UNDO.
+   DEF INPUT  PARAM in-cont-code AS CHARACTER   NO-UNDO.
+   DEF INPUT  PARAM in-date1     AS DATE        NO-UNDO.
+   DEF INPUT  PARAM in-date2     AS DATE        NO-UNDO.
+   DEF INPUT  PARAM in-AcctType  AS CHAR        NO-UNDO.
+   DEF INPUT  PARAM vMainSince   AS DATE        NO-UNDO.
+   /* in-fact-pos YES расчет до даты состояния, NO - расчет до переданной даты */
+   DEFINE INPUT  PARAMETER in-fact-pos  AS LOGICAL     NO-UNDO. 
+
+   DEFINE VARIABLE vSince     LIKE loan.since          NO-UNDO.
+
+   DEFINE BUFFER tt2 FOR tt-acct.
+   DEFINE BUFFER tt3 FOR tt-acct.
+   DEFINE BUFFER loan FOR loan.
+
+   DEF VAR vSinceCh AS CHARACTER NO-UNDO. /* дата, на которую пересчитывается договор */
+   DEF VAR vLoanSince AS DATE NO-UNDO.    /* дата пересчета договора */
+   DEF VAR vRecalc AS LOGICAL NO-UNDO.    /* признак, что договор пересчитывается */
+
+   ASSIGN
+      vRecalc = GetSysConf("ПересчетДоговора") = "Да"
+      vSinceCh = GetSysConf("ДатаПересчетаДоговора").
+
+   /* если договор пересчитывается и установлена дата, 
+   ** на которую он пересчитывается, то считаем от этой даты */
+   vLoanSince = ?.
+   IF vRecalc AND vSinceCh <> "" 
+       THEN vLoanSince = DATE(vSinceCh) NO-ERROR.
+
+   {empty tt-acct}
+   IF in-AcctType NE "" THEN /* Если ведется учет на счетах */
+   DO: /* истекшие периоды */
+      FOR EACH loan WHERE (loan.contract  EQ in-contract
+                      AND  loan.cont-code EQ in-cont-code)
+                       OR (loan.contract  EQ in-contract
+                      AND  loan.cont-code BEGINS in-cont-code + " ") NO-LOCK
+                    BY loan.open-date:
+
+         IF vLoanSince = ? THEN vLoanSince = loan.since.
+         
+         IF in-fact-pos THEN /*пересчет до даты состояния*/
+            vSince = MINIMUM(in-date2,vLoanSince).
+         ELSE
+            vSince = in-date2.
+
+         IF vSince GE loan.open-date THEN
+            FOR EACH loan-acct OF loan WHERE loan-acct.acct-type EQ in-AcctType
+            NO-LOCK,
+            FIRST acct OF loan-acct
+            NO-LOCK:
+               IF NOT CAN-FIND(FIRST tt-acct WHERE tt-acct.acct EQ acct.acct ) THEN
+               DO: /* Здесь заполнение tt-acct по фактическим остаткам на счетах */
+                  RUN apos-sh.p(acct.acct,
+                                acct.currency,
+                                loan.open-date,
+                                vSince,
+                                CHR(251)).
+                  FOR EACH sh:
+                     sh-bal = (IF acct.currency EQ ""  THEN sh.bal
+                                                       ELSE sh.val) * 
+                              (IF acct.side     EQ "П" THEN -1
+                                                       ELSE 1).
+                     IF acct.currency NE "" 
+                         AND sh.vcr EQ 0 
+                         AND sh.vdb EQ 0 THEN .
+                     ELSE DO:
+                        FIND FIRST tt-acct WHERE tt-acct.acct  = acct.acct
+                                             AND tt-acct.since = sh.since
+                             NO-ERROR.
+                        IF NOT AVAIL tt-acct THEN
+                           CREATE tt-acct.
+                        ASSIGN
+                           tt-acct.acct  = acct.acct
+                           tt-acct.since = sh.since
+                           tt-acct.bal   = sh-bal
+                        .
+                     END.
+                  END.
+               END.
+            END. /* for each loan-acct */
+      END.
+      
+      /* Имеем 2-х мерный массив tt-acct(acct, since) */
+      FOR EACH tt-acct
+         BREAK BY tt-acct.since:
+
+         IF LAST-OF(tt-acct.since) THEN
+         DO:
+            CREATE fost.
+            ASSIGN
+               fost.since = tt-acct.since
+               fost.bal   = 0
+            .            
+            
+            /* для каждого счета - остаток за tt-acct.since */
+            FOR EACH tt2
+               BREAK BY tt2.acct:
+
+               IF FIRST-OF(tt2.acct) THEN
+               DO:
+                  FIND LAST tt3 WHERE tt3.acct  EQ tt2.acct
+                                  AND tt3.since LE tt-acct.since NO-ERROR.
+                  IF AVAIL tt3 THEN
+                     fost.bal = fost.bal + tt3.bal.
+               END.
+            END.
+         END.
+      END.
+      RELEASE fost.
+      
+      &IF DEFINED(DBG) &THEN
+         PUT UNFORMATTED "Фактические остатки на счетах" SKIP(1).
+         FOR EACH fost:
+            DISPLAY fost.since fost.bal.
+         END.
+         PUT UNFORMATTED "----EOF:Фактические остатки на счетах ------------" SKIP(1).
+      &ENDIF
+   END. /* mAcct-type NE "" */
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose: Построение динамики в предстоящих периодах
+------------------------------------------------------------------------------*/
+PROCEDURE GetPlanDyn.
+   DEFINE INPUT  PARAMETER in-contract  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER in-cont-code AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER in-par       AS INT64       NO-UNDO.
+   DEFINE INPUT  PARAMETER vMainSince   AS DATE        NO-UNDO.
+   DEFINE INPUT  PARAMETER modeOfCalc   AS LOGICAL     NO-UNDO.
+
+   DEFINE BUFFER loan   FOR loan.
+   DEFINE BUFFER tt-tr3 FOR tt-tr.
+   DEFINE BUFFER fost   FOR fost.
+
+   DEFINE VARIABLE vBal  AS DECIMAL     NO-UNDO.
+   
+   &IF DEFINED(ORACLE) &THEN
+       /* Под ORACLE - 2 прохода */ 
+       /* 1 */ 
+       FOR EACH loan WHERE 
+                loan.contract   EQ in-contract
+            AND loan.cont-code  BEGINS in-cont-code + " " 
+       NO-LOCK:
+           RUN GetPlanDyn-Opt(BUFFER loan,
+                              in-par,
+                              vMainSince,
+                              modeOfCalc).  
+       END. /*each loan*/
+       /* 2 */ 
+       FOR EACH loan WHERE 
+                loan.contract   EQ in-contract
+            AND loan.cont-code  EQ in-cont-code
+            AND loan.class-code EQ 'loan-tran-lin-ann'
+       NO-LOCK:
+           RUN GetPlanDyn-Opt(BUFFER loan,
+                              in-par,
+                              vMainSince,
+                              modeOfCalc).  
+       END. /*each loan*/
+   &ELSE 
+      /* Progress - оставляем по старому  */ 
+      FOR EACH loan WHERE 
+              (loan.contract   EQ in-contract
+           AND loan.cont-code  BEGINS in-cont-code + " " 
+           AND NUM-ENTRIES(loan.cont-code, " ") EQ 2)
+           OR (loan.contract   EQ in-contract
+           AND loan.cont-code  EQ in-cont-code
+           AND loan.class-code EQ 'loan-tran-lin-ann')
+      NO-LOCK:
+          RUN GetPlanDyn-Opt(BUFFER loan,
+                             in-par,
+                             vMainSince,
+                             modeOfCalc). 
+      END. /*each loan*/
+   &ENDIF
+   
+   /* переносим данные из tt-tr в fost */
+   /*Имеем 2-х мерную матрицу tt-tr(cont-code, since) - преобразуем в одномерный fost(since) */
+   FOR EACH tt-tr
+      BREAK BY tt-tr.since:
+
+      IF LAST-OF(tt-tr.since) AND NOT CAN-FIND (FIRST fost WHERE fost.since EQ tt-tr.since) THEN
+      DO:
+         vBal  = 0 .
+         /*для каждого договора - остаток за tt-tr.since  */
+         FOR EACH tt-loan:
+            FIND LAST tt-tr3 WHERE tt-tr3.cont-code EQ tt-loan.cont-code
+                               AND tt-tr3.since     LE tt-tr.since NO-ERROR.
+            IF AVAIL tt-tr3 THEN
+               vBal = vBal + tt-tr3.bal.
+          END.
+         FIND LAST fost WHERE fost.since LT tt-tr.since
+         NO-LOCK NO-ERROR.
+         IF (NOT AVAIL fost AND vBal <> 0) OR 
+            (AVAIL fost AND fost.balance <> vBal) 
+         THEN DO :
+              CREATE fost.
+              ASSIGN
+               fost.since = tt-tr.since
+               fost.bal   = vBal .           
+         END.  
+      END.
+   END.
+   RELEASE fost.
+   
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose: Выделенная процедура при оптимизации запросов 
+------------------------------------------------------------------------------*/
+PROCEDURE GetPlanDyn-Opt.
+   DEFINE PARAMETER BUFFER loan         FOR loan. 
+   DEFINE INPUT  PARAMETER in-par       AS INT64       NO-UNDO.
+   DEFINE INPUT  PARAMETER vMainSince   AS DATE        NO-UNDO.
+   DEFINE INPUT  PARAMETER modeOfCalc   AS LOGICAL     NO-UNDO.
+   
+   DEFINE VARIABLE f-bal    AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE f-db     AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE f-cr     AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE pl-bal   AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE pl-db    AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE pl-cr    AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE v1Date   AS DATE        NO-UNDO.
+   DEFINE VARIABLE pl-ost   AS DECIMAL     NO-UNDO.
+
+   DEFINE BUFFER tt-tr3 FOR tt-tr.
+      
+   ASSIGN
+      f-bal  = 0
+      f-db   = 0
+      f-cr   = 0
+      pl-bal = 0
+      pl-db  = 0
+      pl-cr  = 0
+   .
+
+   RUN RE_PARAM IN h_Loan (in-par,           /* Код параметра */
+                           loan.since,       /* Дата расчета */
+                           loan.contract,    /* Тип договора */
+                           loan.cont-code,   /* Номер договора */
+                           OUTPUT f-bal,     /* Сумма параметра */
+                           OUTPUT f-db,      /* фактическое увеличение ссуды */
+                           OUTPUT f-cr).     /* фактическое уменьшение ссуды */
+
+      
+   /* Если транш фактически не выдан, но должен был выдан,
+   то плановые платежи не должны влиять на график остатков*/
+   
+   v1Date = get1Date (loan.contract, loan.cont-code).
+
+   IF (   in-par EQ 0
+       OR in-par EQ 7) /* только для основного долга */ 
+      AND f-bal  EQ 0 
+      AND v1Date LT vMainSince THEN NEXT. /* пропустить транш - не выдан в срок */
+   
+   /*создать список договоров*/
+   FIND FIRST tt-loan WHERE tt-loan.cont-code EQ loan.cont-code
+       NO-LOCK NO-ERROR.
+   IF NOT AVAIL tt-loan THEN
+   DO:
+      CREATE tt-loan.
+      tt-loan.cont-code = loan.cont-code.
+   END.
+   RELEASE tt-loan.
+
+   FIND FIRST tt-tr WHERE tt-tr.cont-code EQ loan.cont-code
+        NO-LOCK NO-ERROR.
+   IF NOT AVAIL tt-tr THEN
+   DO:
+      CREATE tt-tr.
+      ASSIGN
+         tt-tr.since     = loan.since
+         tt-tr.cont-code = loan.cont-code
+      .
+   END.
+                            
+   tt-tr.in-bal = tt-tr.in-bal + f-bal - f-db + f-cr .
+
+   IF    in-par EQ 0
+      OR in-par EQ 7 THEN /*только для основного долга*/
+   DO:
+      /*Сумма плановых операций по увеличению ссудной задолжености за дату */
+      /* Разность плановых остатков term-obl = 2 */      
+      pl-db = delta-tt (loan.contract, loan.cont-code, loan.since, 2).      
+      pl-db = MAXIMUM(0, pl-db).
+
+      /*Сумма плановых операций по уменьшению ссудной задолжености за дату 
+      Сумма idnt=3 */         
+      pl-cr = plan-tt (loan.contract, loan.cont-code, loan.since, 3).
+      pl-bal = plan-tt (loan.contract, loan.cont-code, loan.since, 2).
+
+      /* В случае, если "Режим отсрочки платежа" = ДА, сумма планового погашения
+         за дату пересчета состояния не может превышать разницы между фактическим
+         и плановым остатком.
+         Например, фактический остаток  - 250000, плановый остаток 200000,
+         плановое погашение в графике - 100000, но к расчету принимается 50000 */
+      ASSIGN      
+         tt-tr.db  = MAXIMUM (f-db, pl-db)
+         tt-tr.cr  = IF modeOfCalc THEN
+                        MAXIMUM (f-cr,MINIMUM(pl-cr, MAXIMUM(0, f-bal - pl-bal)))
+                     ELSE
+                        MAXIMUM (f-cr, pl-cr)
+      .
+
+   END.
+   ASSIGN tt-tr.bal = tt-tr.in-bal + tt-tr.db - tt-tr.cr.   
+   RELEASE tt-tr.
+   
+   IF    in-par EQ 0
+      OR in-par EQ 7 THEN /*только для основного дога*/
+   DO:      
+      /*{{{ Построение графика прогнозируемого изменения остатка  - 
+      на основе планового увеличения и уменьшения остатка*/
+      FOR EACH term-obl OF loan WHERE term-obl.idnt     EQ 2
+                                  AND term-obl.end-date GT loan.since NO-LOCK:
+         pl-db = delta-tt(term-obl.contract,
+                          term-obl.cont-code,
+                          term-obl.end-date,
+                          2).
+         IF pl-db GT 0 THEN
+            add-tt-tr(term-obl.contract,
+                      term-obl.cont-code,
+                      term-obl.end-date,
+                      pl-db,
+                      0.0,
+                      0.0).
+      END.
+
+      FOR EACH term-obl OF loan WHERE term-obl.idnt     EQ 3
+                                  AND term-obl.end-date GT loan.since NO-LOCK:
+         pl-cr = plan-tt(term-obl.contract,
+                         term-obl.cont-code,
+                         term-obl.end-date,
+                         3).
+         add-tt-tr(term-obl.contract,
+                   term-obl.cont-code,
+                   term-obl.end-date,
+                   0.0,
+                   pl-cr,
+                   0.0).
+
+         /*Запомним Плановый остаток*/
+         pl-ost = plan-tt(term-obl.contract,
+                          term-obl.cont-code,
+                          term-obl.end-date,
+                          2).
+         add-tt-tr(term-obl.contract,
+                   term-obl.cont-code,
+                   term-obl.end-date,
+                   0.0,
+                   0.0,
+                   pl-ost).
+      END.
+   END.
+   
+   /*modeOfCalc инициализируется начальным значением доп.реквизита
+   loan.modeOfCalc :
+   false - досрочные платежи не влияют на график плановых погашений осн. долга
+   true - досрочные платежи засчитываются при гашении осн.долга */
+
+   IF NOT modeOfCalc THEN
+   DO: /* Без отсрочки платежа: заполнить in-bal bal на основе данных по оборотам */
+      pl-bal = 0.
+      FOR EACH tt-tr WHERE tt-tr.cont-code EQ loan.cont-code
+                       AND tt-tr.since     GE loan.since:
+         IF tt-tr.since EQ loan.since THEN
+            pl-bal = tt-tr.bal. /*исходящий остаток */
+         ELSE
+         DO:
+            /*Если гасить нечего, то сбрасываем плановые обороты по гашению*/
+            IF pl-bal EQ 0
+               AND tt-tr.db EQ 0 THEN
+               tt-tr.cr = 0.
+            
+            ASSIGN
+               tt-tr.in-bal = pl-bal
+               tt-tr.bal    = (tt-tr.in-bal + tt-tr.db - tt-tr.cr)
+            .
+            /*Если исходящий остаток < 0 
+            Кредит "mitr-tr 4" 20/05/06 in=50.00 db=0.00  cr=100.00 out=50.00Cr */
+            IF tt-tr.bal LT 0 THEN
+            ASSIGN
+               tt-tr.cr  = tt-tr.cr + tt-tr.bal
+               tt-tr.bal = 0
+            .
+            
+            pl-bal = tt-tr.bal.
+         END.
+      END.
+   END.
+   ELSE
+   DO: /* С отсрочкой платежа: заполнить in-bal bal на основе данных по оборотам  и плановым остаткам */
+      pl-bal = 0.
+      /* Данные для расчета:
+         tt-tr.cr - плановая сумма по гашению ссуды
+         tt-tr.pl-ost - исходящий плановый остаток */
+      FOR EACH tt-tr WHERE tt-tr.cont-code EQ loan.cont-code
+                       AND tt-tr.since     GE loan.since
+         BY tt-tr.since:
+
+         IF tt-tr.since EQ loan.since THEN
+            pl-bal = tt-tr.bal. /*исходящий остаток */
+         ELSE
+         DO:
+            ASSIGN
+               tt-tr.in-bal = pl-bal
+               tt-tr.bal    = (tt-tr.in-bal + tt-tr.db - tt-tr.cr)
+            .
+            /*      400 - 100 = 300      >=  250     */
+            IF (tt-tr.pl-ost - tt-tr.cr) GE tt-tr.bal THEN
+               tt-tr.cr = 0.
+            ELSE
+               /*    300 - 100 = 200        < 250 */
+               /*    300 - 100 = 200        < 250 */
+               /* if (tt-tr.pl-ost - tt-tr.cr) < tt-tr.bal THEN */
+               tt-tr.cr = tt-tr.bal - (tt-tr.pl-ost - tt-tr.cr).
+            
+            ASSIGN
+               tt-tr.bal = (tt-tr.in-bal + tt-tr.db - tt-tr.cr)
+               pl-bal    = tt-tr.bal
+            .
+         END.
+      END.
+   END.
+            
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose: Расчитывает фактическую динамику договора по параметрам
+------------------------------------------------------------------------------*/
+PROCEDURE GetFactDynPar.
+   DEFINE INPUT  PARAMETER in-contract  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER in-cont-code AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER in-date1 AS DATE        NO-UNDO.
+   DEFINE INPUT  PARAMETER in-date2 AS DATE        NO-UNDO.
+   DEFINE INPUT  PARAMETER in-cod-par   AS INT64     NO-UNDO.
+
+   DEF VAR vSinceCh   AS CHARACTER NO-UNDO.
+   DEF VAR vLoanSince AS DATE      NO-UNDO. 
+   DEF VAR vRecalc    AS LOGICAL   NO-UNDO. 
+   DEF VAR vSince     AS DATE      NO-UNDO.    
+   DEF VAR vLst       AS CHARACTER NO-UNDO.
+
+   DEFINE BUFFER loan FOR loan.
+   DEFINE BUFFER tt2  FOR tt-acct.
+   DEFINE BUFFER tt3  FOR tt-acct.
+
+   ASSIGN  vRecalc = GetSysConf("ПересчетДоговора") = "Да"
+           vSinceCh = GetSysConf("ДатаПересчетаДоговора") .
+   IF vRecalc AND vSinceCh <> "" 
+       THEN vLoanSince = DATE(vSinceCh) NO-ERROR.
+
+
+   FOR EACH loan WHERE (loan.contract  EQ in-contract
+                   AND  loan.cont-code EQ in-cont-code)
+                    OR (loan.contract  EQ in-contract
+                   AND  loan.cont-code BEGINS in-cont-code + " "
+                       ) NO-LOCK:
+      
+      {empty filost}  
+      IF vLoanSince = ? THEN vSince = loan.since.
+      ELSE vSince  = vLoanSince .
+      
+      vSince = IF vRecalc THEN MINIMUM(in-date2,vSince) ELSE in-date2.
+        { workost1.i
+          &MostVar  =  in-cod-par
+          &d-beg    = "in-date1 - 1 "
+          &d-end    =  vSince
+          &type-ost = type-ost}
+      /* Если движения были, но за данный период остаток нулевой, то нужно этот остаток добавить 
+         (не создается в workost1, т.к. каждый цикл чистим таблицу filost) */
+      IF     NOT CAN-FIND (FIRST filost) 
+         /* добавлять нулевой остаток нужно только тогда, когда уже было движение до даты начал периода */
+         AND CAN-FIND (FIRST tt-acct WHERE 
+                             tt-acct.acct  EQ loan.cont-code
+                         AND tt-acct.since LE in-date1 - 1
+                         /* это условие для параметров, рассчитываемых по остаткам нескольких базовых параметров */
+                         AND CAN-DO(tt-acct.type,STRING(in-cod-par))) THEN
+      DO:
+         CREATE filost.
+         ASSIGN
+             filost.since = in-date1 - 1
+             filost.type  = in-cod-par
+          .
+      END.  
+
+      FOR EACH filost:
+         FIND FIRST tt-acct WHERE tt-acct.acct  EQ loan.cont-code 
+                              AND tt-acct.since EQ filost.since 
+                              AND tt-acct.type  EQ STRING(filost.type) NO-ERROR.
+         IF NOT AVAIL tt-acct THEN 
+         DO:  
+            CREATE tt-acct.
+            ASSIGN
+                tt-acct.acct  = loan.cont-code
+                tt-acct.since = filost.since
+                tt-acct.bal   = filost.balance
+                tt-acct.type  = STRING(filost.type).
+         END.  
+      END. 
+   END.          
+   FOR EACH tt-acct
+    BREAK BY tt-acct.since:
+        IF LAST-OF(tt-acct.since) THEN 
+        DO:
+           FIND FIRST fost WHERE fost.since EQ tt-acct.since NO-ERROR.
+           IF NOT AVAIL fost THEN
+           DO:
+              CREATE fost.
+              ASSIGN
+                 fost.since = tt-acct.since
+                 fost.bal   = 0
+              .            
+           END.
+           ASSIGN
+              vLst     = tt-acct.type + "=" + tt-acct.acct
+              fost.bal = tt-acct.bal.
+           FOR EACH tt3 WHERE  tt3.since  LE tt-acct.since
+                           AND RECID(tt3) NE RECID(tt-acct) 
+                           BY tt3.since DESCENDING:
+              IF CAN-DO(vLst,tt3.type + "=" + tt3.acct) THEN NEXT.
+              ASSIGN
+                vLst     = vLst + "," + tt3.type + "=" + tt3.acct
+                fost.bal = fost.bal + tt3.bal.
+           END.  
+        END.
+   END.
+   
+END PROCEDURE.
+
+PROCEDURE AddTranshOst:
+   DEFINE INPUT PARAMETER iSince    AS DATE        NO-UNDO. /*Дата изменения*/
+   DEFINE INPUT PARAMETER iParam    AS INT64     NO-UNDO. /*Код параметра*/
+   DEFINE INPUT PARAMETER iSumma    AS DECIMAL     NO-UNDO. /*Сумма*/
+   DEFINE INPUT PARAMETER iPrevDate AS DATE        NO-UNDO.   
+   DEFINE INPUT PARAMETER iPrevSum  AS DECIMAL     NO-UNDO.
+   DEFINE VARIABLE vsumm AS DECIMAL INITIAL 0 NO-UNDO.
+
+   DEFINE BUFFER bFost FOR fost.
+
+      
+   FIND FIRST bFost WHERE bFost.Since EQ iSince 
+                      AND bFost.type  EQ STRING(iParam) 
+       NO-ERROR.
+   IF AVAIL bFost THEN
+      vsumm = bFost.balance.
+  IF NOT AVAIL bFost
+      OR bFost.since LT isince THEN
+   DO:
+      CREATE bFost.
+      ASSIGN
+         bFost.type  = STRING(iParam)
+         bFost.Since = iSince
+
+      .
+   END.
+
+   ASSIGN bFost.Balance = vsumm + iSumma.
+   IF iPrevSum NE 0 THEN
+      FOR EACH bFost WHERE bFost.Since LT iSince
+                       AND bFost.Since GT iPrevDate:
+         bFost.Balance = bFost.Balance + iPrevSum.
+      END.
+   ELSE RELEASE bFost.
+   
+END PROCEDURE.
+
+
+/* Первое движение по договору после определенной даты
+      для параметра "0" - Остаток срочной задолженности
+      дополнительно ищем операцию погашения задолженности */
+
+/*-----------------------------------------------------------------------------------
+   Процедура заполняет временные таблицы для ставок по настройке "БазаНач" 
+-----------------------------------------------------------------------------------*/
+PROCEDURE pFillTable.
+
+   DEFINE INPUT  PARAMETER in-contract   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER in-cont-code  AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER in-date1      AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER in-date2      AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER in-cod-par    AS INT64      NO-UNDO.
+   DEFINE INPUT  PARAMETER in-MainSince  AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER in-modeOfCalc AS LOG        NO-UNDO.  
+
+   DEF VAR vI          AS INT64 NO-UNDO. /* Счетчик */
+   DEF VAR vAcctType   AS CHAR  NO-UNDO.
+   DEF VAR vFunc       AS CHAR  NO-UNDO.
+   DEF VAR vCalcString AS CHAR  NO-UNDO.
+   DEF VAR vIsRole     AS LOG   NO-UNDO. /*YES-расчет по роли, No - по параметрам*/
+   DEF VAR vPar AS INT64 NO-UNDO.
+   DEF BUFFER bfost FOR fost.
+ 
+   vCalcString = ENTRY(in-cod-par,mListBaseCalc) NO-ERROR.
+   
+   IF NOT ERROR-STATUS:ERROR THEN
+      vCalcString = REPLACE(REPLACE(vCalcString,"+",","),"&","+") NO-ERROR.
+ 
+   IF ERROR-STATUS:ERROR OR 
+      vCalcString = "" OR vCalcString = ? THEN
+      RETURN.
+ 
+   vIsRole = vCalcString MATCHES "*Роль*".
+   /*Идем по списку ролей\парам. базы начисления */
+   DO vI = 1 TO NUM-ENTRIES(vCalcString):
+      vFunc = ENTRY(vi,vCalcString).
+      IF NOT {assigned TRIM(vFunc)} THEN NEXT.
+      IF vCalcString MATCHES "*Роль*" THEN
+      DO: 
+         ASSIGN
+            vCalcString = REPLACE(vCalcString, " ", "")
+            vAcctType   = SUBSTR(SUBSTR(vFunc,INDEX(vFunc, "(") + 1), 1,
+                         LENGTH(SUBSTR(vFunc,INDEX(vFunc, "(") + 1)) - 1)
+            .
+         IF    in-cod-par EQ 1  /*Для основных процентов*/
+            OR in-cod-par EQ 13 /*Для %КрКом */
+            THEN 
+         DO:
+            RUN GetDynPos(in-contract,
+                          in-cont-code,
+                          in-date1,
+                          in-date2,
+                          vAcctType,
+                          in-MainSince,
+                          YES).
+            RUN GetPlanDyn(in-contract,
+                           in-cont-code,
+                           most[in-cod-par],
+                           in-MainSince,
+                           in-modeOfCalc).
+         END.
+         ELSE /*для остальных процентов*/
+            RUN GetDynPos(
+               in-contract,
+               in-cont-code,
+               in-date1,
+               in-date2,
+               vAcctType,
+               in-MainSince,
+               NO).
+      END. /* MATCHES "*Роль*" */
+      ELSE 
+      DO:
+         vPar = INT64(vFunc) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN
+         DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "-1",
+               "Невозможно выполнить расчет! Проверьте корректность настройки ДР <БазаНач> ").
+            RETURN.
+         END.
+         RUN GetFactDynPar(
+            in-contract,
+            in-cont-code,
+            in-date1,
+            in-date2,
+            vPar). 
+         IF    in-cod-par EQ 1  /*Для основных процентов*/
+            OR in-cod-par EQ 13 /*Для %Крком*/
+            THEN
+            RUN GetPlanDyn(in-contract,
+                           in-cont-code,
+                           vPar,
+                           in-MainSince,
+                           in-modeOfCalc).
+         FOR EACH fost WHERE fost.type EQ "":
+            fost.type = vFunc.
+         END.
+         FOR EACH fost WHERE 
+            CAN-FIND (FIRST bfost WHERE bfost.since EQ fost.since
+                        AND bfost.bal   EQ fost.bal
+                        AND bfost.type  EQ fost.type
+                        AND RECID(bfost) NE RECID(fost)):
+            DELETE fost.
+         END.
+      END.                          
+   END. /*По каждой роли*/
+
+END PROCEDURE.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='04/09/2015 07:02:45.410+04:00' */
+/* $LINTUSER='glaa' */
+/* $LINTMODE='1' */
+/* $LINTFILE='nach-tr.i' */
+/*prosigng4QFnXiY1E8f3dhr6TDk2Q*/

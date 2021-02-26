@@ -1,0 +1,63 @@
+ndays-real = 0.
+if     loan-cond.disch-type NE 1 
+   AND loan-cond.disch-type NE 2 
+   AND loan-cond.disch-type NE 11 
+   AND loan-cond.disch-type NE 13 
+   AND loan-cond.disch-type NE 14 
+   AND loan-cond.disch-type NE 15 
+   AND loan-cond.disch-type NE 16  
+   AND loan-cond.disch-type NE 17
+   AND loan-cond.disch-type NE 35 
+   AND loan-cond.disch-type NE 36 
+   AND DAY(cur) EQ 31 THEN cur = cur + 1.
+/*
+if loan-cond.disch-type ne 1 and loan-cond.disch-type ne 11 and
+    day(nldt) eq 31 then nldt = nldt + 1.
+*/
+if (    loan-cond.disch-type NE 1 
+    AND loan-cond.disch-type NE 2 
+    AND loan-cond.disch-type NE 11 
+    AND loan-cond.disch-type NE 13 
+    AND loan-cond.disch-type NE 14 
+    AND loan-cond.disch-type NE 15 
+    AND loan-cond.disch-type NE 16
+    AND loan-cond.disch-type NE 17
+    AND loan-cond.disch-type NE 35 
+    AND loan-cond.disch-type NE 36) 
+    AND cur - DAY(cur)       NE nldt - day(nldt) 
+    AND DAY(nldt)            EQ 31 
+THEN  DO : nldt = nldt + 1. nldt2 = nldt. END. 
+do while (month(nldt) + (year(nldt) - year(cur)) * 12 - month(cur)) gt 0:
+ ndays-real = ndays-real + day(nldt).
+   {1} = {1} + (IF    loan-cond.disch-type = 1 
+                   OR loan-cond.disch-type = 2 
+                   OR loan-cond.disch-type = 11 
+                   OR loan-cond.disch-type = 13 
+                   OR loan-cond.disch-type = 14 
+                   OR loan-cond.disch-type = 15 
+                   OR loan-cond.disch-type = 16
+                   OR loan-cond.disch-type = 17
+                   OR loan-cond.disch-type = 35 
+                   OR loan-cond.disch-type = 36
+               then day(nldt)
+                ELSE (IF nldt = nldt2 
+                      THEN MIN(DAY(nldt),30) 
+                      ELSE 30)).
+ nldt = nldt - day(nldt).
+end.
+ndays-real = ndays-real + day(nldt) - day(cur).
+{1} = {1} + (IF    loan-cond.disch-type = 1 
+                OR loan-cond.disch-type = 2 
+                OR loan-cond.disch-type = 11 
+                OR loan-cond.disch-type = 13 
+                OR loan-cond.disch-type = 14 
+                OR loan-cond.disch-type = 15 
+                OR loan-cond.disch-type = 16
+                OR loan-cond.disch-type = 17
+                OR loan-cond.disch-type = 35 
+                OR loan-cond.disch-type = 36
+               then (day(nldt) - day(cur))
+             ELSE (IF nldt = nldt2 
+                   THEN MIN(DAY(nldt),31) 
+                   ELSE 30) 
+                 - MIN(DAY(cur),30)).

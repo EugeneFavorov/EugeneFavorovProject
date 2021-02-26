@@ -1,0 +1,155 @@
+DEF VAR m-beg-date AS DATE INIT TODAY NO-UNDO.
+DEF VAR m-end-date AS DATE INIT TODAY NO-UNDO.
+DEF VAR m-ratecomm AS DEC  INIT 0.00  NO-UNDO.
+DEF VAR mLnTotal   AS INT64  INIT 0     NO-UNDO.
+DEF VAR mLoanCount AS INT64  INIT 0     NO-UNDO.
+DEF VAR mchoice    AS LOG  NO-UNDO.
+DEF VAR mContract  AS CHAR NO-UNDO.
+DEF VAR mContCode  AS CHAR NO-UNDO.
+DEF VAR mCurrency  AS CHAR NO-UNDO.
+DEF VAR mAlwaysSkip    AS LOG NO-UNDO.
+DEF VAR mAlwaysReplace AS LOG NO-UNDO.
+DEF VAR mFlagNotMark   AS LOG NO-UNDO.
+DEF VAR mBefore        AS LOG NO-UNDO.
+DEF VAR mAfter         AS LOG NO-UNDO.
+
+DEFINE FRAME SetPar
+   m-beg-date
+      &IF '{&WINDOW-SYSTEM}' = 'TTY':U &THEN AT ROW 2 COL 2
+      &ELSE AT ROW 2 COL 2 &ENDIF
+      FORMAT "99/99/9999"
+      LABEL "Начиная с"
+      HELP  "Дата начала"
+      VIEW-AS FILL-IN
+   m-ratecomm 
+      &IF '{&WINDOW-SYSTEM}' = 'TTY':U &THEN AT ROW 2 COL 25
+      &ELSE AT ROW 2 COL 25 &ENDIF
+      FORMAT "->>>>>>9.99"
+      LABEL  "Коэффициент"
+      HELP   "Коэффициент резервирования %%"
+      VIEW-AS FILL-IN
+WITH OVERLAY ROW 10 CENTERED NO-UNDERLINE SIDE-LABELS 
+TITLE COLOR BRIGHT-WHITE "НАЗНАЧЕНИЕ КОЭФФИЦИЕНТОВ РЕЗЕРВИРОВАНИЯ".
+
+ON VALUE-CHANGED OF FRAME SetPar DO:
+   IF  DEC(m-ratecomm:SCREEN-VALUE) < 0.00 OR
+       DEC(m-ratecomm:SCREEN-VALUE) > 100.00
+   THEN DO:
+      MESSAGE "Коэффициент создания резерва должен иметь значение [0.00 - 100.00]"
+         VIEW-AS ALERT-BOX ERROR.
+      RETURN NO-APPLY.
+   END.
+END.
+ON F1 OF m-beg-date IN FRAME SetPar
+DO:            
+   /* вызвать календарь */
+   RUN calend.p.
+   IF pick-value <> ? THEN DO:
+      m-beg-date:SCREEN-VALUE = pick-value.
+   END.
+END.
+ON LEAVE  OF m-ratecomm IN FRAME SetPar OR
+   GO OF FRAME SetPar
+DO:
+   IF  DEC(m-ratecomm:SCREEN-VALUE) < 0.00 OR
+       DEC(m-ratecomm:SCREEN-VALUE) > 100.00
+   THEN DO:
+      MESSAGE "Коэффициент создания резерва должен иметь значение [0.00 - 100.00]"
+         VIEW-AS ALERT-BOX ERROR.
+      RETURN NO-APPLY.
+   END.
+END.
+
+
+DEFINE FRAME DelPar 
+   m-beg-date
+      &IF '{&WINDOW-SYSTEM}' = 'TTY':U &THEN AT ROW 2 COL 2
+      &ELSE AT ROW 2 COL 2 &ENDIF
+      FORMAT "99/99/9999"
+      LABEL "Начиная с"
+      HELP  "Дата начала"
+      VIEW-AS FILL-IN
+   m-end-date 
+      &IF '{&WINDOW-SYSTEM}' = 'TTY':U &THEN AT ROW 2 COL 25
+      &ELSE AT ROW 2 COL 25 &ENDIF
+      FORMAT "99/99/9999"
+      LABEL  "по"
+      HELP   "Дата окончания"
+      VIEW-AS FILL-IN
+WITH OVERLAY ROW 10 CENTERED NO-UNDERLINE SIDE-LABELS
+TITLE COLOR BRIGHT-WHITE "УДАЛЕНИЕ КОЭФФИЦИЕНТОВ РЕЗЕРВИРОВАНИЯ".
+
+ON F1 OF m-beg-date IN FRAME DelPar
+DO:            
+   /* вызвать календарь для m-beg-date*/
+   RUN calend.p.
+   IF pick-value <> ? THEN DO:
+      m-beg-date:SCREEN-VALUE = pick-value.
+   END.
+END.
+ON F1 OF m-end-date IN FRAME DelPar
+DO:            
+   /* вызвать календарь для m-end-date */
+   RUN calend.p.
+   IF pick-value <> ? THEN DO:
+      m-end-date:SCREEN-VALUE = pick-value.
+   END.
+END.
+ON VALUE-CHANGED OF FRAME DelPar DO:
+   IF DATE(m-beg-date:SCREEN-VALUE) > DATE(m-end-date:SCREEN-VALUE)
+   THEN DO:
+      MESSAGE "Дата окончания не может быть больше даты начала" VIEW-AS ALERT-BOX.
+      RETURN NO-APPLY.
+   END.
+END.
+ON LEAVE  OF m-beg-date IN FRAME DelPar OR
+   GO OF FRAME DelPar
+DO:
+   IF DATE(m-beg-date:SCREEN-VALUE) > DATE(m-end-date:SCREEN-VALUE)
+   THEN DO:
+      MESSAGE "Дата окончания не может быть больше даты начала" VIEW-AS ALERT-BOX.
+      RETURN NO-APPLY.
+   END.
+END.
+
+
+PROCEDURE ChangeRiskOnLoan:
+
+   DEFINE INPUT  PARAMETER iCommiss   AS CHAR  NO-UNDO.
+   DEFINE INPUT  PARAMETER iContract  AS CHAR  NO-UNDO.
+   DEFINE INPUT  PARAMETER iContCode  AS CHAR  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrency  AS CHAR  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate      AS DATE  NO-UNDO.
+   DEFINE INPUT  PARAMETER iRate      AS DEC   NO-UNDO.
+
+   DEF VAR mGrRiska AS INT64 INIT ? NO-UNDO.
+
+   DEF BUFFER xcomm-rate FOR comm-rate.
+   DEF BUFFER b-loan     FOR loan.
+
+   IF NOT CAN-FIND( FIRST xcomm-rate WHERE
+                          xcomm-rate.commission = iCommiss
+                      AND xcomm-rate.kau = iContract + ',' + iContCode
+                      AND xcomm-rate.currency = iCurrency
+                      AND xcomm-rate.since > iDate  NO-LOCK)
+   THEN
+   DO:
+      FIND FIRST b-loan WHERE
+                 b-loan.Contract  = iContract AND
+                 b-loan.Cont-Code = iContCode
+      EXCLUSIVE-LOCK  NO-WAIT NO-ERROR.
+
+      ASSIGN
+         b-loan.risk     = iRate
+         b-loan.gr-riska = LnGetGrRiska( iRate, iDate ).
+         .
+      IF b-loan.cont-type = 'Течение'
+         THEN RUN Set_Transh_Risk IN h_i254 
+                               (b-loan.contract,b-loan.cont-code + ' ',
+                               b-loan.gr-riska,iRate).       
+      RELEASE b-loan.
+
+   END.
+
+END PROCEDURE. 
+

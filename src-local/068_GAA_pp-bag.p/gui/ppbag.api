@@ -1,0 +1,3140 @@
+
+/* +++ ppbag.api was humbly modified by (c)blodd converter v.1.11 on 4/12/2017 11:07am +++ */
+
+FUNCTION Is_Transh_in_POS  RETURNS LOGICAL (
+   iContract   AS CHAR, /* Назначение договора. */
+   iContCode   AS CHAR  /* Номер договора. */
+) FORWARD.
+
+FUNCTION GetUpPOS  RETURNS CHAR (
+   iPos   AS CHAR 
+) FORWARD.
+
+FUNCTION LnWhereProsProc  RETURNS CHAR (
+   iContract   AS CHAR, /* Назначение договора. */
+   iContCode   AS CHAR  /* Номер договора. */
+) FORWARD.
+
+FUNCTION GetSubPOS  RETURNS CHAR (
+   iContract   AS CHAR,  
+   iContCode   AS CHAR,
+   iPOS        AS CHAR,
+   iDate       AS DATE
+) FORWARD.
+
+
+/* Возвращает TRUE если указанный клиент частный предприниматель. */
+FUNCTION fIsClientIndividualBisnessman RETURN LOGICAL (
+    INPUT iCustCat AS CHARACTER,   /* Тип клиента. */
+    INPUT iCustId  AS INT64      /* Код клиента. */
+):
+   DEFINE VARIABLE vPredprFlag AS LOG NO-UNDO.
+
+   IF iCustCat EQ 'Ч' THEN DO:
+      vPredprFlag = GetXattrValueEx("person",
+                                    STRING(iCustId),
+                                    "Предпр",
+                                    'Ненашли') BEGINS "Пред".
+      IF NOT vPredprFlag THEN
+          vPredprFlag = GetXattrValueEx("person",
+                                        STRING(iCustId),
+                                        "Предпр",
+                                        'Ненашли') EQ "ФЛП".
+   END.
+   ELSE IF iCustCat EQ 'Ю' THEN
+      vPredprFlag = GetXattrValueEx("cust-corp",
+                                    STRING(iCustId),
+                                    "Предпр",
+                                    'Ненашли') BEGINS "Пред".
+   RETURN vPredprFlag.
+
+END FUNCTION.
+
+/* Является ли клиент субъектом малого и среднего предпринимательства */
+FUNCTION fIsClientISubMalSredBisness RETURN LOGICAL (
+   INPUT iCustCat AS CHARACTER,   /* Тип клиента. */
+   INPUT iCustId  AS INT64      /* Код клиента. */
+):
+   RETURN GetXAttrValue(IF iCustCat EQ "Ч" THEN "person" ELSE ( IF iCustCat EQ "Ю" THEN "cust-corp" ELSE ""),
+                        STRING(iCustId),
+                        "Ф302_СубМалСредБиз"
+          ) NE "".
+END FUNCTION.
+
+/* Возвращает наименование ПОСа. Если не нашел, то вернет "?". */
+FUNCTION fGetPosName RETURN CHAR (
+   INPUT iPos AS CHAR   /* Код ПОСа. */
+):
+   DEF BUFFER loan FOR loan. /* Локализация буфера. */
+   FIND FIRST loan WHERE
+            loan.contract  EQ "ПОС"
+      AND   loan.cont-code EQ iPos
+   NO-LOCK NO-ERROR.
+   RETURN   IF AVAIL loan
+               THEN loan.comment
+               ELSE ?.
+END FUNCTION.
+/* Дата начала периода ненулевого остатка параметров. */
+FUNCTION LN_GetPrsProcDate RETURNS DATE (
+   iContract   AS CHAR, /* Назначение договора. */
+   iContCode   AS CHAR, /* Номер договора. */
+   iDate       AS DATE  /* Дата анализа. */
+):
+   DEF VAR vResDate  AS DATE   NO-UNDO. /* Конечная дата */
+   DEF VAR vResDate1 AS DATE   NO-UNDO. 
+   DEF VAR vProsrFl  AS LOGICAL   NO-UNDO. /* Конечная дата */
+   DEF VAR vContCode AS CHAR     NO-UNDO. 
+
+   /*раздельный учет траншей*/   
+   IF Is_Transh_in_POS(iContract,iContCode) THEN
+   DO:
+      vContCode = iContCode.
+      RUN LN_GetPrsDateEx(iContract,
+                          iContCode,
+                          iDate,
+                          mPosCntrPrmO,
+                          mPosCntrPrmT,
+                          mCurrDay,
+                          OUTPUT vResDate,
+                          OUTPUT vProsrFl).
+      IF NUM-ENTRIES(iContCode," ") EQ 2 THEN
+         vContCode = LnWhereProsProc (iContract,iContCode).
+      /* просрочка ведется на охвате*/
+      IF vContCode NE iContCode THEN 
+      DO:
+         RUN LN_GetPrsDateEx(iContract,
+                             vContCode,
+                             iDate,
+                             mPosCntrPrmO,
+                             mPosCntrPrmT,
+                             mCurrDay,
+                             OUTPUT vResDate1,
+                             OUTPUT vProsrFl).
+
+        vResDate = MIN(vResDate,vResDate1).
+
+      END.
+   END.
+   ELSE
+   RUN LN_GetPrsDateEx(iContract,
+                       ENTRY (1, iContCode, " "),
+                       iDate,
+                       mPosCntrPrmO,
+                       mPosCntrPrmT,
+                       mCurrDay,
+                       OUTPUT vResDate,
+                       OUTPUT vProsrFl).
+   RETURN vResDate.
+END FUNCTION.
+
+/* Чтобы обработать только цифры */ 
+FUNCTION Get-Num-Asc-From-Str RETURN CHAR (INPUT iStr AS CHAR):
+   DEF VAR vI   AS INT64 NO-UNDO. 
+   DEF VAR vRet AS CHAR  NO-UNDO. 
+   DEF VAR vTmp AS CHAR  NO-UNDO. 
+   iStr = TRIM(iStr). 
+   DO vI = 1 TO LENGTH(iStr):
+      vTmp = SUBSTRING(iStr, vI, 1).
+      IF ASC(vTmp) GE 48 AND ASC(vTmp) LE 57 THEN
+         vRet = vRet + vTmp. 
+   END.
+   RETURN (vRet). 
+END FUNCTION.
+
+/* Получить ключ от срока  */ 
+FUNCTION Get-Key-Indicate RETURN INT64( INPUT iStr AS CHAR):
+   DEF VAR vRet   AS INT64 NO-UNDO. 
+   DEF VAR vI     AS INT64 NO-UNDO. 
+   DEF VAR vTmp-1 AS CHAR  NO-UNDO. 
+   DEF VAR vTmp-2 AS CHAR  NO-UNDO. 
+   IF NUM-ENTRIES(iStr, "-" ) GT 1 THEN DO:
+      ASSIGN 
+         vTmp-1 = ENTRY(1, iStr, "-")
+         vTmp-2 = ENTRY(2, iStr, "-")
+         vTmp-1 = Get-Num-Asc-From-Str(vTmp-1)  
+         vTmp-2 = Get-Num-Asc-From-Str(vTmp-2)  
+         .
+   END. ELSE DO:
+      ASSIGN 
+        vTmp-2 = Get-Num-Asc-From-Str(iStr)
+         .
+   END.
+   ASSIGN 
+      vRet = INT64(vTmp-2) * 1000 + INT64(vTmp-1)
+      . 
+   RETURN vRet. 
+END FUNCTION.
+
+/*  Значение ДР на подпортфеле или на верхнем ПОСе, или НП ПОСучВалРез */ 
+FUNCTION GetPOSValRez RETURN CHAR(
+   INPUT  iContract  AS CHAR,  /* Идентификатор */
+   INPUT  iContCode  AS CHAR   /* портфеля      */
+):
+   DEF BUFFER loan  FOR loan.       /* Локализация буфера */
+   DEF BUFFER bloan FOR loan.       /* Локализация буфера */
+
+   DEF VAR vPOSValRez AS CHAR NO-UNDO.   /* Значение ДР или НП ПОСучВалРез */
+
+   IF {assigned iContract} THEN
+      FIND FIRST loan WHERE  loan.contract  EQ iContract
+                         AND loan.cont-code EQ iContCode
+      NO-LOCK NO-ERROR.
+   ELSE
+      FIND FIRST loan WHERE (loan.contract  EQ "ПОС"
+                         AND loan.cont-code EQ iContCode)
+                         OR (loan.contract  EQ "ПУО"
+                         AND loan.cont-code EQ iContCode)
+      NO-LOCK NO-ERROR.
+
+   IF AVAIL loan THEN
+   DO:
+      vPOSValRez = GetXattrValueEx ("loan",
+                                     loan.contract + "," + loan.cont-code, 
+                                     "ПОСучВалРез", "").
+      IF NOT {assigned vPOSValRez} 
+         AND loan.parent-contract NE "" THEN  /* есть верхний уровень ПОСа */
+      DO:
+         FIND FIRST bloan WHERE bloan.contract        EQ loan.parent-contract
+                            AND bloan.cont-code       EQ loan.parent-cont-code
+                            AND bloan.parent-contract EQ ""
+         NO-LOCK NO-ERROR.
+         IF AVAIL bloan THEN
+            vPOSValRez = GetXattrValueEx ("loan",
+                                           bloan.contract + "," + bloan.cont-code,
+                                           "ПОСучВалРез", "").
+      END.
+   END.
+
+   IF NOT {assigned vPOSValRez} THEN
+      vPOSValRez = FGetSetting("ПОС", "ПОСучВалРез" ,"Один").
+
+   RETURN vPOSValRez.
+END FUNCTION.
+
+/* Процедура создания под ПОС-ов по срокам просрочки. */
+PROCEDURE SetSubPos.
+   DEF INPUT  PARAM iHLoan AS HANDLE NO-UNDO. /* Указатель на родительский ПОС. */
+
+   DEF VAR vCntSrok     AS INT64    NO-UNDO. /* Количество периодов по срокам. */
+   DEF VAR vCnt         AS INT64    NO-UNDO. /* Счетчик. */
+   DEF VAR vContCode    AS CHAR   NO-UNDO. /* Новый номер. */
+   DEF VAR vDocRef      AS CHAR   NO-UNDO. /* Новый номер. */
+   DEF VAR vSrcDocRef   AS CHAR   NO-UNDO. /*  */
+   DEF VAR vHUniBagSrok AS HANDLE NO-UNDO.
+   DEF VAR vPOSObjedDog AS CHAR   NO-UNDO. /* "ПОСОбъедДог" */
+   DEF VAR vDate2920-U  AS DATE   NO-UNDO. /* дата начала действия 2920-У */
+   DEF VAR vSubPosSet   AS CHAR   NO-UNDO. /* набор подпортфелей (1-старый, с 181-998y,
+                                                                  2-новый, с 181-360,361-998y) */
+   DEF VAR vPosClsf     AS CHAR   NO-UNDO. /* справочник для сроков/ставок */
+   DEF VAR vRateComm    AS DEC    NO-UNDO. /* ставка резервирования */
+   DEF VAR vPOSAcctInBank AS CHAR NO-UNDO. /* ПосЛСвБанке */
+   DEF VAR vSubPosTyp   AS CHAR   NO-UNDO.
+
+   DEF BUFFER UniBagSrok FOR loan. /* Локализация буфера. */
+   ASSIGN
+      vPOSObjedDog = GetXAttrInit(iHLoan:BUFFER-FIELD ("class-code"):BUFFER-VALUE,"ПОСОбъедДог")
+      vPOSObjedDog = IF {assigned vPOSObjedDog}
+                     THEN vPOSObjedDog
+                     ELSE fGetSetting ("ПОС", "ПОСОбъедДог", "1")
+      vDate2920-U  = DATE (GetXattrInit (iHLoan:BUFFER-FIELD ("Class-code"):BUFFER-VALUE,
+                                         "Дата2920-У"))
+         /* Проверяем индивидуальные настройки  
+         подмножества сроков для типов портфеля */
+      vSubPosTyp   = GetCodeDesc("ПОСТип",
+                                iHLoan:BUFFER-FIELD ("cont-type"):BUFFER-VALUE,
+                                2,
+                                "")
+      vPosClsf     = ( IF gend-date LT vDate2920-U THEN
+                         "ПОССрок"
+                      ELSE IF vSubPosTyp EQ "ПонижРиск" THEN "ПОССрокИН"
+                      ELSE
+                         ( IF iHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П" THEN
+                             "ПОССрокП"
+                          ELSE
+                             "ПОССрок"))
+                        /* Получение сроков. */
+      vCntSrok     =  GetRefCrVal (
+                           vPosClsf,
+                           "ПОССрПрос",
+                           gEnd-Date,
+                           vPOSObjedDog,
+                           TEMP-TABLE ttIndicate:HANDLE)
+      vHUniBagSrok =  BUFFER UniBagSrok:HANDLE
+      vSrcDocRef   =  iHLoan:BUFFER-FIELD ("doc-ref"):BUFFER-VALUE
+      vSubPosSet   =  GetXAttrValueEx ("loan",
+                                       iHLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," +
+                                       iHLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE,
+                                       "SubPosSet",
+                                       GetXattrInit (iHLoan:BUFFER-FIELD ("Class-code"):BUFFER-VALUE,
+                                                     "SubPosSet"))
+   .
+   CR_BLK:
+   DO
+   TRANSACTION
+   ON ERROR    UNDO CR_BLK, LEAVE CR_BLK
+   ON ENDKEY   UNDO CR_BLK, LEAVE CR_BLK:
+
+      FOR EACH ttIndicate
+         BY Get-Key-Indicate(ttIndicate.fChar):      /* сортируем по срокам */ 
+
+         IF     gend-date GE vDate2920-U
+            AND iHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П" THEN
+         DO:
+            IF       (vSubPosSet EQ "1"
+                  AND CAN-DO("181-360,361-998y",ttIndicate.fChar))
+               OR    (vSubPosSet EQ "2"
+                  AND CAN-DO("181-998y",ttIndicate.fChar)) THEN
+               NEXT.
+         END.
+         ASSIGN
+            vCnt        =  vCnt + 1
+            vDocRef     =  vSrcDocRef + STRING (vCnt)
+            vContCode   =  addFilToLoan (vDocRef, shFilial)
+         .
+         vHUniBagSrok:BUFFER-CREATE ().
+         vHUniBagSrok:BUFFER-COPY (iHLoan, "cont-code,doc-ref,class-code").
+         ASSIGN
+            UniBagSrok.class-code         =  "UniBagSrok"
+            UniBagSrok.doc-ref            =  vDocRef
+            UniBagSrok.cont-code          =  vContCode
+            UniBagSrok.parent-contract    =  iHLoan:BUFFER-FIELD ("contract") :BUFFER-VALUE
+            UniBagSrok.parent-cont-code   =  iHLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+            UniBagSrok.end-date           =  iHLoan:BUFFER-FIELD ("end-date"):BUFFER-VALUE
+            UniBagSrok.reg-num            =  STRING(vCnt)  /* сортировка для Qry */ 
+            vPOSAcctInBank = GetXAttrValueEx ("loan",
+                                               iHLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," +
+                                               iHLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE,
+                                               "ПосЛСвБанке",
+                                               "")
+            vPOSAcctInBank = IF vPOSAcctInBank NE "" THEN
+                                "Да"
+                             ELSE
+                                "Нет"
+            .
+            
+         RUN CopySigns (
+            iHLoan:BUFFER-FIELD ("class-code"):BUFFER-VALUE,
+            iHLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," + iHLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE,
+            UniBagSrok.class-code,
+            UniBagSrok.contract + "," + UniBagSrok.cont-code
+         ).
+         IF NOT UpdateSigns (
+               UniBagSrok.class-code,
+               UniBagSrok.contract + "," + UniBagSrok.cont-code,
+               "ПОССрПрос",
+               ttIndicate.fChar,
+               ?)
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "0", "Ошибка создания ДР ~"ПОССрПрос~".").
+            RETURN ERROR.
+         END.
+            /* рассчитаем ставку резервирования */
+         IF gend-date LT vDate2920-U THEN /* старый вариант */
+            vRateComm = DEC (GetRefVal (vPosClsf,
+                                        UniBagSrok.open-date,
+                                        vPOSObjedDog + "," + ttIndicate.fChar + "," + UniBagSrok.cont-type
+                                        )).
+         ELSE
+         DO: /* новый вариант */
+               /* для предпр-й не используется ДР ПосЛСвБанке
+               ** (а для остальных - используются) */
+            IF iHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П" THEN
+               vRateComm = DEC (GetRefVal (vPosClsf,
+                                           UniBagSrok.open-date,
+                                           vPOSObjedDog + "," + ttIndicate.fChar + "," + UniBagSrok.cont-type)).
+            ELSE
+               vRateComm = DEC (GetRefVal (vPosClsf,
+                                           UniBagSrok.open-date,
+                                           vPOSObjedDog + "," + ttIndicate.fChar + "," + UniBagSrok.cont-type + "," + 
+                                           vPOSAcctInBank)).
+         END.
+                           /* Создание комиссии. */
+         CREATE comm-rate.
+         ASSIGN
+            comm-rate.rate-comm  =  vRateComm
+            comm-rate.kau        =  UniBagSrok.contract + "," + UniBagSrok.cont-code
+            comm-rate.currency   =  UniBagSrok.currency
+            comm-rate.acct       =  "0"
+            comm-rate.commission =  iHLoan:BUFFER-FIELD ("rate-list") :BUFFER-VALUE
+            comm-rate.min-value  =  0
+            comm-rate.period     =  0
+            comm-rate.since      =  UniBagSrok.open-date
+         NO-ERROR.
+         IF ERROR-STATUS:ERROR
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess (
+               "", "", "0",
+               IF ERROR-STATUS:NUM-MESSAGES GT 0
+                  THEN ERROR-STATUS:GET-MESSAGE (1)
+                  ELSE {&RETURN_VALUE}
+            ).
+            RETURN ERROR.
+         END.
+      END.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Реализация метода <Однородность>, определяющего однородность для ссудных договоров.
+** Процедура проверяет соответствие ПОСа и кредитного договора.
+** Если для какого-либо ПОСа метод вернул значение <ДА>,
+** то договор соответствует признакам однородности указанного ПОС и
+** может быть включен в этот ПОС.
+** Включение ссуды в ПОС осуществляется после успешной проверки
+** по характеристикам заемщика и договора,
+** проведенной процедурой уточнения состава ПОС. */
+PROCEDURE ChkLoanUniformity.
+   DEF INPUT  PARAM iBLoan    AS HANDLE NO-UNDO. /* Указатель на ссуду. */
+   DEF INPUT  PARAM iBPos     AS HANDLE NO-UNDO. /* Указатель на ПОС. */
+   DEF INPUT  PARAM iChkDate  AS DATE   NO-UNDO. /* Дата, на которую осуществляется проверка. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF OUTPUT PARAM oErr      AS LOG    NO-UNDO. /* Флаг ошибки (No - ошибка). */
+
+   DEF VAR vLContract   AS CHAR   NO-UNDO. /* Назначение. */
+   DEF VAR vLContCode   AS CHAR   NO-UNDO. /* Номер ссуды. */
+   DEF VAR vPosConCode  AS CHAR   NO-UNDO. /* Номер ПОСа. */
+   DEF VAR vXattrVal    AS CHAR   NO-UNDO. /* Значение ДР. */
+   DEF VAR vXattrValAc  AS CHAR   NO-UNDO. /* Значение ДР счета  */
+   DEF VAR vPosSur      AS CHAR   NO-UNDO. /* Суррогат ПОСа. */
+   DEF VAR vResident    AS LOG    NO-UNDO. /* Резидент (Yes/No). */
+   DEF VAR vRecId       AS RECID  NO-UNDO. /* RECID для term-obl */
+   DEF VAR vCnt         AS INT64    NO-UNDO. /* Счетчик. */
+   DEF VAR vMethod      AS CHAR   NO-UNDO. /* Процедура метода. */
+   DEF VAR vParams      AS CHAR   NO-UNDO. /* Пааметры (не используется). */
+   DEF VAR vHLoan       AS HANDLE NO-UNDO. /* Буфер для проверки. */
+   DEF VAR vHTmp        AS HANDLE NO-UNDO. /* Временный контейнер объекта. */
+   DEF VAR vQualityGar  AS CHAR   NO-UNDO. /* КатОбесп */
+   DEF VAR vContType    AS CHAR   NO-UNDO. /* Тип для охватывающего договора */
+   DEF VAR vTmpVal      AS CHAR   NO-UNDO.
+   DEF VAR vClosePos    AS DATE   NO-UNDO. /* Дата закрытия поса */
+   DEF VAR vPosEndDate  AS DATE   NO-UNDO. /* Дата окончания действия ПОС */
+   DEF VAR vDate2920-U  AS DATE   NO-UNDO. /* дата начала действия 2920-У */
+   DEF VAR vNeedAcct    AS LOG    NO-UNDO. /* Необходимо наличие счета. */
+   DEF VAR vPerVidBeg   AS DATE   NO-UNDO. /* Признак однородности (Период 
+                                              выдачи ссуды - "ОТ"). Задается 
+                                              допреком ПОСПерВыдОт на портфеле. 
+                                           */
+   DEF VAR vPerVidEnd   AS DATE   NO-UNDO. /* Признак однородности (Период 
+                                              выдачи ссуды - "ДО"). Задается 
+                                              допреком ПОСПерВыдДо на портфеле. 
+                                           */
+   DEF VAR vLoanOpenDate AS DATE  NO-UNDO.
+
+   DEF BUFFER term-obl  FOR term-obl.  /* Локализация буфера. */
+   DEF BUFFER bacct     FOR acct.
+   DEF BUFFER loan-acct FOR loan-acct.
+
+   CHK:
+   DO
+   ON ERROR    UNDO CHK, LEAVE CHK
+   ON ENDKEY   UNDO CHK, LEAVE CHK:
+      /* Если ПОС закрыт , с ним уже ни чего не делаем */
+      vClosePos = iBPos:BUFFER-FIELD ("close-date"):BUFFER-VALUE.
+
+      IF vClosePos NE ? THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "", "-1", "ПОС закрыт " + string(vClosePos) ).
+         UNDO CHK, LEAVE CHK.
+      END.
+      /* Если дата проверки >= даты окончания действия ПОС, то ПОС выбирать нельзя */
+      vPosEndDate = DATE(iBPos:BUFFER-FIELD ("end-date"):BUFFER-VALUE) NO-ERROR.
+      IF vPosEndDate NE ? THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "", "-1", "Нельзя выбирать ПОС с " + STRING(vPosEndDate)).
+         UNDO CHK, LEAVE CHK.
+      END.
+
+      /* Создание буфера для проверки. */
+      CREATE BUFFER vHLoan FOR TABLE iBLoan BUFFER-NAME "bl".
+      /* Если передано течение,
+      ** то необходиом перейти на любой транш и проверять его. */
+      IF iBLoan:BUFFER-FIELD ("cont-type"):BUFFER-VALUE EQ "Течение" THEN
+      DO:
+         vHLoan:FIND-FIRST (
+         "WHERE bl.contract   EQ '"       +  iBLoan:BUFFER-FIELD ("contract") :BUFFER-VALUE + "' " +
+         "  AND bl.cont-code  BEGINS '"   +  iBLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE + " ' " +
+         "  AND NUM-ENTRIES (bl.cont-code, ' ') EQ 2 " +
+         "  AND (bl.close-date EQ ? OR bl.close-date GE " + STRING(iChkDate), NO-LOCK) NO-ERROR.
+         IF NOT vHLoan:AVAIL
+         THEN DO:
+            vContType = GetxAttrValueEx("loan",
+                                        iBLoan:BUFFER-FIELD("contract"):BUFFER-VALUE + "," + iBLoan:BUFFER-FIELD("cont-code"):BUFFER-VALUE,
+                                        "ТипДогСогл",
+                                        "").
+            IF vContType EQ "" THEN
+            DO:
+               RUN Fill-SysMes IN h_tmess ("", "", "-1", "На соглашении не указан тип договора для траншей").
+               UNDO CHK, LEAVE CHK.
+            END.
+            ELSE
+               ASSIGN
+                  vHTmp     = vHLoan
+                  vHLoan    = iBLoan
+               .
+         END.
+      END.
+      ELSE
+         ASSIGN
+            vHTmp     = vHLoan
+            vHLoan    = iBLoan
+         .
+      ASSIGN
+         vLContCode     =  vHLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+         vLContract     =  vHLoan:BUFFER-FIELD ("contract") :BUFFER-VALUE
+         vPosConCode    =  iBPos :BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+         vPosSur        =  iBPos :BUFFER-FIELD ("contract") :BUFFER-VALUE + "," +
+                           iBPos :BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+         vContType      =  vHLoan:BUFFER-FIELD ("cont-type"):BUFFER-VALUE WHEN vContType EQ ""
+      NO-ERROR.
+      IF ERROR-STATUS:ERROR
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", ERROR-STATUS:GET-MESSAGE (1)).
+         UNDO CHK, LEAVE CHK.
+      END.
+
+      /* проверка ставки минимального резерва */
+      IF LnRsrvMinRate (vLContract,
+                        vLContCode,
+                        iChkDate) GT 0 THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "pos18", "",
+                                     "%S=" + vPosConCode +
+                                     "%S=" + vLContCode +
+                                     "%S=").
+         UNDO CHK, LEAVE CHK.
+      END.
+
+                        /* Типы клиентов должны совпадать. */
+      IF vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE NE iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE
+      THEN DO:
+         IF NOT ((    vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ч"
+                 AND iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ю"
+                 AND fIsClientIndividualBisnessman(                /* проверим, не ИЧП ли */
+                             vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE,
+                             vHLoan:BUFFER-FIELD ("cust-id"):BUFFER-VALUE))
+
+                 OR ( iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П"
+                 AND (vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ч"
+                   OR vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ю")
+                 AND fIsClientISubMalSredBisness(                /* проверим, не субъект ли малого или среднего предпр. */
+                             vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE,
+                             vHLoan:BUFFER-FIELD ("cust-id"):BUFFER-VALUE))
+                 )  THEN
+         DO:
+               IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                  "", "pos1", "", "%S=" +  vLContCode + "%S=" + vPosConCode).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+                        /* Проверка признака наличия обеспечения ПОС и
+                        ** обеспечения на ссуде. */
+      vXattrVal = GetXattrValueEx ("loan", vPosSur, "ПОСОбесп", "Все").
+      IF CAPS(vXattrVal) NE "ВСЕ"
+         AND vXattrVal   NE ""      THEN
+      DO:
+         IF mPOSuchKK THEN
+         FIND FIRST term-obl WHERE
+                    term-obl.contract    EQ STRING (vHLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE)
+              AND   term-obl.cont-code   EQ vLContCode
+              AND   term-obl.idnt        EQ 5
+              AND   term-obl.end-date    GT iChkDate
+         NO-LOCK NO-ERROR.
+         ELSE DO:
+            Block-term-obl:
+            FOR EACH term-obl WHERE
+                     term-obl.contract    EQ vLContract
+               AND   term-obl.cont-code   EQ vLContCode
+               AND   term-obl.idnt        EQ 5
+               AND   term-obl.end-date    GT iChkDate
+            NO-LOCK:
+               vQualityGar = Get_QualityGar("comm-rate",
+                                            vLContract + "," +
+                                            vLContCode + "," +
+                                            STRING(term-obl.idnt) + "," +
+                                            STRING(term-obl.end-date) + "," +
+                                            STRING(term-obl.nn),
+                                            iChkDate).
+               IF     vQualityGar NE ?
+                  AND vQualityGar NE "?"
+               THEN
+                  LEAVE Block-term-obl.
+            END.
+         END.
+
+         IF    (vXattrVal  EQ "ДА"  AND   NOT AVAIL term-obl)
+            OR (vXattrVal  EQ "НЕТ" AND   AVAIL term-obl)
+         THEN DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                  "",
+                  IF vXattrVal   EQ "ДА"  THEN "pos2" ELSE "pos3",
+                  "",
+                  "%S=" + vPosConCode + "%S=" + vLContCode
+               ).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+                        /* Проверка класса ссуды. */
+      vXattrVal   =  GetXattrValueEx ("loan", vPosSur, "ПОСКлассы", "*").
+      IF NOT   CAN-DO (vXattrVal, vHLoan:BUFFER-FIELD ("class-code") :BUFFER-VALUE)
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+               "", "pos4", "",
+               "%S=" + vLContCode + "%S=" + vPosConCode
+            ).
+         UNDO CHK, LEAVE CHK.
+      END.
+                        /* Проверка соответствия типа ссуды и ПОСа. */
+      vXattrVal   =  GetCode ("ПОСТип", iBPos:BUFFER-FIELD ("cont-type"):BUFFER-VALUE).
+      IF NOT CAN-DO (vXattrVal, vContType)
+      THEN vXattrVal = "ERROR".
+      ELSE DO:
+         vXattrVal   =  GetXattrValueEx ("loan", vPosSur, "ПОСТипы", "*").
+         IF NOT CAN-DO (vXattrVal, vContType)
+            THEN vXattrVal = "ERROR".
+      END.
+      IF vXattrVal   EQ "ERROR"
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+               "", "pos5", "",
+               "%S=" +  vLContCode  +  "%S=" +  vPosConCode
+            ).
+         UNDO CHK, LEAVE CHK.
+      END.
+                        /* Проверка на резидентность. */
+      vXattrVal = GetXattrValueEx ("loan", vPosSur, "ПОСРез", "*").
+      IF CAN-DO ("Да,Нет", vXattrVal)
+      THEN DO:
+         vResident = IsResident (
+                        vHLoan:BUFFER-FIELD ("cust-cat") :BUFFER-VALUE,
+                        vHLoan:BUFFER-FIELD ("cust-id")  :BUFFER-VALUE
+                     ).
+         IF    (vXattrVal  EQ "Да"  AND   NOT vResident)
+            OR (vXattrVal  EQ "Нет" AND       vResident)
+         THEN DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                  "", "pos6", "",
+                  "%S=" +  vLContCode  +  "%S=" +  vPosConCode
+               ).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+                        /* Проверка на принадлежность валюты ссуды и ПОСа.
+                        ** Если указать нац. валюту, то ДР не юудут создан.
+                        ** Т.е. если ДР нет, то это нац. валюта. */
+      vXattrVal = GetXattrValueEx ("loan", vPosSur, "ПосВал", "").
+      IF NOT CAN-DO (vXattrVal, vHLoan:BUFFER-FIELD ("currency") :BUFFER-VALUE)
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+               "", "pos7", "",
+               "%S=" +  vLContCode  +  "%S=" +  vPosConCode
+            ).
+         UNDO CHK, LEAVE CHK.
+      END.
+
+                        /* Проверка превышения максимальной размер ссуды */
+                        /* Определяем ограничение, установленное на ПОС'е */
+      vXAttrVal = GetXAttrValueEx("loan",vPosSur,"ПОСМаксСум","").
+                        /* Если не установлено ограничение на этом ПОС'е */
+      IF vXAttrVal EQ ""
+      THEN              /* ищем ограничение на родительском ПОС'е, если таковой существует */
+         vXAttrVal = GetXAttrValueEx("loan",
+                                     iBPos :BUFFER-FIELD ("parent-contract") :BUFFER-VALUE + "," +
+                                     iBPos :BUFFER-FIELD ("parent-cont-code"):BUFFER-VALUE,
+                                     "ПОСМаксСум","").
+      DEC (vXAttrVal) NO-ERROR.
+      IF     NOT ERROR-STATUS:ERROR
+         AND {assigned vXAttrVal}
+         AND vXAttrVal NE "?"
+      THEN DO:          /* Ограничение не установлено */
+                           /* Определение размера ссуды */
+                           /* Для траншевого договора максимальный размер ссуды определяется
+                           ** суммой договора, указанной на соглашении (всего по всем траншам). */
+         vTmpVal = ENTRY(1,iBLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE," ").
+         FIND FIRST term-obl WHERE term-obl.contract  EQ STRING (vHLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE)
+                               AND term-obl.cont-code EQ vTmpVal
+                               AND term-obl.idnt      EQ 2
+         NO-LOCK NO-ERROR.
+                           /* проверка превышения ограничения */
+         IF     AVAIL term-obl
+            AND CurToBase("УЧЕТНЫЙ",iBLoan:BUFFER-FIELD ("currency"):BUFFER-VALUE,iChkDate,term-obl.amt-rub) GT DEC(vXAttrVal)
+         THEN DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                  "", "pos14", "",
+                  "%S=" +  vLContCode  +  "%S=" +  vXAttrVal).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+
+      /* Проверка расшифровки Б/С ссудного счета */
+      vXattrVal   =  GetXattrValueEx ("loan", vPosSur, "i1_dec_pos", "*").
+      IF vXAttrVal NE "*" THEN
+      DO:
+         /* Поиск ссудного счета договора  */
+         FIND LAST loan-acct WHERE loan-acct.contract  EQ vLContract
+                               AND loan-acct.cont-code EQ vLContCode
+                               AND loan-acct.acct-type EQ "Кредит"
+                               AND loan-acct.since     LE iChkDate
+         NO-LOCk NO-ERROR.
+         IF AVAIL loan-acct THEN
+         DO:
+            vXattrValAc = GetXattrValueEx ("acct", 
+                                      loan-acct.acct + "," + loan-acct.currency,
+                                      "i1_dec", 
+                                      "").
+            IF NOT CAN-DO(vXAttrVal,vXattrValAc) THEN
+            DO:
+               RUN Fill-SysMes IN h_tmess (
+                  "", "pos20", "",
+                  "%S=" +  vLContCode  + "%S=" + 
+                  vXAttrVal + "%S=" + vXAttrValAc).
+               UNDO CHK, LEAVE CHK.
+            END.
+         END.
+         ELSE
+         DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                  "", "pos21", "",
+                  "%S=" +  vLContCode).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+
+                        /* Запуск пользовательских процедур проверки однородности. */
+      vXattrVal = GetXattrValueEx ("loan", vPosSur, "ПосПриз", "").
+      RUN GetClassMethod IN h_xclass (
+         iBPos:BUFFER-FIELD ("class-code"):BUFFER-VALUE,
+         "U1", "ПосПриз", "",
+         OUTPUT vMethod,
+         OUTPUT vParams
+      ).
+      IF       LENGTH (vMethod)  GT 0
+         AND   SearchPfile (vMethod) THEN
+      DO vCnt = 1 TO NUM-ENTRIES (vXattrVal):
+         RUN VALUE (vMethod + ".p") (
+            vHLoan, iBPos, iChkDate, ENTRY (vCnt, vXattrVal), iMsg, OUTPUT oErr
+         ) NO-ERROR.
+                        /* Анализ ошибки запуска. */
+         IF ERROR-STATUS:ERROR
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess (
+               "", "", "-1",
+               IF ERROR-STATUS:NUM-MESSAGES GT 0
+                  THEN ERROR-STATUS:GET-MESSAGE (1)
+                  ELSE {&RETURN_VALUE}
+            ).
+            UNDO CHK, LEAVE CHK.
+         END.
+                        /* Анализ флага проверки. */
+         IF NOT oErr
+            THEN UNDO CHK, LEAVE CHK.
+      END.
+         /* если дата начала действия 2920-У на дату проверки уже наступила,
+         ** смотрим ДР ПосЛСсБанке - если да, то проверяем наличие у клиента
+         ** счета с назначением Расчет */
+      vDate2920-U = DATE (GetXattrInit (iBPos:BUFFER-FIELD ("class-code"):BUFFER-VALUE,
+                                        "Дата2920-У")) NO-ERROR.
+
+      IF vDate2920-U LE iChkDate THEN
+      DO:
+         IF LENGTH(iBPos:BUFFER-FIELD("parent-cont-code"):BUFFER-VALUE) NE 0 THEN
+         vXattrVal = GetXAttrValueEx ("loan",
+                                      iBPos:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," +
+                                      iBPos:BUFFER-FIELD ("parent-cont-code"):BUFFER-VALUE,
+                                      "ПосЛСвБанке",
+                                      GetXattrInit (iBPos:BUFFER-FIELD ("class-code"):BUFFER-VALUE,
+                                                    "ПосЛСвБанке")).
+         ELSE
+         vXattrVal = GetXAttrValueEx ("loan",
+                                      iBPos:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," +
+                                      iBPos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE,
+                                      "ПосЛСвБанке",
+                                      GetXattrInit (iBPos:BUFFER-FIELD ("class-code"):BUFFER-VALUE,
+                                                    "ПосЛСвБанке")).
+         
+         IF NOT {assigned vXattrVal} THEN
+            vXattrVal = "!|Расчет".
+         ELSE
+            vNeedAcct = YES.
+         IF ENTRY(1, vXattrVal, "|") EQ "!" THEN
+            ASSIGN
+               vNeedAcct = NO
+               vXattrVal = IF NUM-ENTRIES(vXattrVal, "|") GT 1 
+                           THEN ENTRY(2, vXattrVal, "|")
+                           ELSE "Расчет"
+            .
+         /* Поиск расчетного счета договора, чтобы проверить его назначение  */
+         FIND LAST loan-acct WHERE loan-acct.contract  EQ vLContract
+                               AND loan-acct.cont-code EQ vLContCode
+                               AND loan-acct.acct-type EQ "КредРасч"
+                               AND loan-acct.since     LE iChkDate
+         NO-LOCK NO-ERROR.
+
+         IF AVAIL loan-acct THEN 
+            FIND FIRST bacct WHERE 
+                    bacct.acct           EQ loan-acct.acct
+                AND bacct.currency       EQ loan-acct.currency
+                AND CAN-DO(vXattrVal, bacct.contract)
+                AND bacct.open-date      LE iChkDate
+                AND (  bacct.close-date  EQ ?
+                     OR bacct.close-date GT iChkDate)
+            NO-LOCK NO-ERROR.
+         ELSE
+            FIND FIRST bacct WHERE
+                       bacct.cust-cat       EQ vHLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE
+                   AND bacct.cust-id        EQ INT64 (vHLoan:BUFFER-FIELD ("cust-id"):BUFFER-VALUE)
+                   AND CAN-DO(vXattrVal, bacct.contract)
+                   AND bacct.open-date      LE iChkDate
+                   AND (  bacct.close-date  EQ ?
+                        OR bacct.close-date GT iChkDate)
+            NO-LOCK NO-ERROR.
+
+         IF       (    vNeedAcct  AND NOT AVAIL bacct)
+            OR    (NOT vNeedAcct  AND     AVAIL bacct) THEN
+         DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess ("", "pos17", "",
+                                           "%S=" + vPosConCode + "%S=" + vLContCode + 
+                                           "%S=" + ( IF vNeedAcct THEN "не " ELSE "") +
+                                           "%S=" + vXattrVal + 
+                                           ( IF AVAIL loan-acct THEN " (счет КредРасч)"
+                                           ELSE "") + "%S=").
+            UNDO CHK, LEAVE CHK.
+         END. 
+
+      END. /* OF CHKACCT-BLOCK */ 
+
+      /* Проверка на соответствие по периоду выдачи ссуды */
+      ASSIGN
+         vPerVidBeg = DATE(GetxAttrValueEx(  "loan"
+                                           , vPosSur
+                                           , "ПОСПерВыдОт"
+                                           , ?)).
+         vPerVidEnd = DATE(GetxAttrValueEx(  "loan"
+                                           , vPosSur
+                                           , "ПОСПерВыдДо"
+                                           , ?)).
+         vLoanOpenDate = vHLoan:BUFFER-FIELD ("open-date"):BUFFER-VALUE
+      .
+      IF (vPerVidBeg NE ? 
+      AND vPerVidBeg GT vLoanOpenDate)
+      OR (vPerVidEnd NE ? 
+      AND vPerVidEnd LT vLoanOpenDate) THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "pos19", "",
+                                     "%S=" + vPosConCode 
+                                   + "%S=" + vLContCode
+                                   + "%S=" + STRING(vPerVidBeg)
+                                   + "%S=" + STRING(vPerVidEnd)
+                                   + "%S=" + STRING(vLoanOpenDate)).
+         UNDO CHK, LEAVE CHK.
+      END.
+
+                        /* Проверки пройдены. */
+      oErr = YES.
+   END.
+   IF vHTmp NE ?
+      THEN  DELETE OBJECT vHTmp  NO-ERROR.
+      ELSE  DELETE OBJECT vHLoan NO-ERROR.
+   RETURN.
+END PROCEDURE.
+
+/* Нахождение первого подходящего портфеля для ссуды. */
+PROCEDURE FindUniBagForLoan.
+   DEF INPUT  PARAM iBLoan    AS HANDLE NO-UNDO. /* Указатель на ссуду. */
+   DEF INPUT  PARAM iChkDate  AS DATE   NO-UNDO. /* Дата, на которую осуществляется проверка. */
+   DEF OUTPUT PARAM oBagsCode AS CHAR   NO-UNDO. /* Список ПОС подходящих для ссуды. */
+
+   DEF VAR vErr AS LOG    NO-UNDO. /* Флаг ошибки. */
+
+   DEF BUFFER loan   FOR loan. /* Локализация буфера. */
+   DEF BUFFER SubPos FOR loan. /* Локализация буфера. */
+      
+   CHK:
+   FOR EACH loan WHERE
+            loan.contract     EQ "ПОС"
+      AND  (loan.close-date   EQ ?
+         OR loan.close-date   GT iChkDate)
+      AND  ( IF loan.cust-cat  EQ "Ч"
+               THEN NOT CAN-FIND (FIRST SubPos WHERE
+                              SubPos.parent-contract  EQ "ПОС"
+                          AND SubPos.parent-cont-code EQ loan.cont-code)
+               ELSE YES)
+      AND   loan.filial-id   EQ iBLoan:BUFFER-FIELD("filial-id"):BUFFER-VALUE
+   NO-LOCK:
+      RUN ChkLoanUniformity (iBLoan, (BUFFER loan:HANDLE), iChkDate, NO, OUTPUT vErr).
+      IF vErr
+      THEN DO:
+         oBagsCode = loan.cont-code.
+         LEAVE CHK.
+      END.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Возвращает код срока просрочки для ссуды.  Учётну, или расчётную, в зависимости от iTypeUniSrok*/
+PROCEDURE GetUniSrokForLoanA.
+   DEF INPUT  PARAM iHBLoan   AS HANDLE NO-UNDO. /* Указатель на ссуду. */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата проверки. */
+   DEF INPUT  PARAM iBagCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iTypeUniSrok AS CHAR   NO-UNDO. /* Учетный/Расчетный */
+   DEF OUTPUT PARAM oSrokCode AS CHAR   NO-UNDO. /* Код срока. */
+
+   DEF BUFFER term-obl  FOR term-obl.  /* Локализация буфера. */
+   DEF BUFFER loan      FOR loan.      /* Локализация буфера. */
+
+   DEF VAR  vPContract  AS CHAR   NO-UNDO. /* Назначение родительского договора. */
+   DEF VAR  vPConCode   AS CHAR   NO-UNDO. /* Номер родительского договора. */
+   DEF VAR  vSrocPros   AS CHAR   NO-UNDO. /* Список кодов сроков просрочки. */
+   DEF VAR  vPosOpCode  AS CHAR   NO-UNDO. /* Список кодов операций. */
+   DEF VAR  vCnt        AS INT64    NO-UNDO. /* Счетчик. */
+   DEF VAR  vContract   AS CHAR   NO-UNDO. /* Назначение ссуды. */
+   DEF VAR  vContCode   AS CHAR   NO-UNDO. /* Номер ссуды. */
+   DEF VAR  vDatePros   AS DATE   NO-UNDO. /* Дата начала непогашенных обязательств. */
+   DEF VAR  vNu1        AS INT64    NO-UNDO. /* Не используем. */
+   DEF VAR  vNu2        AS INT64    NO-UNDO. /* Не используем. */
+
+   BLCK:
+   DO
+   ON ERROR    UNDO BLCK, LEAVE BLCK
+   ON ENDKEY   UNDO BLCK, LEAVE BLCK:
+      ASSIGN
+         vContract   =  iHBLoan:BUFFER-FIELD ("contract")   :BUFFER-VALUE
+         vContCode   =  iHBLoan:BUFFER-FIELD ("cont-code")  :BUFFER-VALUE
+      .
+
+                        /* Если дата проверки не указана,
+                        ** то берем дату состояния ссуды. */
+      IF iDate EQ ?
+         THEN iDate  =  iHBLoan:BUFFER-FIELD ("since"):BUFFER-VALUE.
+                        /* Определяем портфель. */
+      IF iBagCode EQ ""
+      THEN DO:
+         FIND FIRST term-obl WHERE
+                  term-obl.contract    EQ vContract
+            AND   term-obl.cont-code   EQ vContCode
+            AND   term-obl.idnt        EQ 128
+            AND   term-obl.end-date    LE iDate
+            AND  (term-obl.sop-date    EQ ?
+               OR term-obl.sop-date    GE iDate)
+         NO-LOCK NO-ERROR.
+         IF AVAIL term-obl
+         THEN iBagCode = term-obl.lnk-cont-code.
+         ELSE DO:
+            FIND FIRST loan WHERE
+                     loan.contract  EQ "ПОС"
+               AND   loan.cust-cat  EQ STRING (iHBLoan:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE)
+            NO-LOCK NO-ERROR.
+            IF NOT AVAIL loan
+               THEN UNDO BLCK, LEAVE BLCK.
+            iBagCode = loan.cont-code.
+         END.
+         iBagCode = term-obl.lnk-cont-code.
+      END.
+      IF iTypeUniSrok EQ "Учетный" THEN 
+      DO:
+         /*То берём её с допрека портфеля*/
+         oSrokCode = GetXattrValue ("loan", "ПОС" + "," + iBagCode, "ПОССрПрос").
+                  
+         /*Если по какойто ДР не заполнен, то пробуем получить расчётную просрочку*/
+         IF oSrokCode EQ "" THEN
+            iTypeUniSrok = "Расчетный".
+      END.
+
+      IF iTypeUniSrok EQ "Расчетный" THEN
+      DO:
+                           /* Определение сроков по ПОС. */
+         FIND FIRST loan WHERE
+                  loan.contract  EQ "ПОС"
+            AND   loan.cont-code EQ iBagCode
+         NO-LOCK NO-ERROR.
+         IF NOT AVAIL loan
+            THEN UNDO BLCK, LEAVE BLCK.
+         IF LENGTH (loan.parent-contract) GT 0
+         THEN DO:
+            ASSIGN
+               vPContract  =  loan.parent-contract
+               vPConCode   =  loan.parent-cont-code
+            .
+            FIND FIRST Loan WHERE
+                     Loan.contract  EQ vPContract
+               AND   Loan.cont-code EQ vPConCode
+            NO-LOCK NO-ERROR.
+         END.
+         IF NOT AVAIL loan
+            THEN UNDO BLCK, LEAVE BLCK.
+         ASSIGN
+            vPContract  =  loan.contract
+            vPConCode   =  loan.cont-code
+         .
+                           /* Перебираем все ПОСы по срокам. */
+         FOR EACH loan WHERE
+                  loan.parent-contract    EQ vPContract
+            AND   loan.parent-cont-code   EQ vPConCode
+         NO-LOCK:
+            vSrocPros = vSrocPros                                 +
+                        ( IF vSrocPros   EQ "" THEN ""  ELSE ",")  +
+                        GetXattrValue ("loan", loan.contract + "," + loan.cont-code, "ПОССрПрос").
+         END.
+                           /* Определим срок просрочки ссуды. */
+         vDatePros   =  LN_GetPrsProcDate (vContract, vContCode, iDate).
+                           /* Определяем код срока просрочки. */
+         DO vCnt = 1 TO NUM-ENTRIES (vSrocPros):
+            IF IS-Term(vDatePros, iDate, ENTRY (vCnt, vSrocPros), NO, 0, OUTPUT vNu1, OUTPUT vNu2)
+            THEN oSrokCode = ENTRY (vCnt, vSrocPros).
+         END.
+      END.
+   END.
+   RETURN.
+END PROCEDURE.
+
+
+/* Возвращает код срока просрочки для ссуды. */
+PROCEDURE GetUniSrokForLoan.
+   DEF INPUT  PARAM iHBLoan   AS HANDLE NO-UNDO. /* Указатель на ссуду. */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата проверки. */
+   DEF INPUT  PARAM iBagCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF OUTPUT PARAM oSrokCode AS CHAR   NO-UNDO. /* Код срока. */
+
+   RUN GetUniSrokForLoanA(iHBLoan,
+                          iDate,
+                          iBagCode,
+                          "Расчетный",
+                          OUTPUT oSrokCode).
+END PROCEDURE.
+
+FUNCTION SetCredReserv RETURN LOGICAL (
+   INPUT iContract AS CHARACTER,
+   INPUT iContCode AS CHARACTER,
+   INPUT iDate     AS DATE,
+   INPUT iRate     AS DECIMAL
+):
+
+  DEF VAR vReturn  AS LOGICAL NO-UNDO.
+
+  mb:
+  DO ON ERROR UNDO, LEAVE:
+
+     FIND FIRST loan WHERE loan.contract  EQ icontract
+                       AND loan.cont-code EQ iContCode NO-LOCK NO-ERROR.
+
+     IF NOT AVAIL loan THEN
+        LEAVE mb.
+
+     /* Найдем %Рез по ссуде до даты */
+     FIND FIRST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                            AND comm-rate.acct       EQ "0"
+                            AND comm-rate.currency   EQ loan.currency
+                            AND comm-rate.kau        EQ loan.contract + "," + loan.cont-code
+                            AND comm-rate.min-value  EQ 0.00
+                            AND comm-rate.period     EQ 0
+                            AND comm-rate.since      LT iDate NO-LOCK NO-ERROR.
+
+     IF AVAIL comm-rate AND comm-rate.rate-comm EQ iRate THEN
+     DO:
+        vReturn = YES.
+        LEAVE mb.
+     END.
+     ELSE
+     DO:
+        /* Найдем %Рез НА дату */
+        FIND FIRST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                               AND comm-rate.acct       EQ "0"
+                               AND comm-rate.currency   EQ loan.currency
+                               AND comm-rate.kau        EQ loan.contract + "," + loan.cont-code
+                               AND comm-rate.min-value  EQ 0.00
+                               AND comm-rate.period     EQ 0
+                               AND comm-rate.since      EQ iDate NO-LOCK NO-ERROR.
+
+        /* Если не нашли, создаем */
+        IF NOT AVAIL comm-rate THEN
+        DO:
+           CREATE comm-rate.
+           ASSIGN
+              comm-rate.commission = "%Рез"
+              comm-rate.acct       = "0"
+              comm-rate.currency   = loan.currency
+              comm-rate.kau        = loan.contract + "," + loan.cont-code
+              comm-rate.min-value  = 0.00
+              comm-rate.period     = 0
+              comm-rate.since      = iDate + 1
+              comm-rate.rate-fixed = NO
+           .
+        END.
+        /* Иначе лочим exclusive-lock'ом */
+        ELSE
+           FIND CURRENT comm-rate EXCLUSIVE-LOCK NO-ERROR.
+
+        /* Ставим собственно %. Если запись куда то делась - откатываем создание, и выходим с ошибкой */
+        IF AVAIL comm-rate THEN
+           ASSIGN
+              comm-rate.rate-comm  = iRate.
+        ELSE
+           UNDO mb,LEAVE mb.
+
+        vReturn = YES.
+     END.
+  END. /* mb */
+
+  RETURN vReturn.
+
+END FUNCTION.
+
+
+PROCEDURE SetLinkPos.
+   DEF INPUT  PARAM iContract AS CHAR   NO-UNDO. /* Идентификатор */
+   DEF INPUT  PARAM iContCode AS CHAR   NO-UNDO. /* ссуды. */
+   DEF INPUT  PARAM iPosCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата привязки ПОСа. */
+   DEF INPUT  PARAM iHLAcct   AS HANDLE NO-UNDO. /* Указатель на таблицу. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF OUTPUT PARAM oResult   AS LOG           . /* YES - запись создана. */
+
+   RUN SetLinkPosEx(iContract,iContCode,iPosCode,iDate,iHLAcct,iMsg,No,Yes,OUTPUT oResult).
+
+END PROCEDURE.
+
+/* Закрывает предыдущую привязку ПОСа. */
+PROCEDURE SetLinkPosEx.
+   DEF INPUT  PARAM iContract AS CHAR   NO-UNDO. /* Идентификатор */
+   DEF INPUT  PARAM iContCode AS CHAR   NO-UNDO. /* ссуды. */
+   DEF INPUT  PARAM iPosCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата привязки ПОСа. */
+   DEF INPUT  PARAM iHLAcct   AS HANDLE NO-UNDO. /* Указатель на таблицу. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF INPUT  PARAM iFromMove AS LOG    NO-UNDO. /* Признак запуска из SetLinkPosMove. */
+   DEF INPUT  PARAM iTrMove   AS LOG    NO-UNDO. /* Перепривязывать все течения.*/
+   DEF OUTPUT PARAM oResult   AS LOG           . /* YES - запись создана. */
+
+   DEF VAR vEndDate  AS DATE   NO-UNDO. /* Дата окончания ПОСа. */
+   DEF VAR vBegDate  AS DATE   NO-UNDO. /* Дата окончания ПОСа. */
+   DEF VAR vSubCont  AS LOG    NO-UNDO. /* Признак течения. */
+   DEF VAR vFlag     AS LOG    NO-UNDO. /* Флаг успешности отработки процедур. */
+   DEF VAR vFlag2    AS LOG    NO-UNDO. /* Флаг ошибки в проверке */
+   DEF VAR vPOSIndKr AS CHAR   NO-UNDO. /* Значение ДР ПОСИндКр на ПОС'е */
+
+   DEF BUFFER term-obl  FOR term-obl.  /* Локализация буфера. */
+   DEF BUFFER NextTO    FOR term-obl.  /* Локализация буфера. */
+   DEF BUFFER tobl      FOR term-obl.  /* Локализация буфера. */
+   DEF BUFFER loan      FOR loan.      /* Локализация буфера. */
+
+                        /* Если указатель валидный, то обрабатываем течения. */
+   vSubCont = VALID-HANDLE (iHLAcct).
+                        /* Поиск действующего ПОСа. */
+   FIND LAST term-obl WHERE
+            term-obl.contract       EQ iContract
+      AND   term-obl.cont-code      EQ iContCode
+      AND   term-obl.idnt           EQ 128
+      AND   term-obl.end-date       LE iDate
+      AND   term-obl.lnk-contract   EQ "ПОС"
+   NO-LOCK NO-ERROR.
+
+   IF AVAIL term-obl AND LENGTH(iPosCode)  EQ 0 THEN
+      vPOSIndKr = GetXAttrValueEx("loan",term-obl.lnk-contract + "," + term-obl.lnk-cont-code,"ПОСИндКр","").
+
+   IF AVAIL term-obl THEN           /* Существует привязка к ПОСу. */
+   CRT_TO:
+   DO
+   TRANSACTION
+   ON ERROR    UNDO CRT_TO, RETRY CRT_TO
+   ON ENDKEY   UNDO CRT_TO, LEAVE CRT_TO:
+
+      IF LENGTH (iPosCode) EQ 0 THEN DO:
+         FIND CURRENT term-obl EXCLUSIVE-LOCK NO-ERROR NO-WAIT.
+         IF NOT AVAIL term-obl THEN UNDO CRT_TO, LEAVE CRT_TO.
+         IF term-obl.sop-date EQ ? THEN term-obl.sop-date = iDate - 1.
+         ELSE DO:
+            term-obl.sop-date = iDate - 1.
+                                    /* Удаляем все ПОСы с датой sop-date большей iDate - 1. */
+            FOR EACH tobl WHERE
+                     tobl.contract       EQ iContract
+                 AND tobl.cont-code      EQ iContCode
+                 AND tobl.idnt           EQ 128
+                 AND tobl.sop-date       GT iDate - 1
+                 AND tobl.lnk-contract   EQ "ПОС":
+               DELETE tobl.
+            END.
+         END.
+      END.
+   END.
+
+                        /* Если "чужой" ПОС, то проставляем ему дату закрытия
+                        ** и создаем требуемый ПОС. */
+   IF AVAIL term-obl THEN DO:
+      IF       term-obl.lnk-cont-code  NE iPosCode
+         AND  (term-obl.sop-date       EQ ?
+            OR term-obl.sop-date       GE iDate)
+      THEN vEndDate =  iDate - 1.
+       IF     term-obl.lnk-cont-code  EQ iPosCode
+         AND  term-obl.sop-date       EQ ?
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+                  "", "", "1",
+                  "Действующий ПОС совпадает с новым. Договор " + iContCode +
+                  " останется в ПОС " + iPosCode + "."
+            ).
+         vFlag2 = TRUE.
+      END.
+   END.
+                        /* Поиск следующего действующего ПОСа,
+                        ** для случая включения ПОСа м/у сущесвующими ПОСами. */
+   IF AVAIL term-obl
+      THEN FIND FIRST NextTO WHERE
+               NextTO.contract      EQ iContract
+         AND   NextTO.cont-code     EQ iContCode
+         AND   NextTO.idnt          EQ 128
+         AND   NextTO.end-date      GT term-obl.end-date
+         AND   NextTO.lnk-contract  EQ "ПОС"
+      NO-LOCK NO-ERROR.
+      ELSE FIND FIRST NextTO WHERE
+               NextTO.contract      EQ iContract
+         AND   NextTO.cont-code     EQ iContCode
+         AND   NextTO.idnt          EQ 128
+         AND   NextTO.lnk-contract  EQ "ПОС"
+      NO-LOCK NO-ERROR.
+   IF AVAIL NextTO
+   THEN DO:
+      vBegDate  =  NextTO.end-date - 1.
+                        /* Если требуется создать ПОС,
+                        ** то следует проверить наличие счета резерва. */
+      IF iMsg THEN
+         RUN Fill-SysMes IN h_tmess (
+                  "", "", "1",
+                  "Привязка договора " + iContCode + " к ПОСу " +
+                  iPosCode + " будет закрыта " + STRING(vBegDate,"99/99/9999") + "."
+         ).
+   END.
+   IF       LENGTH (iPosCode) GT 0
+      AND   NOT VALID-HANDLE (iHLAcct)
+   THEN DO:
+      SUBSCRIBE "tmess-fill-sysmes-event" IN h_tmess RUN-PROCEDURE "GetSysText".
+      RUN GetAcctByPos (
+         iContract,
+         iContCode,
+         iDate,
+         iPosCode,
+         (TEMP-TABLE ttPosAcct:HANDLE),
+         YES,
+         OUTPUT vFlag
+      ) NO-ERROR.
+      UNSUBSCRIBE "tmess-fill-sysmes-event".
+      IF vFlag THEN
+         iHLAcct = TEMP-TABLE ttPosAcct:HANDLE.
+   END.
+   ELSE vFlag = YES.
+
+
+   CR_TO:
+   DO
+   TRANSACTION
+   ON ERROR    UNDO CR_TO, RETRY CR_TO
+   ON ENDKEY   UNDO CR_TO, LEAVE CR_TO:
+/*      IF vFlag2 THEN UNDO CR_TO, LEAVE CR_TO. */
+     IF NOT vFlag2 THEN
+     DO:
+      IF RETRY
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+               "", "pos10", "",
+               "%S=" +  iContCode +
+               "%S=" +  iPosCode  +
+               "%S=" +  IF  ERROR-STATUS:NUM-MESSAGES GT 0
+                           THEN ERROR-STATUS:GET-MESSAGE (1)
+                           ELSE {&RETURN_VALUE}
+            ).
+         UNDO CR_TO, LEAVE CR_TO.
+      END.
+                        /* Если не определн счет ссуды
+                        ** и неуказан ПОС, то выходим. */
+      IF       NOT VALID-HANDLE (iHLAcct)
+         AND   LENGTH (iPosCode) GT 0
+      THEN DO:
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess (
+               "", "pos11", "",
+               "%S=" + iContCode +
+               "%s=" + iPosCode).
+         UNDO CR_TO, LEAVE CR_TO.
+      END.
+                        /* Корректировка даты окончания текущего ПОСа. */
+      IF vEndDate NE ?
+      THEN DO:
+         IF term-obl.sop-date NE ? THEN
+         DO:
+            pick-value = "NO".
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                     "", "", "4",
+                     "Дата " + STRING(vEndDate,"99/99/9999") + " входит в интервал действия " +
+                     term-obl.lnk-cont-code + " Изменить дату исключения из этого ПОС?"
+               ).
+            IF pick-value NE "YES"
+            THEN DO:
+               RUN Fill-SysMes IN h_tmess (
+                  "", "", "1",
+                  "Договор " + iContCode + " не будет привязан."
+               ).
+               UNDO CR_TO, LEAVE CR_TO.
+            END.
+         END.
+         FIND CURRENT term-obl
+         EXCLUSIVE-LOCK NO-ERROR NO-WAIT.
+         IF NOT AVAIL term-obl
+            THEN UNDO CR_TO, LEAVE CR_TO.
+
+         term-obl.sop-date = vEndDate.
+      END.
+                        /* Создание ПОСа. */
+      IF LENGTH (iPosCode) GT 0
+      THEN DO:
+         CREATE term-obl.
+         ASSIGN
+            term-obl.class-code    = "term-obl-lnk"
+            term-obl.contract      = iContract
+            term-obl.cont-code     = iContCode
+            term-obl.lnk-contract  = "ПОС"
+            term-obl.lnk-cont-code = iPosCode
+            term-obl.idnt          = 128
+            term-obl.end-date      = iDate
+            term-obl.cont-type     = "КодПортфеля"
+            term-obl.sop-date      = vBegDate
+         .
+                        /* Создание счетов. */
+/*         RUN SetLAcct (iContract, iContCode, iHLAcct, OUTPUT vFlag).
+         IF NOT vFlag
+            THEN UNDO CR_TO, LEAVE CR_TO.
+                        /* Если передан суррогат счета,
+                        ** то поиск течений производить не следует,
+                        ** т.к. уже обрабатываем течение. */ */
+      END.
+      ELSE
+      DO:
+         IF vPOSIndKr NE "" THEN
+            IF NOT SetCredReserv(iContract,iContcode,iDate - 1,DEC(vPOSIndKr)) AND iMsg THEN
+               RUN Fill-Sysmes IN h_tmess ("","","0","Не могу установить %Рез при выводе ссуды " + icontcode + " из портфеля.").
+      END.
+     END.
+      IF LENGTH (iPosCode) GT 0
+      THEN DO:
+          /* Создание счетов - копирование с ПОС. */
+         RUN SetLAcct (iContract, iContCode, iHLAcct, OUTPUT vFlag).
+         IF NOT vFlag
+            THEN UNDO CR_TO, LEAVE CR_TO.
+                        /* Если передан суррогат счета,
+                        ** то поиск течений производить не следует,
+                        ** т.к. уже обрабатываем течение. */
+      END.
+
+      /*если перепривязали транш, то надо перепривязать охват,
+      */
+      IF     NUM-ENTRIES(iContCode," ") EQ 2 
+         AND NOT iFromMove
+         AND Is_Transh_in_POS(iContract,iContCode)
+         AND iPosCode NE LnInBagOnDate(iContract,
+                                       ENTRY(1, iContcode, " "),
+                                       iDate)
+      THEN
+      DO:
+          RUN SetLinkPosEx (iContract,
+                            ENTRY(1, iContcode, " "),
+                            GetSubPOS(iContract,
+                                      ENTRY(1, iContcode, " "),
+                                      GetUpPOS(iPosCode),
+                                      iDate),
+                            iDate,
+                            ?,
+                            iMsg,NO,NO,OUTPUT oResult).
+      END.
+
+      IF NOT vSubCont AND iTrMove
+      THEN DO:
+                     /* Поиск договора для определения его типа. */
+         FIND FIRST loan WHERE
+                  loan.contract  EQ iContract
+            AND   loan.cont-code EQ iContCode
+         NO-LOCK.
+         IF loan.cont-type EQ "Течение"
+         THEN DO:
+                     /* Обработка течений. */
+            RUN SetLinkPosMove (loan.contract, loan.cont-code,  iPosCode, iDate, iHLAcct, iMsg, OUTPUT oResult).
+            IF NOT vFlag
+               THEN UNDO CR_TO, LEAVE CR_TO.
+         END.
+      END.
+      oResult = YES.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Осуществляет привязку к ПОС для течений договора. */
+PROCEDURE SetLinkPosMove.
+   DEF INPUT  PARAM iContract AS CHAR   NO-UNDO. /* Идентификатор */
+   DEF INPUT  PARAM iContCode AS CHAR   NO-UNDO. /* ссуды. */
+   DEF INPUT  PARAM iPosCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата привязки ПОСа. */
+   DEF INPUT  PARAM iHLAcct   AS HANDLE NO-UNDO. /* Указатель на таблицу. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF OUTPUT PARAM oResult   AS LOG    NO-UNDO. /* YES - запись создана. */
+
+   DEF VAR vPosSrok AS CHAR NO-UNDO. /*ПОС для транша с учетом срока просрочки*/
+   DEF VAR vUpPos   AS CHAR NO-UNDO. /* верхний ПОС */
+   DEF VAR vLTr     AS LOG  NO-UNDO. /*раздельный учет траншей*/
+
+   vLTr = Is_Transh_in_POS(iContract,iContCode). 
+
+   IF vLTr THEN 
+      vUpPos = GetUpPOS(iPosCode).
+
+                        /* Перебираем течения договора. */
+   BLCK:
+   DO TRANSACTION
+   ON ERROR    UNDO BLCK, LEAVE BLCK
+   ON ENDKEY   UNDO BLCK, LEAVE BLCK:
+      FOR EACH loan WHERE
+               loan.contract                       EQ       iContract
+         AND   loan.cont-code                      BEGINS   iContCode + " "
+         AND   NUM-ENTRIES (loan.cont-code, " ")   EQ       2
+         AND   ENTRY (1, loan.cont-code, " ")      EQ       iContCode
+         AND   loan.open-date                      LE       iDate
+         AND   (   loan.close-date EQ ?
+                OR loan.close-date GE iDate)
+      NO-LOCK:
+         IF vLTr THEN
+         DO:
+            vPosSrok = GetSubPOS(loan.contract,
+                                 loan.cont-code,
+                                 vUpPos,
+                                 iDate).
+
+            /*счет надо для каждого транша переискивать*/
+            SUBSCRIBE "tmess-fill-sysmes-event" IN h_tmess RUN-PROCEDURE "GetSysText".
+            RUN GetAcctByPos (
+               iContract,
+               iContCode,
+               iDate,
+               vPosSrok,
+               (TEMP-TABLE ttPosAcct:HANDLE),
+               YES,
+               OUTPUT oResult
+            ) NO-ERROR.
+            UNSUBSCRIBE "tmess-fill-sysmes-event".
+
+            IF oResult THEN
+               iHLAcct = TEMP-TABLE ttPosAcct:HANDLE.
+            ELSE 
+               UNDO BLCK, LEAVE BLCK.
+
+         END.
+
+         ELSE 
+            vPosSrok = iPosCode.
+   
+         RUN SetLinkPosEx (
+            loan.contract,
+            loan.cont-code,
+            vPosSrok,
+            iDate,
+            iHLAcct,
+            iMsg,
+            Yes,
+            Yes,
+            OUTPUT oResult
+         ).
+         IF NOT oResult
+            THEN UNDO BLCK, LEAVE BLCK.
+      END.
+                        /* Данное присоение необходимо для случая
+                        ** запуска инструментя без проверки на наличие течений. */
+      oResult = YES.
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Поиск счета резерва по роли, привязанного к портфелю, на дату
+** На вход:
+** № Ссудного счета,
+** Валюта С/С,
+** Портфель,
+** Роль счета резерва,
+** Дата действия,
+**
+** На выход
+** № Счета резерва
+** Валюта С/Р
+** Назвать getAcctResBag */
+
+PROCEDURE getAcctResBag.
+   DEF INPUT  PARAM iMainAcct AS CHAR   NO-UNDO. /* Ссудный счет           */
+   DEF INPUT  PARAM icurrency AS CHAR   NO-UNDO. /* валюта ссудного счета  */
+   DEF INPUT  PARAM iPosCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iAcctType AS CHAR   NO-UNDO. /* Роль счета резерва     */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата действия          */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF OUTPUT PARAM oResAcct  AS CHAR          . /* Счет резерва           */
+   DEF OUTPUT PARAM oResCurr  AS CHAR          . /* Валюта Счета резерва   */
+
+   RUN getAcctResBagEx IN THIS-PROCEDURE (iMainAcct,
+                                          icurrency,
+                                          iPosCode,
+                                          iAcctType,
+                                          iDate,
+                                          iMsg,
+                                          ?,
+                                   OUTPUT oResAcct,
+                                   OUTPUT oResCurr).
+END PROCEDURE.
+
+/* по требованиям 446-П с 01/01/2016 добавляются разрезы Тип сделки и Тип клиента 
+   для счетов ПОС, инфо будет браться с договора */
+PROCEDURE getAcctResBagEx.
+   DEF INPUT  PARAM iMainAcct AS CHAR   NO-UNDO. /* Ссудный счет           */
+   DEF INPUT  PARAM icurrency AS CHAR   NO-UNDO. /* валюта ссудного счета  */
+   DEF INPUT  PARAM iPosCode  AS CHAR   NO-UNDO. /* Код портфеля. */
+   DEF INPUT  PARAM iAcctType AS CHAR   NO-UNDO. /* Роль счета резерва     */
+   DEF INPUT  PARAM iDate     AS DATE   NO-UNDO. /* Дата действия          */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF INPUT  PARAM iLoanSurr AS CHAR   NO-UNDO. /* Суррогат договора      */
+   DEF OUTPUT PARAM oResAcct  AS CHAR          . /* Счет резерва           */
+   DEF OUTPUT PARAM oResCurr  AS CHAR          . /* Валюта Счета резерва   */
+
+   DEF VAR vBalAcct1          AS CHAR   NO-UNDO. /* Счет первого порядка. */
+   DEF VAR vValuwc            AS CHAR   NO-UNDO. /* Валюта в зав-ти от НП ПОСУчВалРез */
+   DEF VAR vContSurr          AS CHAR   NO-UNDO. /* Суррогат для поиска счет по ПОС. */
+   DEF VAR vPOSvalRez         AS CHAR   NO-UNDO.   /* Значение НП или ДР ПОСУчВалРез */
+   DEFINE VARIABLE vDTType    AS CHARACTER NO-UNDO. /* тип сделки */
+   DEFINE VARIABLE vSubj      AS CHARACTER NO-UNDO. /* тип субъекта */
+   DEFINE VARIABLE vP446      AS LOGICAL   NO-UNDO. /* флаг перехода на 446-П */
+   DEFINE VARIABLE vClFile    AS CHARACTER NO-UNDO. 
+   DEFINE VARIABLE vTypeNoBal AS CHARACTER NO-UNDO.
+
+   DEF BUFFER mainacct FOR acct.       /* Локализация буфера. */
+   DEF BUFFER resacct  FOR acct.       /* Локализация буфера. */
+   DEF BUFFER loanacct FOR loan-acct.  /* Локализация буфера. */
+   DEF BUFFER bloan    FOR loan.       /* Локализация буфера. */
+   DEF BUFFER balacct  FOR bal-acct.   /* Локализация буфера. */
+   DEFINE BUFFER loan  FOR loan.
+
+   CHK:
+   DO
+   ON ERROR    UNDO CHK, LEAVE CHK
+   ON ENDKEY   UNDO CHK, LEAVE CHK:
+      FIND FIRST mainacct WHERE mainacct.acct     EQ iMainAcct
+                            AND mainacct.currency EQ icurrency
+               NO-LOCK NO-ERROR.
+
+      FIND FIRST balacct WHERE 
+                 balacct.bal-acct EQ INT64(iMainAcct)
+      NO-LOCK NO-ERROR.
+
+      IF     NOT AVAIL mainacct
+         AND NOT AVAIL balacct THEN
+      DO:
+         IF iMsg THEN
+            RUN Fill-Sysmes IN h_tmess ("", "", "-1", "Указанный счет не найден " + iMainAcct).
+         UNDO CHK, LEAVE CHK.
+      END.
+
+      IF iAcctType EQ "КредРезВб" THEN
+      DO:
+         IF AVAIL mainacct THEN
+         vBalAcct1  = SUBSTRING(STRING(mainacct.bal-acct),1,5).
+      ELSE
+            vBalAcct1  = SUBSTRING(STRING(balacct.bal-acct),1,5).
+      END.
+      ELSE
+      DO:
+         IF AVAIL mainacct THEN
+         vBalAcct1  = SUBSTRING(STRING(mainacct.bal-acct),1,3).
+         ELSE
+            vBalAcct1  = SUBSTRING(STRING(balacct.bal-acct),1,3).
+      END.
+
+      /* Найдем ПОС - он нам понадобится в случае отсутствия счета на подПОСе*/
+      FIND FIRST bloan WHERE bloan.contract  EQ "ПОС"
+                         AND bloan.cont-code EQ iPosCode
+      NO-LOCK NO-ERROR.
+
+      ASSIGN 
+         vPOSvalRez = GetPOSValRez("ПОС",iPosCode)
+         vTypeNoBal = FGetSetting("ПОС","ПОСРольНеБС","")
+      .
+
+      vP446 = iDate GE DATE(FGetSetting("ЦБ446П","Дата446П","01/01/2016")) NO-ERROR.
+      IF vP446 AND {assigned iLoanSurr}
+      THEN 
+         DO:
+            FIND FIRST loan WHERE loan.contract  EQ ENTRY(1,iLoanSurr)
+                              AND loan.cont-code EQ ENTRY(2,iLoanSurr)
+            NO-LOCK NO-ERROR.
+            IF NOT AVAILABLE loan THEN
+            DO:
+               IF iMsg THEN               
+                  RUN Fill-Sysmes IN h_tmess ("", "", "-1", 
+                         "Указанный договор не найден " + iLoanSurr).
+               UNDO CHK, LEAVE CHK.
+            END.
+            CASE loan.cust-cat:
+               WHEN "Ч" THEN vClFile = "person".
+               WHEN "Ю" THEN vClFile = "cust-corp".
+               WHEN "Б" THEN vClFile = "banks".
+               OTHERWISE vClFile = ?.   
+            END CASE.
+            ASSIGN 
+               vSubj = GetXAttrValueEx(vClFile,
+                                       STRING(loan.cust-id),
+                                       "Субъект",
+                                       ?)
+               
+               vDTType = GetXAttrValueEx("loan",
+                                         iLoanSurr,
+                                         "DTType",
+                                         GetXAttrInit(loan.class-code,
+                                                      "DTType")
+                                        )
+               vSubj   = GetXAttrValueEx("loan",
+                                         iLoanSurr,
+                                         "Субъект",
+                                         vSubj
+                                        )
+            .
+         END.
+      ELSE  
+         ASSIGN 
+            vDTType = "*"
+            vSubj   = "*"
+         .
+
+      IF iAcctType BEGINS "КредР" THEN
+      DO:
+         CASE vPOSvalRez:
+            WHEN "Один"     THEN
+               vValuwc = "*".
+            WHEN "Два"      THEN
+               vValuwc = IF (   (    AVAIL mainacct 
+                                 AND mainacct.currency EQ "")
+                             OR (    AVAIL balacct 
+                                 AND icurrency EQ "")) THEN ""
+                         ELSE "Вал".
+            WHEN "Отдельно" THEN
+               vValuwc = IF AVAIL mainacct THEN
+                            mainacct.currency
+                         ELSE
+                            icurrency.
+         END CASE.
+
+         IF iAcctType BEGINS "КредРез"
+         THEN DO:
+            vContSurr = iPosCode + " " + vBalAcct1.
+            {last-lact.i &file=loanacct 
+                         &contract="'ПОС'"
+                         &cont-code=vContSurr
+                         &acct-type=iAcctType
+                         &currency=vValuwc
+                         &since=iDate
+                         &numentries=5
+                         &DTType=vDTType
+                         &Subj=vSubj}
+            /* Если не нашли счет на ПОСе, и у ПОСа есть родитель - то ищем на нем */
+            IF    NOT AVAIL loanacct
+              AND AVAIL bloan
+              AND bloan.parent-contract NE "" THEN
+            DO:
+               vContSurr = bloan.parent-cont-code + " " + vBalAcct1.
+               {last-lact.i &file=loanacct 
+                            &contract="'ПОС'"
+                            &cont-code=vContSurr
+                            &acct-type=iAcctType
+                            &currency=vValuwc
+                            &since=iDate
+                            &numentries=5
+                            &DTType=vDTType
+                            &Subj=vSubj}
+
+            END.
+         END.
+         ELSE /* Ищем последний счет с валютой vValuwc */
+         DO:
+            vContSurr = iPosCode + " " + 
+                        IF CAN-DO(vTypeNoBal,iAcctType) THEN "" ELSE vBalAcct1.
+            {last-lact.i &file=loanacct 
+                         &contract="'ПОС'"
+                         &cont-code=vContSurr
+                         &acct-type=iAcctType
+                         &since=iDate
+                         &numentries=5
+                         &currency=vValuwc                         
+                         &DTType=vDTType
+                         &Subj=vSubj}
+
+            /* Если не нашли счет на ПОСе, и у ПОСа есть родитель - то ищем на нем */
+            IF     NOT AVAIL loanacct
+               AND AVAIL bloan
+               AND bloan.parent-contract NE "" THEN
+            DO:
+               vContSurr = bloan.parent-cont-code + " " + 
+                           IF CAN-DO(vTypeNoBal,iAcctType) THEN "" ELSE vBalAcct1.
+               {last-lact.i &file=loanacct 
+                            &contract="'ПОС'"
+                            &cont-code=vContSurr
+                            &acct-type=iAcctType
+                            &since=iDate
+                            &numentries=5
+                            &currency=vValuwc                         
+                            &DTType=vDTType
+                            &Subj=vSubj}
+            END.
+         END.
+      END.
+      ELSE DO:
+         vContSurr = iPosCode + " " + 
+                     IF CAN-DO(vTypeNoBal,iAcctType) THEN "" ELSE vBalAcct1.
+         FIND LAST loanacct        WHERE
+                   loanacct.contract  EQ "ПОС"
+               AND loanacct.cont-code BEGINS vContSurr
+               AND loanacct.acct-type EQ iAcctType
+               AND loanacct.since     LE iDate
+         NO-LOCK NO-ERROR.
+
+         /* Если не нашли счет на ПОСе, и у ПОСа есть родитель - то ищем на нем */
+         IF     NOT AVAIL loanacct
+            AND AVAIL bloan
+            AND bloan.parent-contract NE "" THEN
+         DO:
+            vContSurr = bloan.parent-cont-code + " " + 
+                        IF CAN-DO(vTypeNoBal,iAcctType) THEN "" ELSE vBalAcct1.
+            FIND LAST loanacct WHERE loanacct.contract  EQ     "ПОС"
+                                 AND loanacct.cont-code BEGINS vContSurr
+                                 AND loanacct.acct-type EQ     iAcctType
+                                 AND loanacct.since     LE     iDate
+            NO-LOCK NO-ERROR.
+         END.
+      END.
+
+      IF NOT AVAIL loanacct THEN
+      DO:
+         IF iMsg THEN
+            IF iAcctType EQ "КредРезВб" THEN
+               RUN Fill-Sysmes IN h_tmess ("", "", "-1",
+                  "Для портфеля " + iPosCode + "\n не задан счет с ролью " + iAcctType +
+                  ", счетом 2 порядка " + vBalAcct1 + " и валютой " + vValuwc +
+                  " на дату " + STRING (iDate, "99/99/9999")).
+            ELSE
+            IF    iAcctType BEGINS "КредРез"
+              AND iAcctType NE "КредРезВб" THEN
+               RUN Fill-Sysmes IN h_tmess ("", "", "-1",
+                  "Для портфеля " + iPosCode + "\n не задан счет с ролью " + iAcctType +
+                  ", счетом 1 порядка " + vBalAcct1 + " и валютой " + vValuwc +
+                  " на дату " + STRING (iDate, "99/99/9999")).
+            ELSE
+               RUN Fill-Sysmes IN h_tmess ("", "", "-1",
+                  "Для портфеля " + iPosCode + "\n не задан счет с ролью " + iAcctType +
+                  " на дату " + STRING (iDate, "99/99/9999")).
+         UNDO CHK, LEAVE CHK.
+      END.
+      ASSIGN
+         oResAcct = loanacct.acct
+         oResCurr = loanacct.currency
+      .
+   END.
+   RETURN.
+END PROCEDURE.
+
+/* Возвращает счет по роли, для ссуды по ПОСу. */
+PROCEDURE GetAcctByPos.
+   DEF INPUT  PARAM iContract AS CHAR   NO-UNDO. /* Назначение договора. */
+   DEF INPUT  PARAM iContCode AS CHAR   NO-UNDO. /* Номер договора. */
+   DEF INPUT  PARAM iSince    AS DATE   NO-UNDO. /* Дата, на которую требуется определить счет. */
+   DEF INPUT  PARAM iPos      AS CHAR   NO-UNDO. /* ПОС. */
+   DEF INPUT  PARAM iContaner AS HANDLE NO-UNDO. /* Контейнер. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Вывод сообщений */
+   DEF OUTPUT PARAM oResult   AS LOG    NO-UNDO. /* Результат (Yes - обязательные счета найдены). */
+
+   DEF BUFFER loan      FOR loan.      /* Локализация буфера. */
+   DEF BUFFER loan-acct FOR loan-acct. /* Локализация буфера. */
+   DEF BUFFER acct      FOR acct.      /* Локализация буфера. */
+
+   DEF VAR vHLacct   AS HANDLE NO-UNDO. /* Указатель на буффер таблицу. */
+   DEF VAR vCnt      AS INT64    NO-UNDO. /* Счетчик. */
+   DEF VAR vBalAcct1 AS CHAR   NO-UNDO. /* Счет 1-го порядка. */
+   DEF VAR vCurrRole AS CHAR   NO-UNDO. /* проверяемая роль. */
+   DEF VAR vMainAcct AS CHAR   NO-UNDO. /* Роль основного счета - Нач.знач. ДР "main-acct-role" */
+   DEF VAR vRolObLst AS CHAR   NO-UNDO. /* список обязательных ролей счетов для конкретного ПОС
+                                        ** (берется из ДР "ПОСРоль" ПОСа, если определен, иначе НП "ПОСРольОбяз" */
+
+   DEF VAR vResAcct  AS CHAR   NO-UNDO. /* Результат getAcctResBag */
+   DEF VAR vResCurr  AS CHAR   NO-UNDO. /* Результат getAcctResBag */
+   DEF VAR vAcctRB   AS CHAR   NO-UNDO. /* Для обработки счетов с ролью КредРезВб */
+   DEF VAR vBal2Acct AS CHAR   NO-UNDO. /* Счет 2-ого порядка */
+
+   DEF BUFFER rloan-acct FOR loan-acct. /* Локализация буфера. */
+
+   BLCK:
+   DO
+   ON ERROR    UNDO BLCK, LEAVE BLCK
+   ON ENDKEY   UNDO BLCK, LEAVE BLCK:
+      CREATE BUFFER vHLacct FOR TABLE iContaner:DEFAULT-BUFFER-HANDLE.
+      vHLacct:EMPTY-TEMP-TABLE().
+                        /* Найдем класс договора */
+      FIND FIRST loan WHERE loan.contract  EQ iContract
+                        AND loan.cont-code EQ iContCode
+      NO-LOCK NO-ERROR.
+      vMainAcct = GetXAttrInit(loan.class-code,"main-loan-acct").
+                        /* Определение счета 1-го порядка. */
+      FIND LAST loan-acct WHERE
+                loan-acct.contract   EQ iContract
+          AND   loan-acct.cont-code  EQ iContCode
+          AND   loan-acct.acct-type  EQ vMainAcct
+          AND   loan-acct.since      LE iSince
+      NO-LOCK NO-ERROR.
+                        /* Поиск счета на ПОСе для ссуды. */
+      IF AVAIL loan-acct
+      THEN DO:
+                        /* Поиск счета необходим, т.к. л/с может не содержать
+                        ** цифры из счета 1-го порядка. */
+         FIND FIRST acct WHERE
+                  acct.acct      EQ loan-acct.acct
+            AND   acct.currency  EQ loan-acct.currency
+         NO-LOCK NO-ERROR.
+                        /* При импорте могут быть ошибки. */
+         IF AVAIL acct
+            THEN vBalAcct1   =  SUBSTRING (STRING (acct.bal-acct), 1, 3).
+      END.
+                        /* Если не найден основной счет, то ищем счет 2-ого порядка */
+      IF vBalAcct1 EQ "" THEN
+      DO:
+         RUN GetBalAcctFromLoan IN h_loan (loan.contract,
+                                           loan.cont-code,
+                                           vMainAcct).
+
+         vBal2Acct = GetSysConf("БАЛАНСОВЫЙ СЧЕТ").
+
+         IF     vBal2Acct NE ?
+            AND vBal2Acct NE "" THEN
+            vBalAcct1 = SUBSTRING(vBal2Acct, 1, 3).
+      END.
+                        /* Если не определен основной счет, то выходим. */
+      IF vBalAcct1 EQ ""
+      THEN DO:
+         IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                   "", "pos16", "",
+                   "%S=" + vMainAcct +
+                   "%S=" + iContCode +
+                   "%S=" + iPos).
+         oResult = YES.
+         LEAVE BLCK.
+      END.
+                        /* Получение списка обязательных для ПОС ролей счетов
+                        ** из ДР "ПОСРоль" на ПОС'е.
+                        ** Если ДР не определен, взять значение НП "ПОСРольОбяз". */
+      vRolObLst = GetXAttrValueEx("loan","ПОС" + "," + iPos,"ПОСРоль",mPosRolObas).
+                        /* Перебор всех необходимых ролей. */
+      DO vCnt = 1 TO NUM-ENTRIES (vRolObLst):
+         vCurrRole = ENTRY (vCnt, vRolObLst).
+
+         vAcctRB = "".
+
+         IF    vCurrRole EQ "КредРезВб"
+           AND vMainAcct EQ "Кредит" THEN
+         DO:
+            FIND LAST rloan-acct WHERE rloan-acct.contract  EQ loan.contract
+                                   AND rloan-acct.cont-code BEGINS ENTRY(1,loan.cont-code," ")
+                                   AND rloan-acct.acct-type EQ "КредЛин"
+                                   AND rloan-acct.since     LE iSince
+            NO-LOCK NO-ERROR.
+            IF AVAIL rloan-acct THEN
+               vAcctRB = rloan-acct.acct + "," + rloan-acct.currency.
+            ELSE
+            DO:
+               FIND LAST rloan-acct WHERE rloan-acct.contract  EQ loan.contract
+                                      AND rloan-acct.cont-code BEGINS ENTRY(1,loan.cont-code," ")
+                                      AND rloan-acct.acct-type EQ "КредН"
+                                      AND rloan-acct.since     LE iSince
+               NO-LOCK NO-ERROR.
+               IF AVAIL rloan-acct THEN
+                  vAcctRB = rloan-acct.acct + "," + rloan-acct.currency.
+            END.
+
+            IF vAcctRB EQ "" THEN
+            DO:
+               RUN messmenu.p (
+                  10,
+                  "  Выберите балансовый счет для КЛ  ",
+                  "(Договор " + loan.cont-code + ")",
+                  "Невозобновляемая КЛ (91316),Возобновляемая КЛ   (91317)"
+               ).
+
+               CASE pick-value:
+                  WHEN "1" THEN
+                    vBal2Acct = "91316".
+                  WHEN "2" THEN
+                    vBal2Acct = "91317".
+                  OTHERWISE
+                    vBal2Acct = "".
+               END CASE.
+   
+               IF vBal2Acct NE "" THEN
+                  vAcctRB = vBal2Acct + "," + loan.currency.
+              
+            IF vAcctRB EQ "" THEN
+            DO:
+               IF iMsg THEN
+                  RUN Fill-SysMes IN h_tmess (
+                      "", "pos16", "",
+                      "%S=" + "КредН/КредЛин" +
+                      "%S=" + iContCode +
+                      "%S=" + iPos).
+               oResult = YES.
+               LEAVE BLCK.
+            END.
+         END.
+         END.
+         ELSE
+         DO:
+            IF AVAIL acct THEN
+            vAcctRB = acct.acct + "," + acct.currency.
+            ELSE
+               vAcctRB = vBal2Acct + "," + loan.currency.
+         END.
+         RUN getAcctResBagEx IN THIS-PROCEDURE
+                          (ENTRY(1,vAcctRB),
+                           ENTRY(2,vAcctRB),
+                           iPos,
+                           vCurrRole,
+                           iSince,
+                           NO,
+                           iContract + "," + iContCode,
+                           OUTPUT vResAcct,
+                           OUTPUT vResCurr).
+         IF vResAcct NE ""
+         THEN DO:
+            vHLacct:BUFFER-CREATE().
+            ASSIGN
+               vHLacct:BUFFER-FIELD ("acct")       :BUFFER-VALUE  = vResAcct
+               vHLacct:BUFFER-FIELD ("currency")   :BUFFER-VALUE  = vResCurr
+               vHLacct:BUFFER-FIELD ("contract")   :BUFFER-VALUE  = iContract
+               vHLacct:BUFFER-FIELD ("cont-code")  :BUFFER-VALUE  = iContCode
+               vHLacct:BUFFER-FIELD ("acct-type")  :BUFFER-VALUE  = vCurrRole
+               vHLacct:BUFFER-FIELD ("pos")        :BUFFER-VALUE  = iPos
+               vHLacct:BUFFER-FIELD ("since")      :BUFFER-VALUE  = iSince
+            .
+         END.
+         /* Если счет не найден, то поднимаем флаг ошибки. */
+         ELSE DO:
+            IF iMsg THEN
+               RUN Fill-SysMes IN h_tmess (
+                   "", "pos15", "",
+                   "%S=" + vCurrRole +
+                   "%S=" + iContCode +
+                   "%S=" + iPos).
+            oResult = YES.
+         END.
+      END.
+   END.
+   DELETE OBJECT vHLacct NO-ERROR.
+   oResult = NOT oResult.
+   RETURN.
+END PROCEDURE.
+
+/* Создание привязки со счетом по ссуде. */
+PROCEDURE SetLAcct.
+   DEF INPUT  PARAM iContract AS CHAR   NO-UNDO. /* Идентификатор */
+   DEF INPUT  PARAM iContCode AS CHAR   NO-UNDO. /* ссуды.        */
+   DEF INPUT  PARAM iHLAcct   AS HANDLE NO-UNDO. /* Указатель на таблицу. */
+   DEF OUTPUT PARAM oFlag     AS LOG    NO-UNDO. /* Связь создана (YES - создана). */
+
+   DEF BUFFER loan-acct FOR loan-acct. /* Локализация буфера. */
+   DEF BUFFER l-acct    FOR loan-acct.
+
+   DEF VAR vHtt   AS HANDLE NO-UNDO. /* Буфер таблицы. */
+   DEF VAR vHQry  AS HANDLE NO-UNDO. /* Указатель на запрос. */
+   DEF VAR vNeedL AS LOG    NO-UNDO. /* флаг необходимости копировать счет */
+
+   BLCK:
+   DO
+   TRANSACTION
+   ON ERROR    UNDO BLCK, LEAVE BLCK
+   ON ENDKEY   UNDO BLCK, LEAVE BLCK:
+      /* определение "правильного договора", на котором учитывается резервирование */
+      RUN LnWhereRes (iContract,
+                      iContCode,
+                      OUTPUT iContract,
+                      OUTPUT iContCode).
+
+      CREATE BUFFER vHtt FOR TABLE iHLAcct:DEFAULT-BUFFER-HANDLE.
+      CREATE QUERY vHQry.
+      vHQry:SET-BUFFERS (vHtt).
+      vHQry:QUERY-PREPARE ("
+         FOR EACH ttPosAcct WHERE
+                  ttPosAcct.contract   EQ '" + iContract                 + "'
+            AND  (ttPosAcct.cont-code  EQ '" + ENTRY (1, iContCode, " ") + "'
+               OR ttPosAcct.cont-code  EQ '" + iContCode + "')"
+      ).
+      vHQry:QUERY-OPEN ().
+      vHQry:GET-FIRST ().
+      DO WHILE NOT vHQry:QUERY-OFF-END:
+         FIND FIRST loan-acct
+            WHERE loan-acct.contract   EQ  iContract
+              AND loan-acct.cont-code  EQ  iContCode
+              AND loan-acct.acct-type  EQ  vHtt:BUFFER-FIELD ("acct-type")  :BUFFER-VALUE
+              AND loan-acct.since      EQ  DATE (vHtt:BUFFER-FIELD ("since")      :BUFFER-VALUE)
+         NO-LOCK NO-ERROR.
+         IF AVAIL loan-acct
+         THEN DO:
+            FIND LAST l-acct
+               WHERE l-acct.cont-code begins vHtt:BUFFER-FIELD ("pos"):BUFFER-VALUE
+                 AND l-acct.contract  EQ 'ПОС'
+                 AND l-acct.acct-type EQ vHtt:BUFFER-FIELD ("acct-type")  :BUFFER-VALUE
+                 AND l-acct.since     LE vHtt:BUFFER-FIELD ("since")      :BUFFER-VALUE
+                 AND l-acct.acct      EQ loan-acct.acct
+            NO-LOCK NO-ERROR.
+            IF NOT AVAIL l-acct
+            THEN DO:
+               RUN Fill-SysMes IN h_tmess (
+                  "", "", "1",
+                  "Уже есть привязанный счет " + loan-acct.acct +
+                  " на дату " + STRING(loan-acct.since) +
+                  " с ролью " + loan-acct.acct-type
+               ).
+               UNDO BLCK, LEAVE BLCK.
+            END.
+         END.
+         ELSE DO:
+            vNeedL = TRUE.
+            FIND LAST loan-acct
+               WHERE loan-acct.contract   EQ iContract
+                 AND loan-acct.cont-code  EQ iContCode
+                 AND loan-acct.acct-type  EQ vHtt:BUFFER-FIELD("acct-type"):BUFFER-VALUE
+                 AND loan-acct.since      LE DATE(vHtt:BUFFER-FIELD("since"):BUFFER-VALUE)
+            NO-LOCK NO-ERROR.
+            IF AVAIL loan-acct THEN
+            DO:
+               RUN Fill-SysMes IN h_tmess ("", "", "1",
+                  "По договору " + iContcode + " уже есть привязанный счет " + loan-acct.acct + 
+                  " на дату " + STRING(loan-acct.since) +
+                  " с ролью " + loan-acct.acct-type
+               ).
+               IF loan-acct.acct EQ vHtt:BUFFER-FIELD("acct"):BUFFER-VALUE THEN
+                  vNeedL = FALSE.
+               ELSE
+                  vNeedL = TRUE.
+            END.
+            /* Если счёт не найден, то создаём привязки счетов из TT. */
+            IF vNeedL THEN
+            DO:
+            CREATE loan-acct.
+            ASSIGN
+               loan-acct.contract   =  iContract
+               loan-acct.cont-code  =  iContCode
+               loan-acct.acct-type  =  vHtt:BUFFER-FIELD ("acct-type")  :BUFFER-VALUE
+               loan-acct.since      =  vHtt:BUFFER-FIELD ("since")      :BUFFER-VALUE
+               loan-acct.acct       =  vHtt:BUFFER-FIELD ("acct")       :BUFFER-VALUE
+               loan-acct.currency   =  vHtt:BUFFER-FIELD ("currency")   :BUFFER-VALUE
+            NO-ERROR.
+            IF ERROR-STATUS:ERROR
+            THEN DO:
+               RUN Fill-SysMes IN h_tmess (
+                  "", "", "-1",
+                  IF ERROR-STATUS:NUM-MESSAGES GT 0
+                     THEN ERROR-STATUS:GET-MESSAGE (1)
+                     ELSE {&RETURN_VALUE}
+               ).
+               UNDO BLCK, LEAVE BLCK.
+            END.
+               RUN Fill-SysMes IN h_tmess (
+                  "", "", "1",
+                  "К договору " + loan-acct.cont-code + 
+                  " привязан счет " + loan-acct.acct + 
+                  " на дату " + STRING(loan-acct.since) +
+                  " с ролью " + loan-acct.acct-type
+                  ).
+            END. /* vNeedL */
+         END.
+                        /* Создание ссылки на ПОС. */
+         IF NOT UpdateSigns (
+            "loan-acct",
+            iContract + "," + iContCode + "," + loan-acct.acct-type + "," + STRING (loan-acct.since),
+            "ПОС",
+            "ПОС," + vHtt:BUFFER-FIELD ("pos"):BUFFER-VALUE,
+            YES)
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess (
+               "", "", "0",
+               "Для счета с ролью ~""                    + vHtt:BUFFER-FIELD ("acct-type")   :BUFFER-VALUE +
+               "~" невозможно создать привязку к ПОС ~"" + vHtt:BUFFER-FIELD ("pos")         :BUFFER-VALUE +  "~"."
+            ).
+            UNDO BLCK, LEAVE BLCK.
+         END.
+         vHQry:GET-NEXT ().
+      END.
+      vHQry:QUERY-CLOSE ().
+      oFlag =  YES.
+   END.
+   DELETE OBJECT vHtt   NO-ERROR.
+   DELETE OBJECT vHQry  NO-ERROR.
+   RETURN.
+END PROCEDURE.
+
+/* Проверка на возможность удаления привязки к ПОС. */
+PROCEDURE ChekPosDel.
+   DEF INPUT  PARAM iHLnkPos AS HANDLE NO-UNDO. /* Указатель связь с ПОСом. */
+   DEF OUTPUT PARAM oResult  AS LOG    NO-UNDO. /* Флаг (Yes - удаляем). */
+
+   CHK:
+   DO
+   ON ERROR    UNDO CHK, LEAVE CHK
+   ON ENDKEY   UNDO CHK, LEAVE CHK:
+                        /* Если привязка закрыта, то удалять ее нельзя. */
+      IF iHLnkPos:BUFFER-FIELD ("sop-date"):BUFFER-VALUE NE ?
+      THEN DO:
+         RUN Fill-SysMes IN h_tmess ("", "", "0", "Нельзя удалять закрытую привязку к ПОС.").
+         UNDO CHK, LEAVE CHK.
+      END.
+                        /* Если по счетам ПОСа есть движения по ссуде,
+                        ** то удалятьпривязку нельзя. */
+      FOR EACH signs WHERE
+               signs.FILE-NAME   EQ       "loan-acct"
+         AND   signs.code        EQ       "ПОС"
+         AND   signs.code-value  EQ       "ПОС," + STRING (iHLnkPos:BUFFER-FIELD ("lnk-cont-code"):BUFFER-VALUE)
+         AND   signs.surrogate   BEGINS   STRING (iHLnkPos:BUFFER-FIELD ("contract"):BUFFER-VALUE) + "," + STRING (iHLnkPos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE) + ","
+      NO-LOCK,
+      FIRST loan-acct WHERE
+               loan-acct.contract   EQ ENTRY (1, signs.surrogate)
+         AND   loan-acct.cont-code  EQ ENTRY (2, signs.surrogate)
+         AND   loan-acct.acct-type  EQ ENTRY (3, signs.surrogate)
+         AND   loan-acct.since      EQ DATE (ENTRY (4, signs.surrogate))
+         AND   loan-acct.since      GE DATE (STRING (iHLnkPos:BUFFER-FIELD ("end-date"):BUFFER-VALUE))
+      NO-LOCK:
+                        /* Проверка на возможность удаления. */
+         RUN ChkLacctDel (RECID (loan-acct)).
+         if {&RETURN_VALUE} NE ""
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "0", {&RETURN_VALUE}).
+            UNDO CHK, LEAVE CHK.
+         END.
+                        /* Проверка удаления 1-го счета. */
+         RUN ChkFirstLacctDel (RECID (loan-acct)).
+         if {&RETURN_VALUE} NE ""
+         THEN DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "0", {&RETURN_VALUE}).
+            UNDO CHK, LEAVE CHK.
+         END.
+      END.
+      oResult = YES.
+   END.
+   RETURN.
+END PROCEDURE.
+
+PROCEDURE ChkDelayConformity.
+   DEF INPUT  PARAM iBLoan    AS HANDLE NO-UNDO. /* Указатель на ссуду. */
+   DEF INPUT  PARAM iBPos     AS HANDLE NO-UNDO. /* Указатель на ПОС. */
+   DEF INPUT  PARAM iChkDate  AS DATE   NO-UNDO. /* Дата, на которую осуществляется проверка. */
+   DEF INPUT  PARAM iMsg      AS LOG    NO-UNDO. /* Признак выдавать сообщения. */
+   DEF OUTPUT PARAM oFlagIT   AS LOG    NO-UNDO. /* Флаг ошибки (No - ошибка). */
+
+   DEF VAR vLContCode   AS CHAR   NO-UNDO. /* Номер ссуды. */
+   DEF VAR vPosConCode  AS CHAR   NO-UNDO. /* Номер ПОСа. */
+   DEF VAR vCnt         AS INT64    NO-UNDO. /* Счетчик. */
+   DEF VAR vPosSur      AS CHAR   NO-UNDO. /* Суррогат ПОСа. */
+   DEF VAR vCdPros      AS CHAR   NO-UNDO. /* Код просрочки. */
+   DEF VAR vBadDay      AS DATE   NO-UNDO. /* Дата начала срока просрочки. */
+   DEF VAR vNu1         AS INT64    NO-UNDO. /* Не используем. */
+   DEF VAR vNu2         AS INT64    NO-UNDO. /* Не используем. */
+   DEF VAR vMainContCode AS CHARACTER NO-UNDO . /* Номер охватывающего договора */
+   DEF VAR vMainBadDay   AS DATE      NO-UNDO .       /* Дата начала срока просрочки по охватывающему договору  */
+
+
+   ASSIGN
+      vPosSur     = iBPos:BUFFER-FIELD ("contract") :BUFFER-VALUE + "," +
+                    iBPos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+      vPosConCode = iBPos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+      vLContCode  = iBLoan:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+   .
+
+  /* Если это транш */
+  IF NUM-ENTRIES(vLContCode," " ) EQ 2 THEN DO:
+     vMainContCode = entry(1,vLContCode," " ).
+     vMainBadDay = LN_GetPrsProcDate (iBLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE,
+                                vMainContCode,
+                                iChkDate).
+  END.
+
+                        /* Получение даты начала просрочки. */
+   vBadDay = LN_GetPrsProcDate (iBLoan:BUFFER-FIELD ("contract"):BUFFER-VALUE,
+                                vLContCode,
+                                iChkDate).
+
+   IF    iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ч" 
+      OR iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П"
+      OR iBPos:BUFFER-FIELD ("Class-Code"):BUFFER-VALUE  EQ "UniBagSrok" THEN 
+   DO:
+      ASSIGN
+         vCdPros  = GetXattrValueEx ("loan", vPosSur, "ПОССрПрос", "?")
+         oFlagIT  = IS-Term (vBadDay, iChkDate, vCdPros, NO, 0, OUTPUT vNu1, OUTPUT vNu2)
+      .
+
+      IF CAN-DO(FGetSetting("ПосБезПроверки", "", ""),vLContCode) THEN
+      DO:
+          RUN Fill-AlertSysMes IN h_tmess("","",1,STRING(vLContCode) + CHR(32) + "Ну пускай уж!").
+
+          oFlagIT  = Yes. 
+      END.
+   END.
+   ELSE
+   DO:
+      IF iChkDate - vBadDay LE mPosDopPr THEN
+         oFlagIT  = YES.
+   END.
+
+   IF NOT oFlagIT AND iMsg THEN DO:
+      /* Если переносим транш , то если ПОС соответствует охватывающему договору разрешаем перенос */
+      IF NUM-ENTRIES(vLContCode," " ) EQ 2 THEN DO:
+         IF    iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "Ч"
+            OR iBPos:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE EQ "П"
+            OR iBPos:BUFFER-FIELD ("Class-Code"):BUFFER-VALUE  EQ "UniBagSrok" THEN
+         DO:
+            ASSIGN
+               vCdPros  = GetXattrValueEx ("loan", vPosSur, "ПОССрПрос", "?")
+               oFlagIT  = IS-Term (vMainBadDay, iChkDate, vCdPros, NO, 0, OUTPUT vNu1, OUTPUT vNu2)
+            .
+            IF oFlagIT THEN
+               RUN Fill-SysMes IN h_tmess ("", "", "0", "По охватывающему договору ПОС соответствует требованиям, поэтому ссуда проходит проверку на срочность" ).
+         END.
+         ELSE
+         DO:
+            IF iChkDate - vMainBadDay LE mPosDopPr THEN DO:
+               oFlagIT  = YES.
+               RUN Fill-SysMes IN h_tmess ("", "", "0", "По охватывающему договору ПОС соответствует требованиям, поэтому ссуда проходит проверку на срочность" ).
+            END.
+         END.
+      END.
+      IF NOT oFlagIT THEN
+      RUN Fill-SysMes IN h_tmess ("", "pos13", "", "%S=" + vPosConCode + "%S=" + vLContCode).
+   END.
+
+END PROCEDURE.
+
+/* Валидация валюты ссудного счета */
+PROCEDURE ChBagValuwc:
+   DEF INPUT PARAM iClassCode AS CHAR NO-UNDO. /* Класс объекта. */
+   DEF INPUT PARAM iSurrogare AS CHAR NO-UNDO. /* Суррогат объекта. */
+   DEF INPUT PARAM iValue     AS CHAR NO-UNDO. /* Значение объекта. */
+
+   DEF VAR vSigns     AS CHAR NO-UNDO.
+   DEF VAR vPOSvalRez AS CHAR NO-UNDO. /* Значение НП или ДР ПОСУчВалРез */
+
+   DEF BUFFER loan FOR loan.
+
+   FIND FIRST loan WHERE loan.contract  EQ          ENTRY(1, iSurrogare)
+                     AND loan.cont-code EQ ENTRY(1, ENTRY(2, iSurrogare), " ")
+      NO-LOCK NO-ERROR.
+   IF AVAILABLE loan
+   THEN DO:
+      ASSIGN
+         vSigns     = GetXattrValue("loan", loan.contract + "," + loan.cont-code, "Посвал")
+         vPOSvalRez = GetPOSValRez(loan.contract,loan.cont-code).
+
+      CASE vPOSvalRez:
+         WHEN "Два" THEN
+         DO:
+            IF     iValue NE ""
+               AND iValue NE "Вал"
+            THEN DO:
+               RETURN ERROR "Значение должно быть '' или 'Вал'.".
+            END.
+         END.
+
+         WHEN "Один" THEN
+         DO:
+            IF iValue NE "*"
+            THEN DO:
+               RETURN ERROR "Значение должно быть '*'.".
+            END.
+         END.
+      END CASE.
+
+      IF     (vPOSvalRez EQ "Отдельно"
+         AND  NOT CAN-DO (vSigns, iValue)
+             )
+         OR ((vPOSvalRez EQ "Один"
+           OR vPOSvalRez EQ "Два")
+         AND (iValue     EQ "Вал"
+          AND vSigns     EQ "")
+            )
+      THEN DO:
+         RETURN ERROR "В портфеле не могут учитываться ссуды с данной валютой.".
+      END.
+
+   END.
+   ELSE DO:
+      RETURN ERROR "Не найден портфель [ " + iSurrogare + " ].".
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+/* Для траншей проверяет возможность включения в портфель
+** по принадлежности к ПОСу охватывающего договора.
+** Возвращает:
+      ?   - если договор, переданный параметром, не является траншем
+      NO  - если транш не может быть привязан к указанному ПОСу (т.к. охватывающий
+            договор в другом ПОСе или вне ПОСа
+      YES - транш может быть привязан к указанному ПОСу */
+FUNCTION CanTranshToPOS RETURN LOGICAL (
+   INPUT iBLoan   AS HANDLE,     /* хэндл на буфер с траншем */
+   INPUT iPosCode AS CHARACTER,  /* код ПОСа, для включения в который проверяется транш */
+   INPUT iChkDate AS DATE,       /* дата проверки */
+   INPUT iMsg     AS LOGICAL     /* выдавать/не выдавать сообщения на экран */
+):
+
+   DEF VAR vContract AS CHAR   NO-UNDO.   /* назначение транша */
+   DEF VAR vContCode AS CHAR   NO-UNDO.   /* код транша */
+   DEF VAR vTrLinPOS AS CHAR   NO-UNDO.   /* код ПОСа, к которому привязан охватывающий договор */
+   DEF VAR vResult   AS LOG    NO-UNDO.
+
+   DEF BUFFER bloan FOR loan. /* траншевая линия - охватывающий договор */
+
+   MAIN_BLOCK:
+   DO:
+      ASSIGN
+         vContract = iBLoan:BUFFER-FIELD("contract") :BUFFER-VALUE
+         vContCode = iBLoan:BUFFER-FIELD("cont-code"):BUFFER-VALUE
+      .
+
+      /* если входным параметром передан не транш - выход */
+      IF NUM-ENTRIES (vContCode, " ") NE 2 THEN
+      DO:
+         vResult = ?.
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", "Договор [" + vContCode + "] не является траншем").
+         LEAVE MAIN_BLOCK.
+      END.
+
+      /* поиск охватывающего договора */
+      FIND FIRST bloan WHERE bloan.contract  EQ vContract
+                         AND bloan.cont-code EQ ENTRY(1,vContCode," ")
+      NO-LOCK NO-ERROR.
+      IF NOT AVAIL bloan THEN
+      DO:
+         vResult = ?.
+         LEAVE MAIN_BLOCK.
+      END.
+
+      /* определяем ПОС охватывающего договора */
+      vTrLinPOS = LnInBagOnDate(bloan.contract,bloan.cont-code,iChkDate).
+      IF vTrLinPOS EQ ? THEN vTrLinPOS = "".
+      IF iPosCode  EQ ? THEN iPosCode  = "".
+
+      /* охватывающий договор не в ПОСе */
+      IF     NOT {assigned vTrLinPOS}
+         AND {assigned iPosCode}
+      THEN
+      DO:
+         vResult = NO.
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess ("", "", "0", "Ссуда [" + vContCode + "] не может быть привязана к ПОС [" + iPosCode + "]. Охватывающий договор находится вне ПОСа.").
+         LEAVE MAIN_BLOCK.
+      END.
+      /* охватывающий договор в другом ПОСе */
+
+      IF    (vTrLinPOS NE iPosCode 
+         AND NOT Is_Transh_in_POS(vContract,vContCode))
+          OR
+            (Is_Transh_in_POS(vContract,vContCode)
+         AND GetUpPOS(vTrLinPOS) NE GetUpPOS(iPosCode))
+       THEN
+      DO:
+         vResult = NO.
+         IF iMsg THEN
+            RUN Fill-SysMes IN h_tmess ("", "", "0", "Ссуда [" + vContCode + "] не может быть привязана к ПОС [" + iPosCode + "]. Охватывающий договор принадлежит ПОСу [" + vTrLinPOS + "].").
+         LEAVE MAIN_BLOCK.
+      END.
+      
+      /* если попали сюда - все нормально */
+      vResult = YES.
+   END.     /* of MAIN_BLOCK */
+
+   RETURN vResult.
+END FUNCTION.
+
+/*---------------------------------------------------------------------------
+  Function   : LnWhereRes
+  Purpose    : Определение идентификаторов договора но котором учытивается
+               резерв по текущему договору
+
+  Parameters : INPUT iContract   - назначение договора
+                     iContCode   - номер договора
+
+               OUTPUT oContract   - назначение искомого договора
+                      oContCode   - номер искомого договора
+  Notes      :
+  ---------------------------------------------------------------------------*/
+PROCEDURE LnWhereRes:
+   DEF INPUT  PARAM iContract AS CHAR NO-UNDO.
+   DEF INPUT  PARAM iContCode AS CHAR NO-UNDO.
+   DEF OUTPUT PARAM oContract AS CHAR NO-UNDO.
+   DEF OUTPUT PARAM oContCode AS CHAR NO-UNDO.
+
+   DEF VAR vRelType  AS CHAR NO-UNDO.
+
+   DEF BUFFER loan  FOR loan.
+
+   ASSIGN
+      oContract = iContract
+      oContCode = iContCode
+      vRelType  = ""
+   .
+
+   IF NUM-ENTRIES(iContCode," ")  = 2 THEN
+
+   FOR EACH loan WHERE
+            loan.contract  = iContract
+        AND loan.cont-code = ENTRY(1,iContCode,' ')
+   NO-LOCK:
+      vRelType = GetXattrInit(loan.class-code,"rel_type").
+      IF {assignex vRelType} AND LOOKUP("КредРез",vRelType) <> 0
+      THEN
+         ASSIGN
+            oContract = loan.contract
+            oContCode = loan.cont-code
+            .
+      LEAVE.
+   END.
+END PROCEDURE.
+
+/*Проверяет наличие операций по урегулированию резерва по договору
+  если есть опер. по урегулированию резерва, - возвращает YES иначе NO */
+FUNCTION VerifyPOSDate RETURN LOGICAL(
+   INPUT    iContr      AS CHARACTER,
+   INPUT    iContCode   AS CHARACTER,
+   INPUT    iDate       AS DATE
+):
+
+   DEF VAR vReturn AS LOG NO-UNDO. /* Возвращаемое значение yes/no */
+
+   DEF BUFFER loan-int FOR loan-int. /* Локализация буфера. */
+
+   /* Поиск loan-int'ов по индексу "contract-d-mdate", т.к. он содержит поле id-d
+   ** и в данном случае будет самым быстрым */
+   FIND LAST loan-int WHERE loan-int.contract  EQ iContr
+                        AND loan-int.cont-code EQ iContCode
+                        AND loan-int.id-d      EQ 22
+                        AND loan-int.mdate     GE iDate
+                        AND loan-int.id-k      EQ 21 NO-LOCK NO-ERROR.
+
+   IF NOT AVAIL loan-int THEN
+   FIND LAST loan-int WHERE loan-int.contract  EQ iContr
+                        AND loan-int.cont-code EQ iContCode
+                        AND loan-int.id-d      EQ 21 
+                        AND loan-int.mdate     GE iDate
+                        AND loan-int.id-k      EQ 22 NO-LOCK NO-ERROR.
+
+   IF NOT AVAIL loan-int THEN
+   FIND LAST loan-int WHERE loan-int.contract  EQ iContr
+                        AND loan-int.cont-code EQ iContCode
+                        AND loan-int.id-d      EQ 22 
+                        AND loan-int.mdate     GE iDate
+                        AND loan-int.id-k      EQ 46 NO-LOCK NO-ERROR.
+
+   IF NOT AVAIL loan-int THEN
+   FIND LAST loan-int WHERE loan-int.contract  EQ iContr
+                        AND loan-int.cont-code EQ iContCode
+                        AND loan-int.id-d      EQ 46 
+                        AND loan-int.mdate     GE iDate
+                        AND loan-int.id-k      EQ 22 NO-LOCK NO-ERROR.
+  
+   /* Если нашли необходимую операцию, то надо еще проверить статус
+   ** документа, по которой она создана. Т.к. может быть случай, когда
+   ** статус у документа с ошибкой или аннулирован, но операция все равно присутствует */
+   IF AVAIL loan-int THEN
+   DO:
+      vReturn = YES.
+      /* Найдем проводку и посмотрим статус */
+      FIND FIRST op-entry WHERE op-entry.op       EQ loan-int.op
+                            AND op-entry.op-entry EQ loan-int.op-entry 
+                            AND op-entry.op-date  EQ iDate NO-LOCK NO-ERROR.
+      IF AVAIL op-entry THEN
+      DO:
+         IF   op-entry.op-status EQ "А"
+           OR op-entry.op-status EQ "В" THEN
+         vReturn = NO.
+      END.
+   END.
+
+   RETURN vReturn.
+
+END FUNCTION.
+
+/* функция возвращает TRUE если смогла определить вид портфеля и FALSE если не смогла. */
+FUNCTION GetPosKindForLoan RETURN LOGICAL(
+   INPUT  iContract AS CHARACTER,  /* назначение */
+   INPUT  iContCode AS CHARACTER,  /* номер договора */
+   INPUT  iAcct     AS CHARACTER,  /* счет (по которому идет расчет) */
+   OUTPUT oResult  AS CHARACTER): /* РЕЗУЛЬТАТ или вид портфеля для данного счета или текст ошибки) */
+
+   DEF BUFFER loan-acct FOR loan-acct. /* Локализация буфера. */
+   DEF VAR vResult AS LOG    NO-UNDO.
+
+   FIND FIRST loan-acct WHERE loan-acct.contract  EQ iContract
+                          AND loan-acct.cont-code EQ iContCode    
+                          AND loan-acct.acct      EQ iAcct
+      NO-LOCK NO-ERROR.
+   IF     NOT AVAIL loan-acct 
+      AND NUM-ENTRIES(iContCode, " " ) GT 1
+   THEN  FIND FIRST loan-acct WHERE loan-acct.contract  EQ iContract
+                                AND loan-acct.cont-code EQ ENTRY(1,iContCode," ")    
+                                AND loan-acct.acct      EQ iAcct
+      NO-LOCK NO-ERROR.
+   IF AVAIL loan-acct 
+   THEN ASSIGN
+           vResult = TRUE
+           oResult = IF loan-acct.acct-type = "Кредит" THEN "ПОС" ELSE "ПОТ"
+        .
+   ELSE ASSIGN
+           vResult = FALSE
+           oResult = "Счет " + iAcct + " не привязан к договору " + iContCode + "."
+        .
+   RETURN vResult.
+END FUNCTION.
+
+/* Возвращает дату последненго изменения значения 
+** ставки резервирования по ПОСу перед, указанной датой */
+PROCEDURE BagRsrvDate.
+   DEF INPUT PARAM iBagHandle AS HANDLE NO-UNDO. /* Handle на ПОС */
+   DEF INPUT PARAM iDate      AS DATE   NO-UNDO. /* Дата, на которую ищем */
+   DEF INPUT PARAM oDate      AS DATE   NO-UNDO. /* Дата посл.изм. знач. ставки рез по ПОС'у */
+
+   DEF BUFFER comm-rate FOR comm-rate. /* Локалзация буффера. */
+
+   /* Ищем последнюю запись comm-rate'a */
+   FIND LAST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                         AND comm-rate.acct       EQ "0"
+                         AND comm-rate.currency   EQ ""
+                         AND comm-rate.kau        EQ iBagHandle:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," + 
+                                                     iBagHandle:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+                         AND comm-rate.min-value  EQ 0
+                         AND comm-rate.period     EQ 0 
+                         AND comm-rate.since      LE iDate
+   NO-LOCK NO-ERROR.
+
+   /* Если есть запись - значит это есть искомая дата 
+   ** иначе ищем дальше */
+   IF AVAIL comm-rate THEN
+      oDate = comm-rate.since.
+   ELSE
+   DO:
+      /* Определяем является ли ПОС субпортфелем или нет 
+      ** Если нет, то возвращаем ? 
+      ** Если да, то смотрим на ставку протфеля родителя */
+      IF     loan.Class-Code       EQ "UniBagSrok" 
+         AND loan.parent-cont-code NE "" THEN
+      DO:
+         FIND LAST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                               AND comm-rate.acct       EQ "0"
+                               AND comm-rate.currency   EQ ""
+                               AND comm-rate.kau        EQ iBagHandle:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," + 
+                                                           iBagHandle:BUFFER-FIELD ("parent-cont-code"):BUFFER-VALUE
+                               AND comm-rate.min-value  EQ 0
+                               AND comm-rate.period     EQ 0 
+                               AND comm-rate.since      LE iDate
+         NO-LOCK NO-ERROR.
+         IF AVAIL comm-rate THEN
+            oDate = comm-rate.since.
+      END.
+   END.
+END PROCEDURE.
+
+/* Возвращает значение ставки резервирования по портфелю за указанную дату */
+PROCEDURE BagRsrvRate.
+   DEF INPUT PARAM iBagHandle AS HANDLE NO-UNDO. /* Handle на ПОС */
+   DEF INPUT PARAM iDate      AS DATE   NO-UNDO. /* Дата, на которую ищем */
+   DEF INPUT PARAM oRate      AS DEC    NO-UNDO. /* Ставка резервирования по портфелю за
+                                                 ** указанную дату */
+
+   DEF BUFFER comm-rate FOR comm-rate. /* Локалзация буффера. */
+
+   /* Ищем последнюю запись comm-rate'a */
+   FIND LAST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                         AND comm-rate.acct       EQ "0"
+                         AND comm-rate.currency   EQ ""
+                         AND comm-rate.kau        EQ iBagHandle:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," + 
+                                                     iBagHandle:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+                         AND comm-rate.min-value  EQ 0
+                         AND comm-rate.period     EQ 0 
+                         AND comm-rate.since      LE iDate
+   NO-LOCK NO-ERROR.
+
+   /* Если есть запись - значит это есть искомый %Рез
+   ** иначе ищем дальше */
+   IF AVAIL comm-rate THEN
+      oRate = comm-rate.rate-comm.
+   ELSE
+   DO:
+      /* Определяем является ли ПОС субпортфелем или нет 
+      ** Если нет, то возвращаем 0
+      ** Если да, то смотрим на ставку протфеля родителя */
+      IF     loan.Class-Code       EQ "UniBagSrok" 
+         AND loan.parent-cont-code NE "" THEN
+      DO:
+         FIND LAST comm-rate WHERE comm-rate.commission EQ "%Рез"
+                               AND comm-rate.acct       EQ "0"
+                               AND comm-rate.currency   EQ ""
+                               AND comm-rate.kau        EQ iBagHandle:BUFFER-FIELD ("contract"):BUFFER-VALUE + "," + 
+                                                           iBagHandle:BUFFER-FIELD ("parent-cont-code"):BUFFER-VALUE
+                               AND comm-rate.min-value  EQ 0
+                               AND comm-rate.period     EQ 0 
+                               AND comm-rate.since      LE iDate
+         NO-LOCK NO-ERROR.
+         IF AVAIL comm-rate THEN
+            oRate = comm-rate.rate-comm.
+      END.
+   END.
+END PROCEDURE.
+
+/* Проверяет соответствие пары ПОС, возращает сообщение о дублированности пары */
+PROCEDURE ChkPosDouble.
+   DEF INPUT  PARAM iPosCode   AS HANDLE   NO-UNDO. /* Код протфеля */
+   DEF INPUT  PARAM iFlag      AS LOG    NO-UNDO. /* Искать до первого однородного ПОС'а или все */
+   DEF INPUT  PARAM iDate      AS DATE   NO-UNDO. /* Дата на которую проверяется */
+   DEF OUTPUT PARAM oResHandle AS HANDLE NO-UNDO. /* Handle на временную таблицу ttposmove */
+
+   DEF BUFFER xloan FOR loan. /* Локалзация буффера. */
+
+   DEF VAR vIsErr AS CHAR NO-UNDO. /* Наличиие пересечения ПОС'ов. Возвр. из ChkPosUniformity */
+   DEF VAR vDate2920-U AS DATE NO-UNDO. /* дата начала действия 2920-У */
+   DEF VAR vPOSSurr    AS CHAR NO-UNDO.
+
+   RELEASE ttposmove.
+   oResHandle = (BUFFER ttposmove:HANDLE).
+
+   mb:
+   DO ON ERROR UNDO, LEAVE:
+
+      /* Проверку для портфелей класса UniBagSrok не делаем */
+      IF iPosCode:BUFFER-FIELD ("class-code"):BUFFER-VALUE EQ "UniBagSrok" THEN
+         LEAVE mb.
+
+      vDate2920-U = DATE(GetXattrInit((iPosCode:BUFFER-FIELD ("class-code"):BUFFER-VALUE),
+                                      "Дата2920-У")) NO-ERROR.
+      vPOSSurr = iPosCode:BUFFER-FIELD ("contract"):BUFFER-VALUE  + "," +
+                 iPosCode:BUFFER-FIELD ("cont-code"):BUFFER-VALUE.
+
+      FOR EACH xloan WHERE  xloan.class-code EQ iPosCode:BUFFER-FIELD ("class-code"):BUFFER-VALUE 
+                       AND  xloan.contract   EQ iPosCode:BUFFER-FIELD ("contract"):BUFFER-VALUE   
+                       AND (xloan.close-date EQ ?
+                        OR  xloan.close-date GT iDate )
+                       AND  xloan.cont-type  EQ iPosCode:BUFFER-FIELD ("cont-type"):BUFFER-VALUE  
+                       AND  xloan.cust-cat   EQ iPosCode:BUFFER-FIELD ("cust-cat"):BUFFER-VALUE   
+                       AND  xloan.cont-code  NE iPosCode:BUFFER-FIELD ("cont-code"):BUFFER-VALUE /* что бы не находить себя */
+                       AND  xloan.filial-id  EQ iPosCode:BUFFER-FIELD ("filial-id"):BUFFER-VALUE
+      NO-LOCK:
+         IF iDate GE vDate2920-U THEN
+         DO:
+            IF GetXAttrValue ("loan",
+                              vPOSSurr,
+                              "ПосЛСвБанке") NE GetXAttrValue ("loan",
+                                                               xloan.contract + "," + xloan.cont-code,
+                                                               "ПосЛСвБанке") THEN
+               NEXT.
+            IF GetXAttrValue ("loan",
+                              vPOSSurr,
+                              "SubPosSet") NE GetXAttrValue ("loan",
+                                                             xloan.contract + "," + xloan.cont-code,
+                                                             "SubPosSet") THEN
+               NEXT.
+         END.
+         
+         /* Для каждого найденного, запускаем проверку пары ПОС */
+         RUN ChkPosUniformity ( iPosCode,
+                               (BUFFER xloan:HANDLE),
+                               OUTPUT vIsErr).
+         
+         /* Если у нам передан iFlag = yes значит ищем первый,
+         ** и дальше не ищем ничего, иначе проходим по всем */
+         IF    iFlag 
+           AND vIsErr EQ "Да" THEN
+         DO:
+            oResHandle = (BUFFER ttposmove:HANDLE).
+            LEAVE.
+         END.
+      END.
+   END. /* mb: */
+END PROCEDURE.
+
+/* Возращает указатель на временную таблицу ttPosMove, с записями Подобных ПОС */
+PROCEDURE ChkPosUniformity.
+   DEF INPUT  PARAM iBasePos    AS HANDLE  NO-UNDO. /* Первый портфель для сравнения */
+   DEF INPUT  PARAM iSecondPos  AS HANDLE  NO-UNDO. /* Второй портфель для сравнения */
+   DEF OUTPUT PARAM oErr        AS CHAR    NO-UNDO. /* Нет - пересечения нет. Да - пересечение есть. */
+
+   DEF VAR vBaseSurr   AS CHAR NO-UNDO. /* Суррогат первого портфеля для сравнения */
+   DEF VAR vSecSurr    AS CHAR NO-UNDO. /* Суррогат второго портфеля для сравнения */
+   DEF VAR vSignsVBase AS CHAR NO-UNDO. /* Значение доп.реквизита первого ПОС */
+   DEF VAR vSignsVSec  AS CHAR NO-UNDO. /* Значение доп.реквизита второго ПОС */
+   DEF VAR vCrossVal   AS CHAR NO-UNDO. /* Список пересекающихся валют (ДР ПОСВал) */
+   DEF VAR vCrossClass AS CHAR NO-UNDO. /* Список пересекающихся классов (ДР ПОСКласс) */
+   DEF VAR vCrossRole  AS CHAR NO-UNDO. /* Список пересекающихся ролей (ДР ПОСРоль) */
+   DEF VAR vCounter    AS INT64  NO-UNDO. /* Счетчик */
+   DEF VAR vDate2920-U AS DATE   NO-UNDO. /* дата начала действия 2920-У */
+   DEF VAR vBaseClass  AS CHAR   NO-UNDO. /* класс первого портфеля */
+   DEF VAR vSecClass   AS CHAR   NO-UNDO. /* класс второго портфеля */
+   DEF VAR vPerOtBase  AS DATE   NO-UNDO. /* Признак однородности по дате выдачи ссуды 
+                                             "ОТ" первого ПОС (ДР ПОСПерВыдОт) */
+   DEF VAR vPerDoBase  AS DATE   NO-UNDO. /* Признак однородности по дате выдачи ссуды 
+                                             "ДО" первого ПОС (ДР ПОСПерВыдДо) */
+   DEF VAR vPerOtSec   AS DATE   NO-UNDO. /* Признак однородности по дате выдачи ссуды 
+                                             "ОТ" второго ПОС (ДР ПОСПерВыдОт) */
+   DEF VAR vPerDoSec   AS DATE   NO-UNDO. /* Признак однородности по дате выдачи ссуды 
+                                             "ДО" второго ПОС (ДР ПОСПерВыдДо) */
+   DEF VAR vEmptyDates AS LOGICAL NO-UNDO.
+   DEF VAR vFlag       AS LOGICAL NO-UNDO.
+           
+   /* Получаем суррогаты ПОС'ов */
+   ASSIGN
+      vBaseSurr = GetSurrogateBuffer("loan",iBasePos)
+      vSecSurr  = GetSurrogateBuffer("loan",iSecondPos)
+      vBaseClass = GetClassObj(iBasePos)
+      vSecClass  = GetClassObj(iSecondPos)
+   .
+
+   /* Последовательно проверяем реквизиты портфелей. Если не прошли хотя бы одну проверку
+   ** выходим, иначе складываем результат в ttposmove */
+   mb:
+   DO ON ERROR UNDO, LEAVE:
+
+      /* 1. Сравниваем дополнительные реквизиты ПОСРез если ДР любого из ПОС не "Все" */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСРез",?)
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСРез",?)
+      .
+      /* Проверяем - совпадают ли они, если нет, то прекращаем проверку */
+      IF    vSignsVBase NE "Все" 
+        AND vSignsVSec  NE "Все" 
+        AND vSignsVBase NE vSignsVSec THEN
+         LEAVE mb.
+
+      /* 2. Сравниваем дополнительные реквизиты ПОСОбесп если ДР любого из ПОС не "Все" */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСОбесп",?)
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСОбесп",?)
+      .
+      /* Проверяем - совпадают ли они, если нет, то прекращаем проверку */
+      IF    vSignsVBase NE "Все" 
+        AND vSignsVSec  NE "Все" 
+        AND vSignsVBase NE vSignsVSec THEN
+         LEAVE mb.
+
+      /* 3. Сравниваем пересечение элементов в дополнительных реквизитах ПОСВал
+      ** если ДР базового ПОС не "*". Если есть пересекающиеся валюты, 
+      ** то сохраняем список этих валют. */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСВал","")
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСВал","")
+      .
+
+      IF vSignsVBase NE "*" THEN
+        DO:
+           IF vSignsVBase EQ "" THEN
+              /* т.e. NUM-ENTRIES("") = 0 */
+           DO:
+              IF CAN-DO(vSignsVSec,vSignsVBase) THEN DO:
+                ASSIGN
+                 vFlag = yes
+                 .
+                /* vCrossVal = "" */
+              END.
+           END.
+           ELSE
+           DO vCounter = 1 TO NUM-ENTRIES(vSignsVBase):
+              IF CAN-DO(vSignsVSec,ENTRY(vCounter,vSignsVBase)) THEN DO:
+                ASSIGN
+                 vFlag = yes
+                .
+                {additem.i vCrossVal ENTRY(vCounter,vSignsVBase)}
+              END.
+           END.
+        END.
+        ELSE
+           ASSIGN
+            vFlag = yes
+            vCrossVal = vSignsVSec.
+
+      IF NOT vFlag THEN
+         LEAVE mb.
+
+      /* 4. Сравниваем дополнительные реквизиты ПОСКлассы если ДР базового 
+      ** ПОС не "". Если есть пересекающиеся классы, то сохраняем список этих классов. */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСКлассы",?)
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСКлассы",?)
+      .
+
+      IF vSignsVBase NE "" THEN
+      DO:
+         /* Проверяем наличие таких классов по второму ПОС'у.
+         ** Если во втором ПОС'е, ДР = "*" - то записываем все из первого */
+         DO vCounter = 1 TO NUM-ENTRIES(vSignsVBase):
+            IF CAN-DO(vSignsVSec,vSignsVBase) THEN
+               vCrossClass = ENTRY(vCounter,vSignsVBase) + ",".
+         END.
+         /* Удаляем последнюю запятую */
+         vCrossClass = SUBSTRING(vCrossClass,1,LENGTH(vCrossClass) - 1).
+      END.
+      
+      /* 5. Сравниваем дополнительные реквизиты ПОСРоль если ДР базового ПОС не "". 
+      ** Если есть пересекающиеся роли, то сохраняем список этих ролей. */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСРоль",?)
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСРоль",?)
+      .
+
+      IF vSignsVBase NE "" THEN
+      DO:
+         /* Проверяем наличие таких классов по второму ПОС'у.
+         ** Если во втором ПОС'е, ДР = "*" - то записываем все из первого */
+         DO vCounter = 1 TO NUM-ENTRIES(vSignsVBase):
+            IF CAN-DO(vSignsVSec,vSignsVBase) THEN
+               vCrossRole = ENTRY(vCounter,vSignsVBase) + ",".
+         END.
+         /* Удаляем последнюю запятую */
+         vCrossRole = SUBSTRING(vCrossRole,1,LENGTH(vCrossRole) - 1).
+      END.
+      
+      /* 6. Сравниваем дополнительные реквизиты ПОСПриз. На полное соответствие */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"ПОСПриз",?)
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"ПОСПриз",?)
+      .
+      /* Проверяем - совпадают ли они, если нет, то прекращаем проверку */
+      IF vSignsVBase NE vSignsVSec THEN
+         LEAVE mb.
+
+      /* 7. Сравниваем ДР ПосЛСвБанке (после перехода на 2920-У) */
+      vDate2920-U = DATE(GetXattrInit(vBaseClass,"Дата2920-У")) NO-ERROR.
+      IF vBaseClass NE vSecClass THEN
+         vDate2920-U = MAX(vDate2920-U,DATE (GetXattrInit(vBaseClass,"Дата2920-У"))) NO-ERROR.
+      IF vDate2920-U EQ ? THEN
+         vDate2920-U = {&BQ-MAX-DATE}.
+      IF gend-date GE vDate2920-U THEN
+      DO:
+         ASSIGN
+            vSignsVBase = GetXAttrValue ("loan",vBaseSurr,"ПосЛСвБанке")
+            vSignsVSec  = GetXAttrValue ("loan",vSecSurr,"ПосЛСвБанке")
+         .
+         /* Проверяем - совпадают ли они, если нет, то прекращаем проверку */
+         IF vSignsVBase NE vSignsVSec THEN
+            LEAVE mb.
+      END.
+      /* 8. Проверяем признаки однородности ссуды по датам выдачи ссуды 
+         ДР "ПОСПерВыдДо" и "ПОСПерВыдОт" */
+      ASSIGN
+         vPerOtBase  = DATE(GetXAttrValueEx ("loan",vBaseSurr,"ПОСПерВыдОт",?))
+         vPerDoBase  = DATE(GetXAttrValueEx ("loan",vBaseSurr,"ПОСПерВыдДо",?))
+         vPerOtSec   = DATE(GetXAttrValueEx ("loan",vSecSurr,"ПОСПерВыдОт",?))
+         vPerDoSec   = DATE(GetXAttrValueEx ("loan",vSecSurr,"ПОСПерВыдДо",?))
+         vEmptyDates =     vPerOtBase EQ ?
+                       AND vPerDoBase EQ ? 
+                       AND vPerOtSec  EQ ?
+                       AND vPerDoSec  EQ ?
+      .
+
+      IF  NOT vEmptyDates
+      AND (vPerOtBase NE vPerOtSec 
+      OR   vPerDoBase NE vPerDoSec) THEN
+         LEAVE mb.
+
+      /* 9. Сравниваем пересечение элементов в дополнительных реквизитах i1_dec_pos
+      ** если ДР базового ПОС не "*". Если есть пересекающиеся расшифровки Б/С, 
+      ** то сохраняем список пересчечений */
+      ASSIGN
+         vSignsVBase = GetXAttrValueEx ("loan",vBaseSurr,"i1_dec_pos","")
+         vSignsVSec  = GetXAttrValueEx ("loan",vSecSurr,"i1_dec_pos","")
+      .
+
+      IF vSignsVBase NE "*" THEN
+      DO:
+         IF vSignsVBase EQ "" THEN
+            /* т.е.. NUM-ENTRIES("") = 0 */
+         DO:
+            IF CAN-DO(vSignsVSec,vSignsVBase) THEN DO:
+              ASSIGN
+               vFlag = yes
+               .
+              /* vCrossVal = "" */
+            END.
+         END.
+         ELSE
+         DO vCounter = 1 TO NUM-ENTRIES(vSignsVBase):
+            IF CAN-DO(vSignsVSec,ENTRY(vCounter,vSignsVBase)) THEN DO:
+              ASSIGN
+                 vFlag = yes
+              .
+              {additem.i vCrossVal ENTRY(vCounter,vSignsVBase)}
+            END.
+         END.
+      END.
+      ELSE
+         ASSIGN
+            vFlag = yes
+            vCrossVal = vSignsVSec.
+
+      IF NOT vFlag THEN
+         LEAVE mb.
+
+      /* Если прошли все проверки - значит у нас совпадающие ПОС'ы. 
+      ** Созраняем информацию в ttposmove */
+      CREATE ttPosMove.
+      ASSIGN
+         ttPosMove.move-date    = TODAY
+         ttPosMove.cont-code    = iBasePos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+         ttPosMove.oldPortfolio = iSecondPos:BUFFER-FIELD ("cont-code"):BUFFER-VALUE
+         ttPosMove.Description  = vCrossVal + ";" + vCrossClass + ";" + vCrossRole.
+      .
+      /* Возвращаем, что портфели одинаковы */
+      oErr = "Да".
+   END. /* mb: */
+
+END PROCEDURE.
+
+
+   /* Возвращает настройки по общему ведению ПОС */
+   /* ================================-=-=-=-=-= */
+PROCEDURE GetPosCommonSettings.
+   DEF OUTPUT PARAM oPosBrFlg  AS LOG  NO-UNDO.  /* Признак раздельного ведения ПОС (НП "ПОСОбщий") */
+   DEF OUTPUT PARAM oCanEdit   AS LOG  NO-UNDO.  /* Признак возможности редактирования ПОС */
+   DEF OUTPUT PARAM oLstBrEdit AS CHAR NO-UNDO.  /* Список филиалов имеющих доступ к редактированию ПОС */
+   DEF OUTPUT PARAM oLstBrCopy AS CHAR NO-UNDO.  /* Список филиалов, на которые производится репликация ПОС */
+   DEF OUTPUT PARAM oPosKfCopy AS LOG  NO-UNDO.  /* Признак копирования коэффициентов резервирования на филиалы (НП "ПОСОбщРез") */
+
+   DEF VAR vTmp   AS CHAR NO-UNDO.
+
+   ASSIGN
+      vTmp       = TRIM(FGetSettingEx("ПОС", "ПОСОбщий", "Нет", NO))
+      oCanEdit   = YES           /* По-умолчанию даем возможность редактировать */
+      oPosBrFlg  = NO            /* По-умолчанию учет ПОС - раздельный          */
+      oPosKfCopy = NO            /* По-умолчанию ко */
+   .
+    
+      /* Имеет смысл только для случая многофилиального учета и 
+      ** значения НП "ПОСОбщий" = Да;... (т.е. общего ведения ПОС) */
+   IF     ENTRY(1, vTmp, ";") EQ "Да" 
+      AND ShMode THEN 
+   DO:
+      IF NUM-ENTRIES(vTmp, ";") NE 3 THEN
+         RUN Fill-SysMes IN h_tmess ("", "", "0", 
+                                    "Неправильное значение НП 'ПОСОбщий'").
+      ELSE
+      DO:
+         ASSIGN
+           oPosBrFlg  = TRUE
+           oLstBrEdit = ENTRY(2, vTmp, ";")
+           oLstBrCopy = ENTRY(3, vTmp, ";")
+         .
+            /* Признак копирования коэффициентов резервирования на филиалы (НП "ПОСОбщРез") */
+         oPosKfCopy = FGetSettingEx("ПОС", "ПОСОбщРез", "НЕТ", NO) EQ "ДА".
+            /* Если общее ведение ПОС и филиал есть в списке 1 (имеющих право на редактирование) */
+         IF     oPosBrFlg 
+            AND NOT CAN-DO(oLstBrEdit, ShFilial) THEN
+            oCanEdit = NO.
+            /* Если 2 список (копируемых) равен "*", то создаем список копирования */
+         IF oLstBrCopy EQ "*" THEN
+         DO:
+            oLstBrCopy = "".
+            FOR EACH branch WHERE 
+                     branch.isbank    EQ YES 
+               AND   branch.Branch-Id NE ShFilial
+               AND   CAN-DO("10,11",branch.Branch-Type)  
+            NO-LOCK:
+               {additem.i oLstBrCopy branch.Branch-Id}
+            END.
+         END.
+      END.
+   END.
+END PROCEDURE.
+
+
+/*признак самостоятельного учета траша в ПОС */
+FUNCTION Is_Transh_in_POS  RETURNS LOGICAL (
+   iContract   AS CHAR, /* Назначение договора. */
+   iContCode   AS CHAR  /* Номер договора. */
+):
+   DEF VAR vL AS LOGICAL NO-UNDO.
+
+   DEFINE BUFFER loan FOR loan.
+
+   FIND FIRST loan WHERE loan.contract  EQ iContract
+                     AND loan.cont-code EQ ENTRY(1,iContCode," ")
+   NO-LOCK NO-ERROR.
+   
+   IF AVAIL loan THEN
+      vL = GetXattrValueEx ("loan",
+                            loan.contract + "," + loan.cont-code, 
+                            "ПОСучТранш", 
+                             GetXattrInit(loan.class-code,"ПОСучТранш")) EQ "Да".
+
+
+   RETURN vL.
+END FUNCTION.
+
+/*возвращает ПОС верхнего уровня для переданного ПОС/СубПоса*/
+FUNCTION GetUpPOS  RETURNS CHAR (
+   iPOS   AS CHAR  
+):
+   DEF VAR vPOS AS CHAR INITIAL ? NO-UNDO.
+ 
+   DEFINE BUFFER pos    FOR loan.
+   DEFINE BUFFER bpos   FOR loan.
+
+   FIND FIRST pos WHERE pos.contract  EQ "ПОС"
+                    AND pos.cont-code EQ iPOS
+   NO-LOCK NO-ERROR.
+
+   IF AVAIL pos THEN
+      IF pos.parent-contract EQ "" THEN
+         vPOS = pos.cont-code.
+      ELSE 
+         vPOS = GetUpPOS(pos.parent-cont-code).
+
+   RETURN vPOS.
+
+END FUNCTION.
+
+
+/* 
+  где ведется просрочка, на охвате или транше
+  возвращает соответств. cont-code
+*/
+FUNCTION LnWhereProsProc RETURNS CHAR (
+   iContract   AS CHAR,  
+   iContCode   AS CHAR  
+):
+
+   DEF VAR vContCode AS CHAR NO-UNDO.
+
+   DEFINE BUFFER loan FOR loan.
+
+   vContCode  = iContCode.
+
+   FIND FIRST loan WHERE loan.contract  EQ iContract
+                     AND loan.cont-code EQ ENTRY(1,iContCode," ")
+   NO-LOCK NO-ERROR.
+   
+   IF AVAIL loan THEN     /*проценты на охвате*/
+      IF CAN-DO(GetXattrEx(loan.Class-code,"rate-list","Initial"),"%Кред") THEN
+      vContCode = ENTRY(1,iContCode," ").
+
+   RETURN vContCode.
+
+END FUNCTION.
+
+/*возвращает СубПоса для договора по верхнему ПОСу с учетом просрочки*/
+FUNCTION GetSubPOS  RETURNS CHAR (
+   iContract   AS CHAR,  
+   iContCode   AS CHAR,
+   iPOS        AS CHAR,
+   iDate       AS DATE
+):
+
+   DEF VAR vSrokPos  AS CHAR  NO-UNDO.
+   DEF VAR vSrocPros AS CHAR  NO-UNDO.
+   DEF VAR vDatePros AS DATE  NO-UNDO.
+   DEF VAR  vNu1        AS INT64    NO-UNDO. /* Не используем. */
+   DEF VAR  vNu2        AS INT64    NO-UNDO. /* Не используем. */
+
+   DEFINE BUFFER loan FOR loan.
+
+   /* Определим срок просрочки ссуды. */
+   vDatePros =  LN_GetPrsProcDate (iContract, iContCode, iDate).
+
+   /* Перебираем все ПОСы по срокам. */
+   FOR EACH loan WHERE
+            loan.parent-contract    EQ "ПОС"
+      AND   loan.parent-cont-code   EQ iPOS
+   NO-LOCK:
+      /* Определяем код срока просрочки. */
+      vSrocPros = GetXattrValue ("loan", loan.contract + "," + loan.cont-code, "ПОССрПрос").
+      IF IS-Term(vDatePros, iDate, vSrocPros, NO, 0, OUTPUT vNu1, OUTPUT vNu2) THEN
+         vSrokPos = loan.cont-code.
+   END.
+
+   RETURN vSrokPos.
+
+END FUNCTION.
+
+/* проверка и включение в ПОС */
+PROCEDURE UpdateUniformBag.
+   /* по текущей реализации сюда мы попадем при заведении нового договора */
+   DEF PARAM BUFFER bl FOR loan.
+
+   DEFINE VARIABLE vPosSrok  AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUBxattr2 AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vUbxattr  AS CHARACTER NO-UNDO. /* Значение дополнительного реквизита UniformBag */
+   DEFINE VARIABLE vOk       AS LOGICAL   NO-UNDO.
+   IF NOT AVAIL bl THEN RETURN.
+   /* если не транш выходим */
+   IF NOT (bl.contract EQ "Кредит" AND NUM-ENTRIES(bl.cont-code," ") EQ 2)
+   THEN RETURN.
+   /* Если охватывающий договор включен в ПОС */ 
+   vubxattr = LnInBagOnDate(bl.contract,
+                            ENTRY(1, bl.cont-code, " "), 
+                            bl.open-date
+                            ).
+   /* и транш еще не помещен в портфель */
+   vubxattr2 = LnInBagOnDate(bl.contract,
+                             bl.cont-code, 
+                             bl.open-date
+                             ).                         
+   IF         {assigned vubxattr}   
+      AND NOT {assigned vubxattr2} THEN 
+   DO:
+
+      IF Is_Transh_in_POS(bl.Contract,bl.Cont-Code) THEN
+      DO:
+        vPosSrok = GetSubPOS(bl.contract,
+                             bl.cont-code,
+                             GetUpPOS(vubxattr),
+                             bl.open-date).
+
+        RUN Fill-SysMes IN h_tmess ("","","3",
+           "Охватывающий договор включен в ПОС "
+            + vubxattr + "~n" +
+           "Включить транш в портфель "
+            + vPosSrok
+            + "|Да,Нет"
+            ).   
+        vubxattr = vPosSrok.
+      END.
+      ELSE
+      RUN Fill-SysMes IN h_tmess ("","20l","","%s=" + vubxattr).   
+
+      IF pick-value EQ "1" THEN 
+         RUN SetLinkPos IN THIS-PROCEDURE 
+                       (bl.contract,
+                        bl.cont-code,
+                        vubxattr,
+                        bl.open-date,
+                        ?,
+                        YES,
+                        OUTPUT vOk
+                        ).
+   END.
+
+END PROCEDURE.
+/* $LINTFILE='ppbag.api' */
+/* $LINTMODE='1' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTUSER='glaa' */
+/* $LINTDATE='26/05/2016 13:22:17.246+03:00' */
+/*prosignCwn22wanlK2CdnIyfRMB0g*/
+/* --- ppbag.api was humbly modified by (c)blodd converter v.1.11 on 4/12/2017 11:07am --- */

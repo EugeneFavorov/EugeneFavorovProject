@@ -1,0 +1,20 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: strahbrw.FND
+      Comment: Получатели страховых премий - текущая запись.
+   Parameters:
+         Uses:
+      Used by:
+      Created:    
+     Modified:   
+*/
+
+ASSIGN
+   mCustCat = ENTRY (1, code.{&CustCodes}, ":")
+   mCustID  = INT64 (ENTRY (2, code.{&CustCodes}, ":"))
+   mShortName = code.{&ShortName}
+   mWName   = code.{&WhiteName}
+   mRaschAcct = DECIMAL (code.{&RaschAcct})
+   mTelefax = code.{&Telefax}
+.

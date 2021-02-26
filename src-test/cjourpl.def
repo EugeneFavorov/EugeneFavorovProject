@@ -1,0 +1,63 @@
+DEFINE VARIABLE mStrPar AS CHAR NO-UNDO.
+DEFINE VARIABLE mDatePar AS CHAR NO-UNDO.
+DEFINE VARIABLE mJourBSet AS CHARACTER NO-UNDO.
+
+mStrPar  = FGetSetting("ä†·Ü„‡", "ä†·Ü„‡ë¢", "").
+mDatePar = FGetSetting("ä†·Ü„‡", "ä†·Ü„‡Ñ†‚†", "").
+mJourBSet = FGetSetting("ä†·Ü„‡Ç", "", "").
+
+DEFINE TEMP-TABLE tt-header
+    FIELD type      AS   CHARACTER
+    FIELD form-code AS   CHARACTER
+    FIELD author    AS   CHARACTER
+    FIELD date      AS   DATE
+    FIELD acct      LIKE acct.acct
+    FIELD currency  LIKE acct.currency
+
+    INDEX primary
+    IS PRIMARY UNIQUE
+        acct
+        currency
+.
+
+DEFINE TEMP-TABLE tt-journal-rec
+    FIELD c-acct   LIKE acct.acct
+    FIELD doc-num  LIKE op.doc-num
+    FIELD acct     LIKE acct.acct
+    FIELD doc-code LIKE doc-type.digital
+    FIELD amt      LIKE op-entry.amt-rub
+    FIELD symbol   LIKE op-entry.symbol
+    FIELD alt-amt  LIKE op-entry.amt-rub
+    FIELD op       LIKE op-entry.op
+    FIELD op-status LIKE op.op-status
+    FIELD buhg     LIKE op.user-id
+    FIELD note     AS   CHAR
+    FIELD kassir   LIKE op.user-inspector
+.
+
+DEFINE TEMP-TABLE tt-journal-rec2 LIKE tt-journal-rec
+    FIELD sprate   AS   CHARACTER   
+.
+
+DEFINE TEMP-TABLE tt-totals-rec
+    FIELD c-acct  LIKE acct.acct
+    FIELD amt     LIKE op-entry.amt-rub
+    FIELD symbol  LIKE op-entry.symbol
+    FIELD alt-amt LIKE op-entry.amt-rub
+
+    INDEX primary
+    IS PRIMARY UNIQUE
+        c-acct
+        symbol
+.
+
+DEFINE TEMP-TABLE tt-op-entry NO-UNDO LIKE op-entry
+   FIELD IsHalfEntryComposited AS LOGICAL
+   FIELD op-entry-half-db LIKE op-entry.op-entry
+   FIELD op-entry-half-cr LIKE op-entry.op-entry
+INDEX ByHalfDb op IsHalfEntryComposited op-entry-half-db
+INDEX ByHalfCr op IsHalfEntryComposited op-entry-half-cr
+.
+
+{def-wf.i NEW}
+{mo-pars.i}

@@ -1,0 +1,1584 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: FBALACCT.LIB
+      Comment: Библиотека парс. функций, используемых при авт. открытии
+               счетов от договора
+   Parameters: нет
+         Uses: ACCTTMPL.LIB
+      Used by:
+     Modified: 02.07.2002 18:30 KSV      (0007589) Изменена процедура СчетРезерва, в случае, если
+                                         передаваемый параметр непустой ищется счет с указанной в
+                                         параметре ролью и возвращается, поиск идет как среди только
+                                         привязываемых счето, так и вслучае отсутствия среди уже
+                                         привязанных.
+                                         Добавлена процедура КоэфРиска, возвращающая коэфициент риска
+                                         по номеру текущего открываемого балансового счета и группе
+                                         риска договора.
+     Modified: 14.03.2003 17:48 kolal    Процеура PLAcct: счет выбирается с учетом маски и
+                                         кода подразделения. Заявка 13858.
+     Modified: 04.08.2003 17:25 kolal    13858
+     Modified: 12.08.2003 16:11 kolal    13858
+     Modified: 19.05.2005 21:00 fedm     (0040594) Добавлена процедура СчетДоговора, возвращающая
+                                         счет, привязанный по указанной роли на глобальную дату
+                                         к карточке, ценности или группе ценностей.
+     Modified: 10.11.2005 ZIAL (0043043) Вычисление счета с использованием 
+                                         функции PLACCT
+     Modified: 18.08.2006 VASOV          (0049848) Процедура СчетКлиента - выбор из списка существующих
+                                         счетов клиента по договору
+     Modified: 24.09.2007 Boes          (0066298) Процедура СчетКрЛин - по ДР "Режим" возвращает счет второго порядка для возобновляемой
+                                                  и невозобновляемой кредитной линии.  
+*/
+
+{dtterm.i}
+DEFINE NEW SHARED VARIABLE mask AS CHARACTER NO-UNDO INITIAL ?.
+{intrface.get re}
+{intrface.get rsrv}
+{intrface.get xclass}
+{intrface.get refer}    /* Библиотека службы справочников. */
+{intrface.get cust}     /* Библиотека для работы с клиентами. */
+{intrface.get db2l}
+
+{loantran.pro}
+
+/* возвращаем роль основного счета договора*/
+FUNCTION GetMainLoanAcct RETURNS CHAR ( BUFFER xLoan FOR loan ):
+
+   DEF VAR vMainAcctType AS CHAR NO-UNDO.
+
+   vMainAcctType = GetXAttrInit(xLoan.class-code,"main-loan-acct").
+
+   IF vMainAcctType = ?  OR
+      vMainAcctType = "" THEN
+      vMainAcctType = xLoan.contract.
+
+   RETURN vMainAcctType.
+
+END FUNCTION.
+
+PROCEDURE ДРДоговора:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF VAR o-Contract LIKE loan.contract  NO-UNDO.
+   DEF VAR o-ContCode LIKE loan.cont-code NO-UNDO.
+
+   DEF BUFFER b-xattr FOR xattr.
+
+   out-str = GetXAttrValueEx("loan",
+                             loan.contract + "," + loan.cont-code,
+                             in-str,
+                             ?
+                            ).
+   IF out-str = ? THEN DO:
+     RUN GetXAttr IN h_xclass (loan.class-code,
+                               in-str,
+                               BUFFER b-xattr
+                              ).
+
+     IF AVAILABLE b-xattr AND b-xattr.Hidden THEN
+       out-str = GetXAttrInit(loan.class-code, in-str).
+
+   END.
+
+END PROCEDURE.
+
+PROCEDURE ВалютаПлатежа:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF BUFFER b-to FOR term-obl.
+
+   FIND FIRST b-to OF loan WHERE b-to.idnt EQ INT64(in-str) 
+        NO-LOCK NO-ERROR.
+
+   out-str = IF AVAIL b-to THEN b-to.currency
+                           ELSE "".
+   
+END PROCEDURE.
+
+/* Возвращаем счет по роли на глобальную дату
+** для карточки, ценности или группы ценностей
+*/
+PROCEDURE СчетДоговора:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF BUFFER loan-acct FOR loan-acct.
+
+   /* Роль для карточки(договора) */
+   FIND LAST loan-acct WHERE
+             loan-acct.contract  = loan.contract
+         AND loan-acct.cont-code = loan.cont-code
+         AND loan-acct.acct-type = in-str
+         AND loan-acct.since    <= gend-date
+   NO-LOCK NO-ERROR.
+
+   IF NOT AVAILABLE loan-acct THEN
+   DO: /* Роль для ценности */
+      FIND LAST loan-acct WHERE
+                loan-acct.contract  = "asset"
+            AND loan-acct.cont-code = loan.cont-type
+            AND loan-acct.acct-type = in-str
+            AND loan-acct.since    <= gend-date
+      NO-LOCK NO-ERROR.
+
+      IF NOT AVAILABLE loan-acct THEN
+      DO: /* Роль для группы ценностей */
+         DEF VAR vAssetGr  AS CHAR  NO-UNDO.
+
+         vAssetGr = GetXAttrValueEx("asset",
+                                    shFilial + "," + loan.cont-type,
+                                    "AssetGr",
+                                    ?
+                                   ).
+         IF vAssetGr <> ? THEN
+            FIND LAST loan-acct WHERE
+                      loan-acct.contract  = "asset"
+                  AND loan-acct.cont-code = vAssetGr
+                  AND loan-acct.acct-type = in-str
+                  AND loan-acct.since    <= gend-date
+            NO-LOCK NO-ERROR.
+      END.
+   END.
+
+   IF AVAILABLE loan-acct THEN
+      out-str = loan-acct.acct.
+
+   RETURN.
+
+END PROCEDURE.
+
+PROCEDURE БалСчет:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE vCodeValue AS CHAR NO-UNDO.
+
+   ASSIGN
+      vCodeValue = IF NUM-ENTRIES(in-str) EQ 1 THEN
+                      GetCode("",in-str)
+                   ELSE
+                   IF NUM-ENTRIES(in-str) EQ 2 THEN
+                      GetCode(ENTRY(1,in-str),ENTRY(2,in-str))
+                   ELSE
+                      ?
+      out-str    = ?
+      .
+   IF vCodeValue <> ? THEN
+   DO:
+      pick-value = ?.
+
+      MESSAGE "Нужно выбрать счет второго порядка для создания счета:" SKIP
+              "по шаблону №" tv-op-template "'" + tv-Acct-name + "'"
+         VIEW-AS ALERT-BOX INFORMATION BUTTONS OK.
+
+      RUN sel-bac.p (tv-Acct-cat,vCodeValue,3).
+
+      IF pick-value NE ?  AND
+         pick-value NE "" AND
+         CAN-FIND(bal-acct WHERE
+                  bal-acct.bal-acct EQ INT64(TRIM(pick-value))) THEN
+         out-str = pick-value.
+   END.
+   ELSE
+   IF CAN-FIND(FIRST bal-acct WHERE
+               bal-acct.acct-cat EQ tv-Acct-cat AND
+                    CAN-DO(in-str,STRING(bal-acct.bal-acct))) THEN
+   DO:
+     pick-value = ?.
+     MESSAGE "Нужно выбрать счет второго порядка для создания счета:" SKIP
+        "по шаблону №" tv-op-template "'" + tv-Acct-name + "'"
+        VIEW-AS ALERT-BOX INFORMATION BUTTONS OK.
+
+     RUN sel-bac.p (tv-Acct-cat,in-str,3).
+
+     IF pick-value NE ?  AND
+        pick-value NE "" AND
+        CAN-FIND(bal-acct WHERE
+                 bal-acct.bal-acct EQ INT64(TRIM(pick-value))) THEN
+        out-str = pick-value.
+   END.
+   ELSE
+     out-str = in-str.
+
+END PROCEDURE.
+
+PROCEDURE СчетРезерва:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEFINE BUFFER buf-tt-editacct FOR tt-editacct.
+   DEFINE BUFFER loan-acct       FOR loan-acct.
+   DEFINE BUFFER bAcct           FOR acct.
+   DEFINE BUFFER bTAcct          FOR tt-editacct.
+
+   out-str = "".
+
+   IF TRIM(in-str) = "" OR in-str = ? THEN
+   DO:
+      FIND FIRST buf-tt-editacct WHERE
+                 buf-tt-editacct.acct-type EQ "Кредит"
+      NO-LOCK NO-ERROR.
+
+      IF NOT AVAILABLE buf-tt-editacct THEN
+         FIND FIRST buf-tt-editacct WHERE
+                    buf-tt-editacct.acct-type EQ "Депоз"
+         NO-LOCK NO-ERROR.
+
+      IF AVAILABLE buf-tt-editacct THEN
+      DO:
+         FIND acct WHERE
+              RECID(acct) EQ buf-tt-editacct.rid
+         NO-LOCK NO-ERROR.
+
+
+      END.
+      ELSE
+      DO:
+         FIND LAST loan-acct OF loan WHERE
+                   loan-acct.acct-type = "Кредит"
+               AND loan-acct.since    <= in-op-date
+         NO-LOCK NO-ERROR.
+
+         IF NOT AVAIL loan-acct THEN RETURN.
+
+         FIND acct  OF loan-acct NO-LOCK NO-ERROR.
+
+      END.
+
+      IF NOT AVAILABLE acct THEN
+           RETURN.
+       
+      FIND LAST bal-acct WHERE
+                bal-acct.acct-cat  EQ acct.acct-cat
+            AND bal-acct.bal-acct1 EQ SUBSTRING(STRING(acct.bal-acct),1,3)
+            AND bal-acct.side      EQ "П"
+      NO-LOCK NO-ERROR.
+
+      IF AVAILABLE bal-acct THEN
+         out-str = STRING(bal-acct.bal-acct).
+   END.
+   ELSE
+   DO:
+      FIND FIRST buf-tt-editacct WHERE
+                 buf-tt-editacct.acct-type = in-str
+      NO-ERROR.
+
+      IF AVAILABLE buf-tt-editacct THEN
+      DO:
+         FIND FIRST bAcct WHERE
+               RECID(bAcct) = buf-tt-editacct.rid
+         NO-LOCK NO-ERROR.
+         IF AVAILABLE bAcct THEN
+            ASSIGN
+               buf-tt-editacct.edit = NO
+               out-str              = bAcct.acct
+               .
+      END.
+      ELSE
+      DO:
+         IF AVAILABLE loan THEN
+         DO:
+            FOR EACH loan-acct OF loan WHERE
+                     loan-acct.acct-type = in-str
+                 AND loan-acct.since <= in-op-date
+            NO-LOCK BY loan-acct.since DESCENDING:
+               LEAVE.
+            END. /* End of FOR */
+
+            IF AVAILABLE loan-acct THEN
+               out-str = loan-acct.acct.
+         END.
+      END.
+   END.
+END PROCEDURE.
+
+PROCEDURE КоэфРиска:
+
+   DEFINE INPUT  PARAMETER pParam  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER opParam AS CHARACTER NO-UNDO.
+
+   DEFINE  VARIABLE vRsrv AS DECIMAL NO-UNDO.
+
+   IF AVAILABLE loan AND loan.gr-riska > 0 THEN
+   DO:
+      RUN GetPersRsrv IN h_rsrv (tv-Bal-Acct,loan.gr-riska,OUTPUT vRsrv).
+      opParam = STRING(vRsrv).
+   END.
+
+END.
+
+PROCEDURE БалСчетСрок:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEFINE VAR vTmpStr  AS CHARACTER
+                          INITIAL "" NO-UNDO.
+   DEFINE VAR vTerm    AS CHARACTER
+                          INITIAL "" NO-UNDO.
+
+   out-str = "".
+
+   FORM
+      "Для создания счета c ролью:"               SKIP
+      tv-acct-name   FORMAT "x(40)"
+                     NO-LABEL                     SKIP
+      "требуется выбрать счет второго порядка  "  SKIP
+      "----------------------------------------"  SKIP
+      out-str        FORMAT "99999"
+                     LABEL  "Счет 2-го порядка"
+                     HELP   "Счет 2-го порядка (F1 выбор доступных счетов)"
+
+   WITH FRAME     frm-bal-acct
+        TITLE     COLOR BRIGHT-WHITE "[ ВВЕДИТЕ СЧЕТ ВТОРОГО ПОРЯДКА ]"
+        CENTERED
+        SIDE-LABELS
+        ROW         9
+        WIDTH       42
+        OVERLAY.
+
+   ON "F1" OF out-str IN FRAME frm-bal-acct
+   DO:
+      RUN sel-bac.p (tv-Acct-cat,vTmpStr,3).
+      IF LAST-EVENT:FUNCTION EQ "GO" AND
+         pick-value NE ? AND pick-value NE "" THEN
+      SELF:SCREEN-VALUE = pick-value.
+   END.
+
+   ON CLEAR OF out-str IN FRAME frm-bal-acct
+   DO:
+      SELF:SCREEN-VALUE = "00000".
+      RETURN NO-APPLY.
+   END.
+
+   ON BACKSPACE OF out-str IN FRAME frm-bal-acct
+   DO:
+      RETURN NO-APPLY.
+   END.
+
+   ON DEL OF out-str IN FRAME frm-bal-acct
+   DO:
+      RETURN NO-APPLY.
+   END.
+
+IF GetXattrValueEx("op-template",
+                   tv-op-kind + "," + STRING(tv-op-template),
+                   "UseOp-Date",
+                   "Нет") EQ "Да"
+THEN
+   RUN GetDBITerm(in-op-date,
+                  loan.end-date,
+                  loan.contract,
+                  loan.cust-cat,
+                  OUTPUT vTerm).
+ELSE
+   RUN GetDBITerm(loan.open-date,
+                  loan.end-date,
+                  loan.contract,
+                  loan.cust-cat,
+                  OUTPUT vTerm).
+
+   FOR EACH code WHERE
+            code.class EQ "BalAcctForLoan"
+        AND CAN-DO(vTerm,code.code)
+   NO-LOCK:
+      {additem.i "vTmpStr" code.val}
+   END.
+
+   IF vTmpStr EQ "" THEN
+      RETURN.
+
+   DISPLAY
+      ENTRY(1,vTmpStr) @ out-str
+      tv-acct-name
+   WITH FRAME frm-bal-acct.
+   SET
+     out-str
+   WITH FRAME frm-bal-acct.
+
+END PROCEDURE.
+
+PROCEDURE DecTable:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF VAR vTerm  AS CHAR INITIAL ""
+                          NO-UNDO.
+   DEF VAR DTType AS CHAR NO-UNDO.
+   DEF VAR DTKind AS CHAR NO-UNDO.
+   DEF VAR DTTerm AS CHAR NO-UNDO.
+   DEF VAR DTCust AS CHAR NO-UNDO.
+
+   DEF VAR l             AS INT64  NO-UNDO.
+   DEF VAR mask-internal AS CHAR NO-UNDO.
+   DEF VAR yy            AS INT64  NO-UNDO.
+   DEF VAR dd            AS INT64  NO-UNDO.
+   DEF VAR s             AS CHAR NO-UNDO.
+   DEF VAR IS_ambiguous  AS LOG  NO-UNDO.
+   DEF VAR vCodeValue    AS CHAR NO-UNDO.
+   DEF VAR vFromDate     AS DATE NO-UNDO.
+   DEF VAR vDTTermRef    AS CHAR NO-UNDO.
+
+   IF NUM-ENTRIES(in-str) > 1 THEN
+      ASSIGN
+          l      = INT64(ENTRY(2,in-str))
+          in-str = ENTRY(1,in-str)
+      NO-ERROR.
+
+   ASSIGN
+      out-str    = ?
+      vCodeValue = GetCode("",in-str)
+      .
+
+   IF vCodeValue <> ? THEN
+   DO:
+      ASSIGN
+         pick-value = ?
+         vFromDate = IF GetXattrValueEx("op-template",
+                                        tv-op-kind + "," + STRING(tv-op-template),
+                                        "UseOp-Date",
+                                        "Нет") EQ "Да"
+                     THEN in-op-date
+                     ELSE loan.open-date.
+
+      RUN GetDBITerm(vFromDate,
+                     loan.end-date,
+                     loan.contract,
+                     loan.cust-cat,
+                     OUTPUT vTerm).
+
+      DTCust = GetXAttrValueEx("loan",
+                               loan.contract + "," + loan.cont-code,
+                               "Субъект",
+                               "").
+      IF DTCust EQ "" THEN 
+         RUN DTCust(tv-cust-cat,tv-cust-id,?,OUTPUT DTcust).
+
+      ASSIGN
+         DTType = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTType",
+                                   GetXAttrInit(loan.class-code,"DTType"))
+         DTKind = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTKind",
+                                   GetXAttrInit(loan.class-code,"DTKind"))
+         DTTerm = ENTRY(3,vTerm,"/")
+         .
+
+
+      IF DTType = ? OR DTType = "" THEN DTType = "*".
+      IF DTKind = ? OR DTKind = "" THEN DTKind = "*".
+      IF DTTerm = ? OR DTTerm = "" THEN DTTerm = "*".
+
+      ASSIGN
+         IS_ambiguous = DTType EQ "*" OR
+                        DTKind EQ "*" OR
+                        DTTerm EQ "*" OR
+                        DTCust EQ "*"
+         mask-internal = tv-Acct-type + CHR(1)
+                             + DTType + CHR(1)
+                             + DTCust + CHR(1)
+                             + DTKind + CHR(1)
+                             + DTTerm
+          s = ""
+          .
+        /* определим используемый справочник сроков */
+     ASSIGN
+        vDTTermRef = GetXattrInit(loan.class-code,"DTTerm")
+        vDTTermRef = IF {assigned vDTTermRef} THEN
+                        vDTTermRef
+                     ELSE
+                        "DTTerm"
+     .
+     FOR EACH code WHERE code.class  = vDTTermRef
+                     AND code.parent = vDTTermRef
+     NO-LOCK:
+         IF IS-Term(vFromDate,
+                    (IF loan.end-date = ? THEN
+                        12/31/9999
+                     ELSE
+                        loan.end-date),
+                     code.code,
+                     NO,
+                     0,
+                     OUTPUT yy,
+                     OUTPUT dd)
+         THEN
+            {additem.i s code.code}
+      END.
+
+      ASSIGN
+         ENTRY(5,mask-internal,chr(1)) = s
+         mask                          = mask-internal
+         .
+
+      RUN cbracct.p(in-str,in-str,"DecisionTable",l).
+
+      IF pick-value NE ?  AND
+         pick-value NE "" AND
+         CAN-FIND(bal-acct WHERE
+                  bal-acct.bal-acct EQ INT64(TRIM(pick-value)))
+      THEN
+         out-str = pick-value.
+   END.
+
+END PROCEDURE.
+
+function str2flt returns char (iVal as char):
+      return (if iVal eq ? then "*" else iVal).
+end function.   
+
+PROCEDURE Placct:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF VAR DTType      AS CHAR NO-UNDO.
+   DEF VAR DTKind      AS CHAR NO-UNDO.
+   DEF VAR DTCust      AS CHAR NO-UNDO.
+   DEF VAR l           AS INT64  NO-UNDO.
+   DEF VAR yy          AS INT64  NO-UNDO.
+   DEF VAR dd          AS INT64  NO-UNDO.
+   DEF VAR s           AS CHAR NO-UNDO.
+   DEF VAR vCodeValue  AS CHAR NO-UNDO.
+
+   DEF VAR err-mes        AS CHAR    NO-UNDO.
+   DEF VAR res            AS CHAR    NO-UNDO.
+   DEF VAR beg-acct       AS CHAR    NO-UNDO.
+   DEF VAR vCheckBranchId AS LOGICAL NO-UNDO. /* Проверять код
+                                                подразделения ?  */
+   DEF VAR vFlt           AS CHAR EXTENT 2 NO-UNDO.
+
+   out-str = {get_placct.i in-op-date}.
+
+   IF NUM-ENTRIES(in-str) > 1 THEN
+      ASSIGN
+         l      = INT64(ENTRY(2,in-str))
+      NO-ERROR.
+
+   in-str = IF out-str NE "" THEN out-str ELSE ENTRY(1,in-str).
+
+   ASSIGN
+      out-str    = ?
+      vCodeValue = GetCode("",in-str)
+      .
+   IF vCodeValue <> ? THEN
+   DO:
+      pick-value = ?.
+
+      DTCust = GetXAttrValueEx("loan",
+                               loan.contract + "," + loan.cont-code,
+                               "Субъект",
+                               "").
+      IF DTCust EQ "" THEN 
+         RUN DTCust(tv-cust-cat,tv-cust-id,?,OUTPUT DTcust).
+
+      ASSIGN
+         DTType = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTType",
+                                   GetXAttrInit(loan.class-code,"DTType"))
+         DTKind = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTKind",
+                                   GetXAttrInit(loan.class-code,"DTKind"))
+      .
+
+      IF DTType = ? OR DTType = "" THEN DTType = "*".
+      IF DTKind = ? OR DTKind = "" THEN DTKind = "*".
+
+      mask = tv-Acct-type + CHR(1)
+                 + DTType + CHR(1)
+                 + DTCust + CHR(1)
+                 + DTKind + CHR(1)
+                 + (IF loan.currency = "" THEN
+                       "Руб"
+                    ELSE
+                       "Вал").
+      RUN placct.p(in-str,in-str,"PlAcct",l).
+      IF pick-value NE ?  AND
+         pick-value NE "" THEN
+      DO:
+         ASSIGN
+            vCheckBranchID = (INDEX(tv-Acct-Mask, "ф", 10) > 0)
+            err-mes        = ""
+            beg-acct       = (IF DYNAMIC-FUNC("ereg":U IN h_re,
+                                              "^([0-9]+)",
+                                              pick-value,
+                                              OUTPUT res,
+                                              INPUT-OUTPUT err-mes) = YES
+                              THEN
+                                 ENTRY(1,res,CHR(1))
+                              ELSE
+                                 "")
+            .
+
+            
+         vFlt[1] =          "MustOffLdFlt"
+                 + "|"    + "acct-cat"    
+                 + CHR(1) + "bal-acct"    
+                 + CHR(1) + "acct"        
+                 + CHR(1) + "currency"    
+                 + CHR(1) + "close-date1"
+                  
+                 + (IF vCheckBranchID THEN  CHR(1) + "branch-id" else "").
+                   
+                   
+               
+         /*Извлечение балансового счета 2-го поряка из маски счета*/          
+         define var vBal2 as char no-undo.
+         if    tv-bal-acct eq "" 
+            or tv-bal-acct eq "*" 
+            or tv-bal-acct eq ? then
+         do:            
+            assign
+               vBal2 = entry(1, pick-value, ".")
+               vBal2 = entry(1, vBal2, "*")
+               vBal2 = (if length(vBal2) >= 5 then
+                           substr(vBal2, 1, 5)
+                        else
+                           tv-bal-acct) 
+            .    
+         end.
+         else
+            vBal2 = tv-bal-acct.
+                           
+         vFlt[2] =          "YES"
+                 + "|"    + str2flt(tv-acct-cat) 
+                 + CHR(1) + str2flt(vBal2) 
+                 + CHR(1) + str2flt(pick-value) 
+                 + CHR(1) + str2flt(tv-Currency) 
+                 + CHR(1) + "?" 
+                 + (IF vCheckBranchID THEN CHR(1) + mOtdel else "").
+
+         run chooseAcct  ("acct", vFlt[1], vFlt[2], "" , output out-str) .
+         if out-str ne ? then
+         do:
+            tv-acct = out-str .
+         end.
+      END.
+   END.
+END PROCEDURE.
+
+/*Аналог парсерной функции Placct. За исключением того, 
+ что если найдено несколько счетов, автоматически выбирается первый. 
+ Без диалога с пользователем. */
+
+PROCEDURE Placct2:
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEF VAR DTType      AS CHAR NO-UNDO.
+   DEF VAR DTKind      AS CHAR NO-UNDO.
+   DEF VAR DTCust      AS CHAR NO-UNDO.
+   DEF VAR l           AS INT64  NO-UNDO.
+   DEF VAR yy          AS INT64  NO-UNDO.
+   DEF VAR dd          AS INT64  NO-UNDO.
+   DEF VAR s           AS CHAR NO-UNDO.
+   DEF VAR vCodeValue  AS CHAR NO-UNDO.
+
+   DEF VAR err-mes        AS CHAR    NO-UNDO.
+   DEF VAR res            AS CHAR    NO-UNDO.
+   DEF VAR beg-acct       AS CHAR    NO-UNDO.
+   DEF VAR vCheckBranchId AS LOGICAL NO-UNDO. /* Проверять код
+                                                подразделения ?  */
+
+   DEFINE VAR hQuery    AS HANDLE NO-UNDO.
+   DEFINE VAR vacct     AS CHAR   NO-UNDO.
+   DEFINE VAR vWhere    AS CHAR   NO-UNDO.
+   DEFINE BUFFER acct FOR acct.
+   DEFINE VAR hBuffer AS handle NO-UNDO.
+
+   out-str = {get_placct.i in-op-date}.
+   IF NUM-ENTRIES(in-str) > 1 THEN
+      ASSIGN
+         l      = INT64(ENTRY(2,in-str))
+      NO-ERROR.
+
+   in-str = IF out-str NE "" THEN out-str ELSE ENTRY(1,in-str).
+
+   ASSIGN
+      out-str    = ?
+      vCodeValue = GetCode("",in-str)
+      .
+   IF vCodeValue <> ? THEN
+   DO:
+      pick-value = ?.
+
+      RUN DTCust(tv-cust-cat,tv-cust-id,?,OUTPUT DTcust).
+
+      ASSIGN
+         DTType = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTType",
+                                   GetXAttrInit(loan.class-code,"DTType"))
+         DTKind = GetXAttrValueEx("loan",
+                                   loan.contract + "," + loan.cont-code,
+                                   "DTKind",
+                                   GetXAttrInit(loan.class-code,"DTKind"))
+      .
+
+      IF DTType = ? OR DTType = "" THEN DTType = "*".
+      IF DTKind = ? OR DTKind = "" THEN DTKind = "*".
+
+      mask = tv-Acct-type + CHR(1)
+                 + DTType + CHR(1)
+                 + DTCust + CHR(1)
+                 + DTKind + CHR(1)
+                 + (IF loan.currency = "" THEN
+                       "Руб"
+                    ELSE
+                       "Вал").
+
+        
+      RUN placct.p(in-str,in-str,"PlAcct",l).
+      
+      IF pick-value NE ?  AND
+         pick-value NE "" THEN
+      DO:
+         ASSIGN
+            vCheckBranchID = (INDEX(tv-Acct-Mask, "ф", 10) > 0)
+            err-mes        = ""
+            beg-acct       = (IF DYNAMIC-FUNC("ereg":U IN h_re,
+                                              "^([0-9]+)",
+                                              pick-value,
+                                              OUTPUT res,
+                                              INPUT-OUTPUT err-mes) = YES
+                              THEN
+                                 ENTRY(1,res,CHR(1))
+                              ELSE
+                                 "")
+            .
+         /*Извлечение балансового счета 2-го поряка из маски счета*/          
+         define var vBal2 as char no-undo.
+         if    tv-bal-acct eq "" 
+            or tv-bal-acct eq "*" 
+            or tv-bal-acct eq ? then
+         do:            
+            assign
+               vBal2 = entry(1, pick-value, ".")
+               vBal2 = entry(1, vBal2, "*")
+               vBal2 = (if length(vBal2) >= 5 then
+                           substr(vBal2, 1, 5)
+                        else
+                           tv-bal-acct) 
+            .    
+         end.
+         else
+            vBal2 = tv-bal-acct.
+                           
+         hBuffer = BUFFER acct:HANDLE.
+         CREATE QUERY hQuery NO-ERROR.
+         hQuery:ADD-BUFFER(hBuffer) NO-ERROR.
+         /*формирование строки для поиска счета по Placct*/
+         vWhere = (IF tv-acct-cat    <> ? THEN "acct.acct-cat  = " + "'"+ tv-acct-cat + "'"+ " AND "  ELSE "" )+
+            (IF vBal2          <> ? THEN "acct.bal-acct  = " + vBal2       + "  AND "  ELSE "") +
+            (IF pick-value     <> ? THEN "CAN-DO('" + pick-value + "', acct.number) AND acct.filial-id  = '" + shFilial + "' AND "  ELSE "") +  
+            (IF tv-Currency    <> ? THEN "acct.currency  = '" + tv-Currency  + "'" +  "AND "  ELSE "") +
+            (IF vCheckBranchID      THEN "acct.branch-id = " + mOtdel + "  AND "  ELSE "") +
+            "(acct.close-date =  ? OR acct.close-date >= " + string(in-op-date) +  ")"
+         .
+         vWhere = "FOR EACH acct WHERE " + vWhere + " NO-LOCK".
+         hQuery:QUERY-PREPARE(vWhere) NO-ERROR.
+         hQuery:query-open() NO-ERROR.                 
+         hQuery:GET-FIRST()  NO-ERROR .
+         IF hBuffer:AVAILABLE  THEN
+            out-str = hBuffer:buffer-field("acct"):BUFFER-VALUE.
+         hQuery:QUERY-CLOSE() NO-ERROR.
+         DELETE OBJECT hQuery NO-ERROR.
+         
+         IF out-str ne ? then
+            tv-acct = out-str .
+      END. /*pick-value NE ?*/
+   END.    /*vCodeValue <> ?*/
+
+END PROCEDURE.
+
+/*{{{ chooseAcct*/
+
+define variable mAcct$ as char no-undo.
+define variable mShowBrowser as logical no-undo.
+
+procedure chooseAcct:
+   define input parameter iClass as char no-undo.
+   define input parameter iFldList as char no-undo.
+   define input parameter iFldVal as char no-undo.
+   define input parameter iFreshList as char no-undo.
+   define output parameter oAcct as char no-undo initial ? .
+   
+
+   mAcct$ = ?.
+   mShowBrowser = no. /*был ли вызван navigate */
+   
+   
+/* message
+      program-name(1) skip
+      "before  ------ AfterNavigate -------" skip   
+   view-as alert-box. */   
+   
+   SUBSCRIBE "AfterNavigate" ANYWHERE RUN-PROCEDURE "chooseAcctListener".
+   do on error undo, leave :
+      RUN browseld.p (
+         iClass,
+         iFldList,
+         iFldVal,
+         iFreshList,
+         4) .
+   end.
+   UNSUBSCRIBE "AfterNavigate".
+
+
+
+   
+   IF mShowBrowser then
+   do:
+      /*был отображен браузер, иначе бессмыслено анализировать
+      последние нажатия конпок */
+      if LASTKEY = 10 THEN      
+         oAcct = ENTRY(1, pick-value).            
+   end.
+   else
+      if mAcct$ ne ? then
+         /*браузер не отображался и в выборке был ТОЛЬКО один счет*/
+         oAcct = mAcct$ .
+
+/* message
+   program-name(1) skip
+   "ПОСЛЕ ------ AfterNavigate -------" skip
+   "mAcct$ = " mAcct$ skip
+   "mShowBrowser = " mShowBrowser skip
+   "oAcct = " oAcct
+view-as alert-box. */
+
+end procedure.   
+
+PROCEDURE chooseAcctListener :
+   DEFINE INPUT  PARAMETER iHbrw      AS HANDLE    NO-UNDO. /* Указатель на 
+                                                               процедуру 
+                                                               браузера. */
+   DEFINE OUTPUT PARAMETER oCont      AS LOG       NO-UNDO. /* Продолжать ли 
+                                                               работу в 
+                                                               браузере. */
+   
+   DEFINE VAR vQry AS HANDLE  NO-UNDO. /* Указатель на запрос. */
+   DEFINE VAR vCnt AS INT64 NO-UNDO. /* Счетчик буфферов.    */
+   DEFINE VAR vFld AS INT64 NO-UNDO. /* Счетчик полей.       */
+   DEFINE VAR vPrepStr AS CHARACTER NO-UNDO.
+   DEFINE VAR vTmp AS CHARACTER NO-UNDO.   
+   define variable vFirst as logical no-undo .
+   define variable vAcct as char no-undo. 
+   
+   vTmp = "CAN-DO (''".
+
+   /* Открываем запрос в браузере. */
+   RUN Open-Query IN iHbrw.
+                        
+   /* Получаем указатель на запрос. */
+   vQry = DYNAMIC-FUNCTION("GetHandleQuery" IN iHbrw).
+
+vPrepStr = vQry:PREPARE-STRING.
+vQry:QUERY-CLOSE().
+DELETE OBJECT vQry.
+
+vPrepStr = REPLACE(vPrepStr, '"', "'").
+vPrepStr = REPLACE(vPrepStr, vTmp, "CAN-DO ('*'").
+vPrepStr = REPLACE(vPrepStr, vTmp, "CAN-DO ('*'").
+vPrepStr = REPLACE(vPrepStr, vTmp, "CAN-DO ('*'").
+vPrepStr = REPLACE(vPrepStr, vTmp, "CAN-DO ('*'").
+vPrepStr = REPLACE(vPrepStr, vTmp, "CAN-DO ('*'").
+
+CREATE QUERY vQry.
+vQry:SET-BUFFERS(BUFFER acct:HANDLE).
+vQry:QUERY-PREPARE(vPrepStr).
+vQry:QUERY-OPEN.
+   
+   oCont = no. /*Не показывать окно браузера*/
+   vFirst = yes. 
+   
+   IF NOT VALID-HANDLE(vQry)
+      THEN RETURN.
+
+   RUN GetFirstRecord IN iHbrw (vQry).
+   DO WHILE NOT vQry:QUERY-OFF-END:
+      
+      if not vFirst then      
+      do:
+         /*В запросе уже 2-я запись. Перебирать нет смысла - отображаем браузер*/
+         oCont = yes .
+         leave.      
+      end.
+      GETID:
+      DO vCnt = 1 TO vQry:NUM-BUFFERS:
+         IF vQry:GET-BUFFER-HANDLE (vCnt):TABLE EQ "ACCT" THEN 
+         DO:            
+            vAcct = vQry:GET-BUFFER-HANDLE (vCnt):buffer-field("acct"):buffer-value.
+            vFirst = no.
+            LEAVE GETID.
+         END.
+      END.
+      RUN GetNextRecord IN iHbrw (vQry).
+   END.
+   
+   
+   if oCont then
+   do:
+      mShowBrowser = yes.
+      vQry:GET-FIRST (NO-LOCK). /*без данного оператора в браузере не видна первая строка*/
+   end.
+   else
+      mAcct$ = vAcct .
+   
+   RETURN.
+END PROCEDURE.
+
+/*}}}*/
+
+/*
+  Определения счета резерва для отдельного транша
+  1. используется в поле bal-acct шаблона
+  - СчетРезерваТран(Согл) - счет 2 порядка определяется исходя из
+  основного счета договора соглашения
+  - СчетРезерваТран(Теч) - счет 2 порядка определяется исходя из
+  основного счета  текущего договора
+  2. В поле l-acct
+  - СчетРезерваТран(Счет) и если в шаблоне стоит "flag-create = искать",
+  то ищется уже привязанный счет к какому либо траншу (с указанным счетом
+  2 порядка), и если найден возвращает его, иначе меняет flag-create на
+  создавать и создает новый счет
+*/
+PROCEDURE СчетРезерваТран:
+
+   DEF INPUT  PARAM iParStr AS CHAR NO-UNDO. /*Строка параметров*/
+   DEF OUTPUT PARAM oValue  AS CHAR NO-UNDO. /*возвращаемое значение*/
+
+   DEF VAR vLoanType   AS CHAR NO-UNDO.
+   DEF VAR vCodeSogl   AS CHAR NO-UNDO.
+   DEF VAR vAcctType   AS CHAR NO-UNDO.
+   DEF VAR vIsTechenie AS LOG  NO-UNDO.
+
+   DEFINE BUFFER buf-tt-editacct FOR tt-editacct.
+   DEFINE BUFFER loan-acct       FOR loan-acct.
+   DEFINE BUFFER bLoan           FOR loan.
+   DEFINE BUFFER mLoan           FOR loan.
+
+
+   RUN IsLoanTechenie(BUFFER loan, OUTPUT vIsTechenie).
+
+   IF NOT vIsTechenie THEN
+      RETURN.
+
+   ASSIGN 
+      oValue    = ""
+      vLoanType = ENTRY(1,iParStr)
+      vCodeSogl = SUBSTRING(loan.cont-code,
+                            1,
+                            R-INDEX(loan.cont-code," ") - 1)
+      .
+   /*если передано  Согл или Теч - то определяем счет 2 проядка*/
+
+   IF vLoanType = "Согл" THEN
+   DO:
+
+      /*ищем соглашение*/
+      FIND FIRST bLoan WHERE
+                 bLoan.contract  = loan.contract
+             AND bLoan.cont-code = vCodeSogl NO-LOCK NO-ERROR.
+
+      IF NOT AVAILABLE bLoan THEN RETURN.
+
+      vAcctType = GetMainLoanAcct(BUFFER bLoan).
+
+      FIND LAST loan-acct OF bLoan WHERE
+                loan-acct.acct-type = vAcctType
+            AND loan-acct.since    <= in-op-date NO-LOCK NO-ERROR.
+
+      IF NOT AVAIL loan-acct THEN RETURN.
+
+      FIND acct OF loan-acct NO-LOCK NO-ERROR.
+
+      IF NOT AVAIL acct THEN RETURN.
+
+      FIND LAST bal-acct WHERE
+                bal-acct.acct-cat  = acct.acct-cat
+            AND bal-acct.bal-acct1 = SUBSTR(STRING(acct.bal-acct),1,3)
+            AND bal-acct.side      = "П" NO-LOCK NO-ERROR.
+
+      IF AVAIL bal-acct THEN oValue = STRING(bal-acct.bal-acct).
+
+      RETURN.
+
+   END.
+   IF vLoanType = "Теч" THEN
+   DO:
+
+      vAcctType = GetMainLoanAcct(BUFFER loan).
+
+      FIND FIRST buf-tt-editacct WHERE
+                 buf-tt-editacct.acct-type EQ vAcctType
+      NO-LOCK NO-ERROR.
+
+      IF AVAIL buf-tt-editacct THEN
+         FIND acct WHERE
+              RECID(acct) EQ buf-tt-editacct.rid
+         NO-LOCK NO-ERROR.
+      ELSE
+      DO:
+         FIND LAST loan-acct OF loan WHERE
+                   loan-acct.acct-type = vAcctType
+               AND loan-acct.since    <= in-op-date
+         NO-LOCK NO-ERROR.
+
+         IF AVAILABLE loan-acct THEN
+            FIND FIRST acct OF loan-acct NO-LOCK NO-ERROR.
+
+      END.
+
+      IF NOT AVAIL acct THEN RETURN.
+
+      FIND LAST bal-acct WHERE
+                bal-acct.acct-cat  EQ acct.acct-cat
+            AND bal-acct.bal-acct1 EQ SUBSTR(STRING(acct.bal-acct),1,3)
+            AND bal-acct.side      EQ "П"  NO-LOCK NO-ERROR.
+
+      IF AVAIL bal-acct THEN
+         oValue = STRING(bal-acct.bal-acct).
+
+      RETURN.
+
+   END.
+
+   IF vLoanType      = "Счет"    AND
+      tv-Create-Find = "Искать " THEN
+   DO:
+      FOR EACH mLoan WHERE
+               mLoan.contract  =      loan.contract
+           AND mLoan.cont-code BEGINS vCodeSogl + " "
+           AND mLoan.cont-code <>     vCodeSogl
+      NO-LOCK,
+          EACH loan-acct OF mLoan WHERE
+               loan-acct.acct-type = tv-Acct-Type
+           AND loan-acct.since    <= in-op-date
+      NO-LOCK,
+          FIRST acct OF loan-acct
+      NO-LOCK:
+         IF tv-Bal-Acct <> ""                    AND
+            tv-Bal-Acct <> ?                     AND
+            tv-Bal-Acct <> STRING(acct.bal-acct) THEN
+            NEXT.
+
+
+         IF acct.open-date > in-op-date THEN
+            NEXT.
+
+         oValue = acct.acct.
+
+         RETURN.
+      END.
+      tv-Create-Find = "Создавать".
+   END.
+
+END PROCEDURE.
+
+
+PROCEDURE СчетКлиента:
+
+DEFINE INPUT  PARAM iParStr AS CHAR NO-UNDO. /*Строка параметров*/
+DEFINE OUTPUT PARAM oValue  AS CHAR NO-UNDO. /*возвращаемое значение*/
+
+DEFINE VARIABLE vBalAcct  AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE vCust-Cat AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE vCust-Id  AS INT64     NO-UNDO.
+DEFINE VARIABLE vCurr     AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE vBranch   AS CHARACTER   NO-UNDO.
+
+vBalAcct = iParStr.     /* обработка параметров */
+IF vBalAcct EQ "" THEN
+   vBalAcct = "*".
+
+IF AVAIL loan THEN
+DO:
+   ASSIGN 
+      vCust-Cat = loan.cust-cat
+      vCust-Id  = loan.cust-id
+      vCurr     = loan.currency
+      vBranch   = loan.branch-id
+   .
+
+   RUN browseld.p ("acct",
+                   "bal-acct" + CHR(1) + "cust-cat" + CHR(1) + "cust-id"          + CHR(1) + "currency" + CHR(1) + "branch-id",
+                   vBalAcct   + chr(1) + vCust-Cat  + CHR(1) + STRING (vCust-Id)  + CHR(1) + vCurr      + CHR(1) + vBranch,
+                   "currency",
+                   4).
+   IF KEYFUNCTION (LASTKEY) NE "END-ERROR" THEN
+      oValue = ENTRY (1, pick-value).
+END.
+END PROCEDURE.
+
+/*Возвращает по ДР "Режим" договора счет второго порядка*/
+PROCEDURE СчетКрЛин:
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO. /*строка параметров*/
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO. /*счет второго порядка*/
+      
+   DEFINE VARIABLE vReg AS CHARACTER NO-UNDO.
+
+   IF AVAIL loan THEN
+   DO:
+      vReg = GetXAttrValueEx("loan",loan.contract + "," + loan.cont-code,"Режим",?) NO-ERROR.
+      CASE vReg:
+         WHEN "ВозобнЛиния"  THEN out-str = "91317". /* изменены счета с 91309 и 91302 на 91317 и 91316 соответственно */
+         WHEN "НевозЛиния"   THEN out-str = "91316".
+         WHEN "ЛимВыдЗад"    THEN out-str = "91317".
+         OTHERWISE   out-str = ?.
+      END CASE.
+   END. 
+END PROCEDURE.
+
+PROCEDURE DecTableAXD:
+   DEFINE INPUT  PARAMETER iClass    AS CHARACTER NO-UNDO. /*строка параметров*/
+   DEFINE OUTPUT PARAMETER oBalAcct  AS CHARACTER NO-UNDO. /*счет второго порядка*/
+
+   DEFINE VARIABLE vAcctType AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE vCustCat   AS CHARACTER   NO-UNDO.
+   IF iClass EQ "" THEN iClass = "LoanAcctAxd".
+   vAcctType = GetXattrValue("op-template",
+                             tv-op-kind + "," + STRING(tv-op-template),
+                             "Acct-Type").
+   IF ClientXAttrVal(loan.cust-cat,loan.cust-id,"Предпр") BEGINS "Пред" THEN
+      vCustCat = "П".
+   ELSE
+   IF loan.cust-cat EQ "Ю" AND
+      CAN-DO(FGetSetting("СтандТР", "СтатусФЛЧП", ""),
+             GetValueAttr("cust-corp", STRING(loan.cust-id), "cust-stat"))
+   THEN
+      vCustCat = "П".
+   ELSE
+      vCustCat = loan.cust-cat.
+
+   oBalAcct =  GetRefVal(iClass,
+                         gend-date,
+                         vAcctType        + "," + 
+                         loan.Class-Code  + "," + 
+                         loan.cont-type   + "," + 
+                         vCustCat         + "," + 
+                         loan.currency).
+   IF NOT CAN-FIND(bal-acct WHERE
+                   bal-acct.bal-acct EQ INT64(TRIM(oBalAcct)))
+   THEN oBalAcct = ?.
+
+END PROCEDURE.
+
+
+PROCEDURE PLAcctAXD:
+   DEFINE INPUT  PARAMETER iClass    AS CHARACTER NO-UNDO. /*строка параметров*/
+   DEFINE OUTPUT PARAMETER oMaskAcct AS CHARACTER NO-UNDO. /*счет второго порядка*/
+
+   DEFINE VARIABLE vAcctType AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE vCustCat  AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE vSubjAgr  AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE vDt446    AS DATE        NO-UNDO INITIAL ?.
+
+   vDt446 = DATE(FGetSetting("ЦБ446П", "Дата446П", "")) NO-ERROR.
+   IF vDt446 EQ ? THEN vDt446 = 01/01/2016.
+
+   IF iClass EQ "" THEN iClass = "MaskAcctAxd".
+   vAcctType = GetXattrValue("op-template",
+                             tv-op-kind + "," + STRING(tv-op-template),
+                             "Acct-Type").
+
+   IF gend-date GE vDt446 THEN
+   DO:
+      vSubjAgr = GetXAttrValueEx("loan", loan.contract + "," + loan.cont-code,
+                                 "SubjAgrmnt", "").
+      IF ClientXAttrVal(loan.cust-cat,loan.cust-id,"Предпр") BEGINS "Пред" THEN
+         vCustCat = "П".
+      ELSE
+      IF loan.cust-cat EQ "Ю" AND
+         CAN-DO(FGetSetting("СтандТР", "СтатусФЛЧП", ""),
+                GetValueAttr("cust-corp", STRING(loan.cust-id), "cust-stat"))
+      THEN
+         vCustCat = "П".
+      ELSE
+         vCustCat = loan.cust-cat.
+
+      oMaskAcct = GetRefVal(iClass,
+                            gend-date,
+                            vAcctType        + "," + 
+                            loan.Class-Code  + "," + 
+                            loan.cont-type   + "," +
+                            vSubjAgr         + "," +
+                            vCustCat         + "," +
+                            loan.currency
+                            ).
+   END.
+   ELSE
+   DO:
+      oMaskAcct = GetRefVal(iClass,
+                            gend-date,
+                            vAcctType        + "," + 
+                            loan.Class-Code  + "," + 
+                            loan.cont-type).
+      IF NOT {assigned oMaskAcct} THEN
+         oMaskAcct = GetRefVal(iClass,
+                               gend-date,
+                               vAcctType        + "," + 
+                               loan.Class-Code  + "," + 
+                               "*").
+   END.
+
+END PROCEDURE.
+
+/* Возвращает маску счета по роли
+
+Параметры = "РОЛЬ СЧЕТА, МАСКА[, ПОДСТАНОВКА]"
+Результат = "Маска"
+Пример    = "МаскаПоРоли('Кредит', 'бббббвввффффксссXXXX') = 'бббббвввффффкссс7813'" 
+*/
+PROCEDURE МаскаПоРоли:
+
+   DEFINE INPUT  PARAMETER iRoleMask   AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+
+   DEFINE VARIABLE iRole   AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE iMask   AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE iMask2  AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE iMask3  AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE iMSubst AS CHARACTER   NO-UNDO.  /* Символы при отсутствии счета по роли */
+   DEFINE VARIABLE mAcct   AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE i       AS INT64     NO-UNDO.
+   DEFINE VARIABLE j       AS INT64     NO-UNDO.
+   DEFINE VARIABLE mFlag   AS LOGICAL     NO-UNDO.
+   DEFINE VARIABLE mDip    AS CHARACTER   NO-UNDO.
+   DEFINE VARIABLE mPer    AS INT64     NO-UNDO.
+   DEFINE VARIABLE mPer1   AS INT64     NO-UNDO.
+   DEFINE VARIABLE mPer2   AS INT64     NO-UNDO.
+
+   DEF BUFFER loan-acct FOR loan-acct.
+
+   MAIN:
+   DO ON ERROR  UNDO MAIN, LEAVE MAIN
+      ON ENDKEY UNDO MAIN, LEAVE MAIN:
+
+      ASSIGN
+         iRole   = TRIM(ENTRY(1, iRoleMask), '"')
+         iMask   = TRIM(ENTRY(2, iRoleMask), '"') WHEN NUM-ENTRIES(iRoleMask) GT 1
+         iMSubst = TRIM(ENTRY(3, iRoleMask), '"') WHEN NUM-ENTRIES(iRoleMask) GT 2
+      .
+      FIND LAST loan-acct WHERE loan-acct.contract  EQ loan.contract
+                            AND loan-acct.cont-code EQ loan.cont-code
+                            AND loan-acct.acct-type EQ iRole NO-LOCK NO-ERROR.
+      IF AVAIL loan-acct THEN
+      DO:
+         mAcct = DelFilFromAcct(loan-acct.acct).
+
+         IF    INDEX(iMask, "[") GT 0
+            OR INDEX(iMask, "]") GT 0 THEN
+         DO:
+            DO i = 1 TO LENGTH(iMask):
+
+               IF SUBSTRING(iMask, i, 1) EQ "[" THEN
+               DO:
+                  mFlag = TRUE.
+                  NEXT.
+               END.
+
+               IF SUBSTRING(iMask, i, 1) EQ "]" THEN
+               DO:
+                  mFlag = FALSE.
+
+                  IF NUM-ENTRIES(mDip, "-") GT 1 THEN
+                  DO:
+                     ASSIGN
+                        mPer1 = INT64(ENTRY(1, mDip, "-"))
+                        mPer2 = INT64(ENTRY(2, mDip, "-"))
+                        mPer  = mPer2 - mPer1
+                     .
+                     DO j = 1 TO mPer:
+                        iMask2 = iMask2 + "ж".
+                     END.
+                  END.
+
+                  mDip = "".
+                  NEXT.
+               END.
+
+               IF NOT mFlag THEN
+                  iMask2 = iMask2 + SUBSTRING(iMask, i, 1).
+               ELSE
+                  mDip = mDip + SUBSTRING(iMask, i, 1).
+            END.
+         END.
+         ELSE iMask2 = iMask.
+
+         IF LENGTH(mAcct) NE LENGTH(iMask2) THEN
+         DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", "Длина счета не равна длине маски").
+            out_Result = ?.
+            UNDO MAIN, LEAVE MAIN.
+         END.
+         
+         DO i = 1 TO LENGTH(iMask2):
+            IF SUBSTRING(iMask2, i, 1) EQ "Х" THEN
+               SUBSTRING(iMask2, i, 1) = SUBSTRING(mAcct, i, 1).
+         END.
+
+         iMask2 = REPLACE(iMask2, "ж", "").
+         
+         IF    INDEX(iMask, "[") GT 0
+            OR INDEX(iMask, "]") GT 0 THEN
+         DO i = 1 TO LENGTH(iMask):
+            IF SUBSTRING(iMask, i, 1) EQ "[" THEN
+            DO:
+               mFlag = TRUE.
+               iMask3 = SUBSTRING(iMask2, i).
+               iMask2 = SUBSTRING(iMask2, 1, i - 1) + "[".
+               NEXT.
+            END.
+
+            IF SUBSTRING(iMask, i, 1) EQ "]" THEN
+            DO:
+               mFlag = FALSE.
+               iMask2 = iMask2 + "]" + iMask3.
+               iMask3 = "".
+               NEXT.
+            END.
+
+            IF mFlag THEN
+               iMask2 = iMask2 + SUBSTRING(iMask, i, 1).
+         END.
+
+         out_Result = iMask2.
+      END.
+      ELSE 
+         out_Result = IF {assigned iMSubst} 
+                         THEN REPLACE(iMask, "Х", iMSubst)
+                         ELSE REPLACE(iMask, "Х", "с").
+   END.
+END PROCEDURE.
+
+PROCEDURE МаскаВекселя.
+   DEFINE INPUT  PARAMETER iMask      AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER   NO-UNDO.
+
+   DEFINE VARIABLE vMask      AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE vTmpI1     AS INT64         NO-UNDO.
+   DEFINE VARIABLE vTmpI2     AS INT64         NO-UNDO.
+   DEFINE VARIABLE vTmpC1     AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE vTmpC2     AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE vIndex     AS INT64         NO-UNDO.
+   DEFINE VARIABLE vMaskLen   AS INT64         NO-UNDO.
+   DEFINE VARIABLE mUserID    AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE mOtdUser   AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE i          AS INT64         NO-UNDO.
+   DEFINE VARIABLE mInd       AS INT64         NO-UNDO.
+   DEFINE VARIABLE mDiasoftID AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE mQ         AS INT64         NO-UNDO.
+   DEFINE VARIABLE mQStr      AS CHARACTER     NO-UNDO.
+   DEFINE VARIABLE mAcctTmp   AS CHARACTER     NO-UNDO.
+
+   DEFINE BUFFER bacct     FOR acct.
+   DEFINE BUFFER bacct2    FOR acct.
+   DEFINE BUFFER bloan     FOR loan.
+   DEFINE BUFFER bsec-code FOR sec-code.
+
+   out_Result = iMask.
+MAIN:
+DO ON ERROR  UNDO MAIN, LEAVE MAIN
+   ON ENDKEY UNDO MAIN, LEAVE MAIN:
+
+   FIND FIRST bloan WHERE bloan.contract  EQ loan.contract
+                      AND bloan.cont-code EQ loan.cont-code NO-LOCK NO-ERROR.
+   IF NOT AVAIL bloan THEN
+      UNDO MAIN, LEAVE MAIN.
+
+   IF INT64(tv-Bal-Acct) EQ 50905 THEN
+      iMask = REPLACE(iMask,"N","с").
+   ELSE
+   DO:
+      FIND FIRST bsec-code WHERE bsec-code.sec-code EQ bloan.sec-code NO-LOCK NO-ERROR.
+      IF NOT AVAIL bsec-code THEN
+         UNDO MAIN, LEAVE MAIN.
+   END.
+
+   vMask = iMask.
+
+   DO WHILE INDEX(vMask,"[") GT 0:
+      ASSIGN
+         vTmpI1 = INDEX(vMask,"[")
+         vTmpI2 = INDEX(vMask,"]")
+      .
+      IF     vTmpI1 GT 1
+         AND vTmpI2 GT vTmpI1 THEN
+      DO:
+         ASSIGN
+            vTmpC1 = SUBSTRING(vMask,vTmpI1 - 1,1)
+            vIndex = INT64(SUBSTRING(vMask,vTmpI1 + 1,vTmpI2 - vTmpI1 - 1))
+         NO-ERROR.
+         IF    ERROR-STATUS:ERROR
+            OR vIndex EQ ? THEN
+         DO:
+            vIndex = 0.
+            LEAVE.
+         END.
+
+         IF vIndex GT 0 THEN
+         DO:
+            vTmpC2 = FILL(vTmpC1,vIndex).
+            vMask = REPLACE(vMask,
+                            SUBSTRING(vMask,vTmpI1 - 1,vTmpI2 - vTmpI1 + 2),
+                            vTmpC2).
+         END.
+      END.
+   END.
+
+   ASSIGN
+      iMask      = vMask
+      out_Result = vMask
+   .
+   /* Номер бланка */
+   IF INDEX(vMask,"N") GT 0 THEN
+   DO:
+      DO WHILE INDEX(vMask,"N") GT 0:
+         vMask = REPLACE(vMask,"N","").
+      END.
+      vMaskLen = LENGTH(iMask) - LENGTH(vMask).
+      vTmpC2 = STRING(bsec-code.form-nbr).
+      vTmpI2 = LENGTH(vTmpC2).
+      IF vTmpI2 GT vMaskLen THEN
+         vTmpC2 = SUBSTRING(vTmpC2,vTmpI2 - vMaskLen + 1,vMaskLen).
+      IF vTmpI2 LT vMaskLen THEN
+         vTmpC2 = FILL("0",vMaskLen - vTmpI2) + vTmpC2.
+      
+      out_Result = REPLACE(out_Result,FILL("N",vMaskLen),vTmpC2).
+   END.
+
+   ASSIGN
+      vMask = out_Result
+   .
+   IF INDEX(vMask,"и") GT 0 THEN
+   DO:
+      mDiasoftID = ClientXattrVal(bloan.cust-cat,
+                                  bloan.cust-id,
+                                  "Diasoft-ID").
+      IF NOT {assigned mDiasoftID} THEN
+         mDiasoftID = STRING(bloan.cust-id).
+   
+      IF LENGTH(mDiasoftID) LT 5 THEN
+         mDiasoftID = FILL("0", 5 - LENGTH(mDiasoftID)) + mDiasoftID.
+      ELSE IF LENGTH(mDiasoftID) GT 5 THEN
+         mDiasoftID = SUBSTRING(mDiasoftID, LENGTH(mDiasoftID) - 4).
+   
+      i = 0.
+
+      DO WHILE INDEX(vMask,"и") GT 0:
+   
+         i = i + 1.
+   
+         IF i GT 5 THEN LEAVE.
+   
+         mInd = INDEX(vMask,"и").
+   
+         SUBSTRING(vMask, mInd, 1) = SUBSTRING(mDiasoftID, i, 1).
+      END.
+   END.
+
+   IF INDEX(vMask,"ю") GT 0 THEN
+   DO:
+      FIND FIRST bacct WHERE bacct.bal-acct EQ INT64(tv-Bal-Acct)
+                         AND bacct.cust-cat EQ bloan.cust-cat
+                         AND bacct.cust-id  EQ bloan.cust-id NO-LOCK NO-ERROR.
+      IF NOT AVAIL bacct THEN
+         vMask = REPLACE(vMask, "ю", "с").
+      ELSE
+      DO:
+         mQ = 0.
+
+         LOOP:
+         DO WHILE TRUE:
+
+            mQStr = STRING(mQ, "99").
+
+            FOR EACH bacct2 WHERE bacct2.bal-acct               EQ INT64(tv-Bal-Acct)
+                              AND SUBSTRING(bacct2.acct, 16, 5) EQ SUBSTRING(vMask, 16, 5)
+            NO-LOCK:
+   
+               IF     SUBSTRING(bacct2.acct, INDEX(vMask,"ю"),     1) EQ SUBSTRING(mQStr, 1, 1)
+                  AND SUBSTRING(bacct2.acct, INDEX(vMask,"ю") + 1, 1) EQ SUBSTRING(mQStr, 2, 1) THEN LEAVE.
+            END.
+   
+            IF NOT AVAIL bacct2 THEN
+            DO:
+               SUBSTRING(vMask, INDEX(vMask,"ю"), 1) = SUBSTRING(mQStr, 1, 1).
+               SUBSTRING(vMask, INDEX(vMask,"ю"), 1) = SUBSTRING(mQStr, 2, 1).
+               LEAVE LOOP.
+            END.
+            ELSE
+            DO:
+               IF mQ EQ 99 THEN
+               DO:
+                  vMask = REPLACE(vMask, "ю", "с").
+                  LEAVE LOOP.
+               END.
+
+               mQ = mQ + 1.
+            END.
+         END.
+      END.
+   END.
+
+   ASSIGN
+      out_Result = vMask
+   .
+END.
+
+END PROCEDURE.
+
+/*Входные параметры
+ - Роль счета (c него берем счет первого порядка)
+ - Хвост счета второго порядка 
+Возвращает счет второго порядка
+Пример БалСчетРоль(Кредит,"09")  = 51409*/
+
+PROCEDURE БалСчетРоль:
+
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEFINE VARIABLE vAcctType AS CHAR NO-UNDO.
+   DEFINE VARIABLE vChar     AS CHAR NO-UNDO.
+
+   DEF BUFFER loan-acct FOR loan-acct.
+   DEF BUFFER acct FOR acct.
+
+   ASSIGN
+      vAcctType = TRIM(ENTRY(1, in-str), '"')
+      vChar     = TRIM(ENTRY(2, in-str), '"') WHEN NUM-ENTRIES(in-str) GT 1
+   .
+   FIND LAST loan-acct OF loan WHERE
+             loan-acct.acct-type = vAcctType
+         AND loan-acct.since    <= in-op-date
+   NO-LOCK NO-ERROR.
+   
+   IF NOT AVAIL loan-acct THEN RETURN.
+   FIND acct  OF loan-acct NO-LOCK NO-ERROR.
+
+   IF NOT AVAILABLE acct THEN RETURN.
+
+   out-str = SUBSTRING(STRING(acct.acct),1,3) + vChar.
+   
+END PROCEDURE.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='10/12/2015 12:28:41.191+04:00' */
+/* $LINTUSER='boam' */
+/* $LINTMODE='1' */
+/* $LINTFILE='fbalacct.lib' */
+/*prosignsVHe2sSUpEzAZwm28xWneg*/

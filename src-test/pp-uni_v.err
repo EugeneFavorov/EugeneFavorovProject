@@ -1,0 +1,27 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-1998 ТОО "Банковские информационные системы"
+     Filename: pp-new.err
+      Comment: Файл стандартных ошибок
+   Parameters:
+         Uses:
+      Used by:
+      Created: 09.11.1999 Kostik
+     Modified: 22/07/2009 kraw (0104913) ppNoCheckOp
+*/
+Form "~n@(#) pp-new.err 1.0 Kostik 09/11/1999 Kostik 09/11/1999 " with frame sccs-id width 250.
+
+&IF DEFINED(ppSuccess) = 0 &THEN
+
+  &GLOBAL-DEFINE ppSuccess      0
+
+  &GLOBAL-DEFINE ppAmbigOpEntry    "К документу относится более одной проводки!"
+  &GLOBAL-DEFINE ppMissingOp       "Нет записи <op>"
+  &GLOBAL-DEFINE ppBadCurrency     "Проводка должна быть в валюте!"
+  &GLOBAL-DEFINE ppNotOut          "Это не исходящий платеж"
+  &GLOBAL-DEFINE ppNotIn           "Это не входящий платеж"
+  &GLOBAL-DEFINE ppNotTrans        "Это не транзитный платеж"
+  &GLOBAL-DEFINE ppNoCheckOp       "Документ не соответствует условиям выборки"
+
+&ENDIF
+

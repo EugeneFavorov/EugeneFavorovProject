@@ -1,0 +1,3 @@
+beg-date end-date commiss aktnum
+        WITH FRAME frame_date_codes
+

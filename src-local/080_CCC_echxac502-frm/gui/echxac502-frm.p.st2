@@ -1,0 +1,7 @@
+
+         vBIK  vINN  vKPP  vOGRN vRNOM vNAME VIEW-AS FILL-IN SIZE 60 BY 1
+         vINDX vCREG vDIST vCITY vNASP vSTRT
+         vHOUS vCORP vAPRT vBRAN vDATE 
+      WITH FRAME vfrm1 SIDE-LABEL ROW 3 TITLE COLOR brigth-white 
+         "[ ‘‚…„…ˆŸ Ž €Š… „Ž ‚…‘…ˆŸ ˆ‡Œ……ˆ‰ ]" 1 COL OVERLAY 
+         CENTERED

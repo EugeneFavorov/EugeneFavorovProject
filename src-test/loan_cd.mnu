@@ -1,0 +1,600 @@
+
+ELSE
+
+ IF lastkey EQ KEYCODE("F2")
+   AND favail()
+THEN
+DO:
+DEF VAR fl-o AS INT64 NO-UNDO .
+DEF VAR mTempPV AS CHAR NO-UNDO.
+
+def var newpick as decimal no-undo.
+def var newrights as char no-undo.
+def var minus1 as int no-undo.
+def var datedg as char no-undo.
+def var tmpdate2 as date no-undo.
+def var tmpstrd as char no-undo.
+def var iii as int no-undo.
+def buffer bloancond for loan-cond.
+def buffer bbterm-obl for term-obl.
+
+   minus1 = 0.
+   newpick = 0.
+   pick-value = "0".
+   newrights = GETXATTRVALUEEX('_user',USERID('bisquit'),'menu_access_f2',''). 
+   
+   IF USERID('bisquit') BEGINS 'i0400' THEN newrights = '0,1,2,3,4,5,6,7,8'.
+   IF INDEX(newrights,"0") <> 0 THEN minus1 = 1.
+
+   RUN messmenu3.p (10,
+                  "[ Операции с договорами ]",
+                  "",
+                  (IF INDEX(newrights,"0") <> 0 THEN "0. ЧДГ,"  ELSE "") +
+                  "1. Дополнительные реквизиты,"                +
+                  "2. Передача другому ответисполнителю,"       +
+                  "3. Назначить коэффициент резервирования,"    +
+                  "4. Удалить коэффициенты резервирования,"     +
+                  "5. Сдвиг графиков при сдвиге выходных дней," +
+                  "6. Заполнение ЭПС на дату выдачи"            +
+                  (IF GetFltVal ("Contract")  EQ "Кредит"
+                   THEN ",7. Операции с ПОС" ELSE "")           +
+                  (IF GetFltVal ("Contract") EQ "Кредит" AND INDEX(newrights,"8") <> 0 THEN                
+                  ",8. Заполнение данных о досрочном гашении" ELSE "")
+                  ).
+
+
+   if lastkey eq keycode("F2") then do:
+       
+ /*        {intrface.get xclass} */
+       {tmp-sel.i1}
+       FIND tmprecid NO-LOCK NO-ERROR.
+       
+       if avail tmprecid then do:
+            find first loan where recid(loan) = tmprecid.id no-lock no-error. 
+            if avail loan then do:
+
+    datedg = trim(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_Date_dosr_g","")).
+
+        find first signs where signs.file-name = 'loan' and
+		signs.surrogate = loan.contract + "," + loan.cont-code and
+		signs.code = 'dg_Date_pod_zay' no-lock no-error.
+	if avail signs then tmpdate2 = date(signs.code-value).
+/*	if avail signs then tmpdate2 = signs.date-value. */
+	else tmpdate2 = today.
+
+
+    DO iii = 1 TO 3:
+        tmpdate2 = tmpdate2 + 1. 
+	DO WHILE HOLIDAY(tmpdate2) OR CAN-DO("1,7",STRING(WEEKDAY(tmpdate2))):
+	      tmpdate2 = tmpdate2 + 1.
+
+	END.
+/*
+message string(tmpdate2) view-as alert-box.
+  */
+/*        IF HOLIDAY(tmpdate2) OR CAN-DO("1,7",STRING(WEEKDAY(tmpdate2))) THEN iii = iii - 1. */
+    END.
+
+
+IF datedg = '' or date(datedg) < (today - 1) or trim(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_type_dosr_g","")) <> 'ПДГ' then
+
+datedg = "".
+
+
+    find first bbterm-obl where
+        bbterm-obl.contract = loan.contract
+        and bbterm-obl.cont-code = loan.cont-code
+        and bbterm-obl.end-date >= tmpdate2
+        and bbterm-obl.idnt = 1 no-lock no-error.
+
+
+    FIND first bloancond WHERE bloancond.contract = loan.contract 
+	and bloancond.cont-code = loan.cont-code
+	and bloancond.class-code = 'cd-cond'	
+	no-lock no-error.
+
+    if avail bloancond then do:
+        find first signs where signs.file-name = 'loan' and
+		signs.surrogate = loan.contract + "," + loan.cont-code and
+		signs.code = 'dg_Date_pod_zay' no-lock no-error.
+/*	if avail signs then tmpdate2 = signs.date-value. */
+	if avail signs then tmpdate2 = date(signs.code-value).
+
+	else tmpdate2 = today.
+
+	   DO iii = 1 TO 1:
+	      tmpdate2 = tmpdate2 + 1. 
+	      IF HOLIDAY(tmpdate2) OR CAN-DO("1,7",STRING(WEEKDAY(tmpdate2))) THEN iii = iii - 1.
+	   END.
+
+	datedg = string((tmpdate2),"99.99.9999").
+
+    end.	
+
+
+    if avail bbterm-obl and datedg = "" then do:
+           datedg = string(bbterm-obl.end-date,"99.99.9999").
+    end.
+
+
+    if GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_Date_pod_zay","") = "" then datedg = "".
+            
+                message "_____________________________________________________" skip 
+                " Договор:                     " string(loan.doc-ref,"x(15)") skip
+                " ДГ- Дата подачи заявления:   " string(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_Date_pod_zay",""),"x(15)") skip
+                " ДГ- Дата досрочного гашения: " string(datedg,"x(15)") skip 
+                " ДГ- Сумма досрочного гашения:" string(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_summ_dosr_g",""),"x(15)") skip
+            /*    " ДГ- Тип досрочного гашения:  " string(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_type_dosr_g",""),"x(15)") skip
+                " ДГ- После ДГ уменьшить:      " string(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_type_dosr_g2",""),"x(15)") skip
+                "ДГ- Перечисление:            " string(GetXattrValueEx("loan",loan.contract + "," + loan.cont-code,"dg_perechisl",""),"x(15)") */
+                 view-as alert-box TITLE "Параметры заявления".
+            end.
+       end. 
+       {tmp-sel.i3}
+   end.
+
+   IF KEYFUNCTION(LASTKEY) EQ "end-error"
+   THEN NEXT ACTION.
+
+   FIND tmprecid NO-LOCK NO-ERROR.
+   IF AMBIGUOUS (tmprecid) THEN
+   DO:
+      mTempPV = pick-value.
+      pick-value = "No".
+      RUN Fill-SysMes IN h_tmess ("","",4,"Помечено несколько договоров. Проводить изменения?").   
+      IF    (KEYFUNCTION(LASTKEY) EQ "end-error")
+         OR (pick-value           NE "Yes") THEN NEXT ACTION.
+      pick-value = mTempPV.
+   END.
+
+   newpick = DECIMAL(pick-value) no-error.
+   if newpick > 0 then newpick = newpick - minus1.
+   pick-value = string(newpick).
+	
+   CASE pick-value:
+      WHEN "1" THEN
+         DO:
+            RUN SignRatSelectAttr.
+            IF RETURN-VALUE EQ "yes"
+            THEN NEXT REFRESH.
+            ELSE NEXT ACTION.
+         END.
+      WHEN "2" THEN
+         DO:
+            {tmp-sel.i1}
+            RUN rid-keep.p (TABLE tmprecid).
+            RUN loan-usr.p.
+            RUN RelQ.
+            {tmp-sel.i3}
+         END.
+
+      WHEN "3" THEN DO: /* НАЗНАЧЕНИЕ КОЭФФИЦИЕНТОВ РЕЗЕРВИРОВАНИЯ  */ 
+            {acc-file.i
+                &file = comm-rate
+                &access-mode="c"
+                &no-access    = "NEXT ACTION"
+                &NOdef-access = YES
+
+            }
+            sss:
+            DO ON ERROR UNDO sss, LEAVE sss ON ENDKEY UNDO sss, LEAVE sss:
+               UPDATE m-beg-date m-ratecomm FORMAT ">>9.99999" WITH FRAME SetPar.
+            
+               HIDE FRAME SetPar NO-PAUSE.
+   
+               IF LASTKEY <> 10 AND LASTKEY <> 13 THEN LEAVE sss.
+   
+               IF NOT CAN-FIND( FIRST tmprecid ) THEN DO:
+                  /* нет отмеченных договоров - работаем по фильтру */
+                  mFlagNotMark = TRUE.
+                  RUN CreateTmpRecid.
+               END.
+   
+               mLnTotal = 0.
+               FOR EACH tmprecid, FIRST loan WHERE
+                  RECID(loan) = tmprecid.id NO-LOCK:
+                  mLnTotal = mLnTotal + 1. /* подсчет кол-ва договоров */
+               END.
+   
+               RUN Fill-SysMes IN h_tmess ("", "", "4", 
+                   "Установить коэффициент резервирования " + STRING(m-ratecomm)
+                   + "\nначиная с " + STRING(m-beg-date) + "\n"
+                   + (IF mFlagNotMark THEN "всем договорам видимым в фильтре"
+                                      ELSE "отмеченным договорам")
+                   + "\n(кол-во: " + STRING(mLnTotal) + ")?"
+                   ).                      
+               IF NOT pick-value = "YES" THEN LEAVE sss.
+   
+               {init-bar.i "Минуточку"}
+               mLoanCount = 0.
+   
+               {move-bar.i  mLoanCount mLnTotal}
+   
+               FOR EACH tmprecid
+               TRANSACTION
+                  ON ERROR  UNDO, NEXT
+                  ON ENDKEY UNDO, NEXT:
+   
+                  FIND FIRST loan WHERE RECID(loan) EQ tmprecid.id EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+      
+                  IF NOT AVAILABLE loan THEN
+                  DO: 
+                     IF LOCKED loan THEN
+                     DO:
+                        RUN wholocks2.p (tmprecid.id,"loan","").
+                        UNDO, NEXT.
+                     END.
+                  END.
+   
+                  ASSIGN
+                     mLoanCount = mLoanCount + 1
+                     mContract  = loan.Contract
+                     mContCode  = loan.Cont-Code
+                     mCurrency  = loan.Currency.
+    
+                  IF NUM-ENTRIES( mContCode," ") = 2  THEN DO:
+                     IF GetXattrInit (loan.Class-Code, "ИндРезервТранш") EQ "НЕТ" THEN
+                     DO:
+                        IF mAlwaysSkipT THEN NEXT.
+                        ELSE DO:
+                           RUN messmenu.p (10,
+                                          "По дог." + TRIM(loan.doc-ref) ,
+                                          "На классе установлен ДР ИндРезервТранш=НЕТ|" +
+                                          "Корректировка КР только на охв.договоре" ,
+                                          "1. Пропустить транш," +
+                                          "2. Всегда пропускать такие транши," +
+                                          "3. Прервать операцию"
+                                          ).
+
+                           IF KEYFUNCTION(LASTKEY) EQ "end-error" THEN
+                              pick-value = "3".
+
+                           CASE pick-value:
+                              WHEN "1" THEN NEXT. /* Пропустить договор */
+                              WHEN "2" THEN DO:   /* Всегда пропускать договор */
+                                 mAlwaysSkipT = TRUE.
+                                 NEXT.
+                              END.
+                              WHEN "3" THEN DO:   /* Прервать операцию */
+                                 {del-bar.i}
+                                 LEAVE sss.
+                              END.
+                           END CASE.
+                        END.
+                     END.
+                  END.
+
+                  IF m-beg-date < loan.open-date THEN 
+                     RUN Fill-SysMes IN h_tmess ("", "", "0", 
+                         "КР для договора " + TRIM(loan.doc-ref) + " будет\n" +
+                         "установлен на дату его открытия " + STRING(loan.open-date)
+                         ).                                       
+    
+                  FIND FIRST comm-rate
+                     WHERE comm-rate.Commission = "%Рез" AND
+                           comm-rate.kau      = mContract + "," + mContCode AND
+                           comm-rate.currency = mCurrency AND
+                           comm-rate.acct     = "0"       AND
+                           comm-rate.since    = IF m-beg-date < loan.open-date 
+                                                THEN loan.open-date
+                                                ELSE m-beg-date
+                     EXCLUSIVE NO-ERROR.
+    
+                  IF AVAIL comm-rate AND comm-rate.rate-comm <> m-ratecomm THEN
+                  DO:
+                     /* по договору уже задан коэфф.риска за эту дату и он
+                        не совпадает с заданным */
+                     IF mAlwaysReplace THEN
+                        rate-comm = m-ratecomm.
+                     ELSE 
+                        IF mAlwaysSkip THEN NEXT.
+                        ELSE DO:
+                           RUN messmenu.p (10,
+                                          "[По дог." + TRIM(loan.doc-ref) +
+                                          " на дату " + STRING(IF m-beg-date < loan.open-date 
+                                                               THEN loan.open-date
+                                                               ELSE m-beg-date) + "]",
+                                          "уже задан КР:" + STRING(comm-rate.rate-comm),
+                                          "1. Заменить коэффициент по договору," +
+                                          "2. Пропустить договор," +
+                                          "3. Всегда заменять коэфф. по договору   ," +
+                                          "4. Всегда пропускать договор," +
+                                          "5. Прервать операцию"
+                                          ).
+                          
+                           IF KEYFUNCTION(LASTKEY) EQ "end-error" THEN
+                              pick-value = "5".
+
+                           CASE pick-value:
+                              WHEN "1" THEN       /* Заменить коэффицент по договору */
+                                 rate-comm = m-ratecomm.
+    
+                              WHEN "2" THEN NEXT. /* Пропустить договор */
+    
+                              WHEN "3" THEN DO:   /* Всегда заменять коэфф. по договору */
+                                 rate-comm = m-ratecomm.
+                                 mAlwaysReplace = TRUE.
+                              END.
+    
+                              WHEN "4" THEN DO:   /* Всегда пропускать договор */
+                                 mAlwaysSkip = TRUE.
+                                 NEXT.
+                              END.
+                              WHEN "5" THEN DO:   /* Прервать операцию */
+                                 {del-bar.i}
+                                 LEAVE sss.
+                              END.
+                           END CASE.
+                        END.
+                  END.
+    
+                  ELSE IF NOT AVAIL comm-rate THEN
+                  /* коэфф.резервирования за дату не найден - добавляем*/
+                  DO:
+                     CREATE comm-rate.
+                     ASSIGN
+                        comm-rate.commission = "%Рез"
+                        comm-rate.kau        = mContract + ',' + mContCode
+                        comm-rate.currency   = mCurrency
+                        comm-rate.acct       = "0"
+                        comm-rate.rate-comm  = m-RateComm
+                        comm-rate.since      = IF m-beg-date < loan.open-date 
+                                               THEN loan.open-date
+                                               ELSE m-beg-date 
+                        comm-rate.period     = 0 
+                     .
+                  END.
+    
+                  RELEASE comm-rate.
+    
+                  RUN ChangeRiskOnLoan("%Рез",
+                                       mContract,
+                                       mContCode,
+                                       mCurrency,
+                                       IF m-beg-date < loan.open-date THEN loan.open-date ELSE m-beg-date,
+                                       m-RateComm
+                                      ).
+       
+               END. /*FOR EACH tmprecid*/
+
+            END. /*sss*/
+
+            {del-bar.i}
+            RUN RelQ.
+            {tmp-sel.i3}
+
+         END. /* 3 */
+
+
+      WHEN "4" THEN DO: /* УДАЛЕНИЕ КОЭФФИЦИЕНТОВ РЕЗЕРВИРОВАНИЯ */
+
+            {acc-file.i
+                &file = comm-rate
+                &access-mode="d"
+                &no-access    = "NEXT ACTION"
+                &NOdef-access = YES
+
+            }
+            ttt:  
+            DO ON ERROR  UNDO ttt, LEAVE ttt
+               ON ENDKEY UNDO ttt, LEAVE ttt:
+               UPDATE m-beg-date m-end-date WITH FRAME DelPar.
+
+               HIDE FRAME SetPar NO-PAUSE.
+   
+               IF LASTKEY <> 10 AND LASTKEY <> 13 THEN /* Ctrl+Enter, Enter */
+                  LEAVE ttt.
+   
+               IF NOT CAN-FIND( FIRST tmprecid ) THEN DO:
+                  /* нет отмеченных договоров - работаем по фильтру */
+                  mFlagNotMark = TRUE.
+                  RUN CreateTmprecid.
+               END.
+   
+               mLnTotal = 0.
+               FOR EACH tmprecid, FIRST loan WHERE
+                  RECID(loan) = tmprecid.id NO-LOCK:
+                  mLnTotal = mLnTotal + 1. /* подсчет кол-ва договоров */
+               END.
+   
+               IF mFlagNotMark THEN /* нет отмеченных договоров - по фильтру */
+                  MESSAGE "Выполнить удаление коэффициентов резервирования за интервал дат " + 
+                          STRING(m-beg-date) + '-' + STRING(m-end-date) +
+                          " по всем договорам видимым в фильтре (кол-во: " +
+                          STRING(mLnTotal) + ")?"
+                     VIEW-AS ALERT-BOX BUTTONS YES-NO UPDATE mchoice.
+               ELSE
+                  MESSAGE "Выполнить удаление коэффициентов резервирования за интервал дат " + 
+                           STRING(m-beg-date) + "-" + STRING(m-end-date) + 
+                          " по отмеченным договорам(к-во: " + STRING(mLnTotal) + ")?"
+                     VIEW-AS ALERT-BOX BUTTONS YES-NO UPDATE mchoice.
+   
+               IF NOT mchoice = YES THEN LEAVE ttt.
+   
+               {init-bar.i "Минуточку"}
+               mLoanCount = 0.
+   
+               {move-bar.i  mLoanCount mLnTotal}
+   
+               FOR EACH tmprecid
+               TRANSACTION
+                  ON ERROR  UNDO, NEXT
+                  ON ENDKEY UNDO, NEXT:
+   
+                  FIND FIRST loan WHERE RECID(loan) EQ tmprecid.id EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+   
+                  IF NOT AVAILABLE loan THEN
+                  DO: 
+                     IF LOCKED loan THEN
+                     DO:
+                        RUN wholocks2.p (tmprecid.id,"loan","").
+                        UNDO, NEXT.
+                     END.
+                  END.
+   
+                  ASSIGN
+                     mLoanCount = mLoanCount + 1
+                     mContract  = loan.Contract
+                     mContCode  = loan.Cont-Code
+                     mCurrency  = loan.Currency.
+    
+                  IF NUM-ENTRIES( mContCode," ") = 2  THEN DO:
+                     IF GetXattrInit (loan.Class-Code, "ИндРезервТранш") EQ "НЕТ" THEN
+                     DO:
+                        IF mAlwaysSkipT THEN NEXT.
+                        ELSE DO:
+                           RUN messmenu.p (10,
+                                          "По дог." + TRIM(loan.doc-ref) ,
+                                          "На классе установлен ДР ИндРезервТранш=НЕТ |" +
+                                          "Удаление КР только на охв.договоре" ,
+                                          "1. Пропустить транш," +
+                                          "2. Всегда пропускать такие транши," +
+                                          "3. Прервать операцию"
+                                          ).
+
+                           IF KEYFUNCTION(LASTKEY) EQ "end-error" THEN
+                              pick-value = "3".
+
+                           CASE pick-value:
+                              WHEN "1" THEN NEXT. /* Пропустить договор */
+                              WHEN "2" THEN DO:   /* Всегда пропускать договор */
+                                 mAlwaysSkipT = TRUE.
+                                 NEXT.
+                              END.
+                              WHEN "3" THEN DO:   /* Прервать операцию */
+                                 {del-bar.i}
+                                 LEAVE ttt.
+                              END.
+                           END CASE.
+                        END.
+                     END.
+                  END.
+
+
+                     FOR EACH comm-rate
+                        WHERE comm-rate.Commission = "%Рез" 
+                          AND comm-rate.kau      = mContract + "," + mContCode
+                          AND comm-rate.currency = mCurrency
+                          AND comm-rate.acct     = "0"
+                          AND comm-rate.since    >= m-beg-date
+                          AND comm-rate.since    <= m-end-date
+                     EXCLUSIVE:
+                        DELETE comm-rate.
+                     END.
+                     fl-o = 0 .
+                     IF GET_NEXT_COMM_DATE('%Рез',?,loan.currency,
+                         loan.contract + ',' + loan.cont-code ,
+                         0.0,0,m-beg-date,01/01/3000) = ?
+                     THEN DO :
+                     RUN  Set_Risk_From_History IN h_i254
+                          (loan.contract,loan.cont-code,m-beg-date -
+                           1,OUTPUT fl-o) .
+                     IF fl-o < 0 
+                     THEN UNDO,NEXT .
+                  END.
+               END. /*FOR EACH tmprecid*/
+
+            END. /*ttt*/
+
+            {del-bar.i}
+            RUN RelQ.
+            {tmp-sel.i3}
+
+         END. /*4*/
+                        /* Привязка договоров к ПОСу. */ 
+      WHEN "7"
+      THEN DO:
+         {tmp-sel.i1}         
+         RUN menubagoper.p (TABLE tmprecid BY-REFERENCE).
+         crid = RECID (loan).
+         RUN RelQ.
+         {repq RECID crid}
+         {tmp-sel.i3} 
+         NEXT REFRESH. 
+      END.
+                        /* ЧДГ */ 
+      WHEN "0"
+      THEN DO:
+         {tmp-sel.i1}         
+         run menuchdg.p (TABLE tmprecid BY-REFERENCE).
+         crid = RECID (loan).
+         RUN RelQ.
+         {repq RECID crid}
+         {tmp-sel.i3} 
+         NEXT REFRESH. 
+      END.
+      WHEN "8"
+      THEN DO:
+         {tmp-sel.i1}         
+         run menudg.p (TABLE tmprecid BY-REFERENCE).
+         crid = RECID (loan).
+         RUN RelQ.
+         {repq RECID crid}
+         {tmp-sel.i3} 
+         NEXT REFRESH. 
+      END.
+      WHEN "5" THEN DO: /* Сдвиг графиков КиД в связи со сдвигом выходных дней */
+          RUN rid-keep.p (TABLE tmprecid).
+          RUN reptrmholiday.p .
+          {del-bar.i}          
+          RUN RelQ.
+          {tmp-sel.i3}
+      END.
+      WHEN "6" THEN /* заполняем ДР ЭПС на дату выдачи */
+      DO:
+         {tmp-sel.i1}
+            /* Запоминаем запись, на которой стоим. */
+         RUN GetRowArr(h_query).
+            /* процедура расчета ДР ЭПС */
+         RUN SetEps.
+            /* чистим отметки */
+         RUN DeleteTmpRecid.
+
+         PROCEDURE SetEps.
+            DEF VAR v-iss-date AS DATE NO-UNDO. /* дата выдачи */
+            DEF VAR vEps       AS DEC  NO-UNDO.
+            DEF VAR vEpsStr    AS CHAR NO-UNDO.            
+            DEF BUFFER bloan     FOR loan.
+            DEF BUFFER bloan-int FOR loan-int.
+
+            FOR EACH tmprecid,
+               FIRST bloan WHERE RECID(bloan) EQ tmprecid.id
+               NO-LOCK:
+               IF GetXAttrInit(bloan.class-code,"РасчЭПС") NE "ДА" THEN NEXT.
+               v-iss-date = ?.
+                  /* ищем операцию выдачи */
+               FOR EACH bloan-int WHERE
+                        bloan-int.contract  EQ bloan.contract
+                    AND bloan-int.cont-code EQ bloan.cont-code
+                    AND bloan-int.id-d      EQ 0
+                    AND bloan-int.id-k      EQ 3
+               NO-LOCK
+               BY bloan-int.mdate:
+                  v-iss-date = bloan-int.mdate.
+                  LEAVE.
+               END.
+               IF v-iss-date EQ ? THEN
+                  v-iss-date = bloan.open-date.
+               vEps = GetEpsLoan (bloan.contract, 
+                                  bloan.cont-code,
+                                  v-iss-date) * 100.
+               vEpsStr = GetRoundEpsLoan (bloan.class-code,
+                                          vEps). 
+               
+               UpdateSignsEx(bloan.class-code,
+                             bloan.contract + "," + bloan.cont-code,
+                             "ЭПС",
+                             vEpsStr).
+            END.
+            RETURN.
+         END PROCEDURE.
+      END.
+   END CASE.
+END.
+
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='01/04/2015 11:42:21.409+04:00' */
+/* $LINTUSER='lakd' */
+/* $LINTMODE='1' */
+/* $LINTFILE='loan_cd.mnu' */

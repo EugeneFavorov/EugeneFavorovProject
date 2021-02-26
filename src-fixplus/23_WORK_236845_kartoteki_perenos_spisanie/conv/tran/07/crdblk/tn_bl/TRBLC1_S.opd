@@ -1,0 +1,223 @@
+[OpKindList 4.1d] // Экспорт данных произвел I0400SGI 22/03/2016 14:12:58 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+TRBLC1_S:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.CrdBlk.TN_BL.TRBLC1_S
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Перевод с картотеки блокированных счетов на Картотеку 1
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// TN_BL
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   10:
+   DO TEMPLATE CLASS opo ACTION Поиск ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(ENTRY(1,@kau))
+
+      20:
+      DO TEMPLATE CLASS op-entry ACTION Поиск ROLE op-entry:
+         // РЕКВИЗИТ: op-entry (формула) #1
+         @op-entry = SEARCH(ENTRY(2,@kau))
+
+
+      END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+
+      DO AFTER:
+         @kau1 = @kau;
+         @iKau-id = 'Карт-ка1';
+         @oplata = 'no';
+         ТРАНЗАКЦИЯ('_PRCKAUS');
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS opo ACTION ВизСоздание ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF @iRegimAuto == no THEN 1 ELSE 0 ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (константа) #2
+      @details = [Перенос документов c картотеки блокированных счетов на Картотеку 1]
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = СЧЕТЧИК(НАСТРОЙКА(СтандТр,СчетНумДок,CNTDOCNUM))
+
+      // РЕКВИЗИТ: doc-type (константа) #4
+      @doc-type = [ВБО]
+      // РЕКВИЗИТ: op-status (константа) #5
+      @op-status = [Ф]
+      // РЕКВИЗИТ: op-bal (формула) #6
+      @op-bal = @op-bal(10)
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: op-date (формула) #8
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #10
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: class-code (константа) #11
+      @class-code = [opo]
+      // РЕКВИЗИТ: ИсхСтатус (формула) #12
+      @ИсхСтатус =
+      DO:
+         IF DEFINED(ИсхСтатус,10) THEN
+                  @ИсхСтатус(10)
+                  ELSE "" ENDIF
+      END.
+
+      40:
+      DO TEMPLATE CLASS op-entry ACTION ВизСоздание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = @icrtacct
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = @iblacct
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur = @oCurr-bal
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @oBalance
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: kau-db (формула) #7
+         @kau-db = @oKau
+
+         // РЕКВИЗИТ: kau-cr (формула) #8
+         @kau-cr = @oKau
+
+         // РЕКВИЗИТ: op-cod (константа) #9
+         @op-cod = [000000]
+
+      END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   50:
+   DO TEMPLATE CLASS opo ACTION Создание ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF @iRegimAuto == no THEN 0 ELSE 1 ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (константа) #2
+      @details = [Перенос документов c картотеки блокированных счетов на Картотеку 1]
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = СЧЕТЧИК(НАСТРОЙКА(СтандТр,СчетНумДок,CNTDOCNUM))
+
+      // РЕКВИЗИТ: doc-type (константа) #4
+      @doc-type = [ВБО]
+      // РЕКВИЗИТ: op-status (константа) #5
+      @op-status = [Ф]
+      // РЕКВИЗИТ: op-bal (формула) #6
+      @op-bal = @op-bal(10)
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: op-date (формула) #8
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #10
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: class-code (константа) #11
+      @class-code = [opo]
+      // РЕКВИЗИТ: ИсхСтатус (формула) #12
+      @ИсхСтатус =
+      DO:
+         IF DEFINED(ИсхСтатус,10) THEN
+                  @ИсхСтатус(10)
+                  ELSE "" ENDIF
+      END.
+
+      60:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = @icrtacct
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = @iblacct
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur = @oCurr-bal
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @oBalance
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: kau-db (формула) #7
+         @kau-db = @oKau
+
+         // РЕКВИЗИТ: kau-cr (формула) #8
+         @kau-cr = @oKau
+
+         // РЕКВИЗИТ: op-cod (константа) #9
+         @op-cod = [000000]
+
+      END TEMPLATE. // ШАБЛОН:   60  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ TRBLC1_S - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

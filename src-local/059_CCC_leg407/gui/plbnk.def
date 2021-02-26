@@ -1,0 +1,31 @@
+
+/* +++ plbnk.def was humbly modified by (c)blodd converter v.1.11 on 8/28/2017 9:10am +++ */
+
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: plbnk.def
+      Comment: TT:0259807 Миграция. 365-П предоставление общей выписки по счетам ТФ и ОФ
+   Parameters:
+         Uses:
+      Used by:
+      Created: 22/03/2014 15:15 KMBIS Переходник для выгрузки данных из внешней системы.
+                                      Объявление функций библиотеки pp-plbnk.p
+     Modified: 
+*/
+/*=== Сравнивает переданную дату с датой НР =====================================================*/
+FUNCTION RunExtQuery RETURNS LOG
+   (INPUT  iDate  AS  DATE) 
+   IN {1}.
+
+/*=== Простой поиск счета =======================================================================*/
+FUNCTION IsAcctExist RETURNS LOG 
+   (INPUT  iAcct     AS  CHAR,
+    OUTPUT oAcct     AS  CHAR,
+    OUTPUT oCur      AS  CHAR,
+    OUTPUT oOpenDate AS  CHAR,
+    OUTPUT oClosDate AS  CHAR)
+   IN {1}.
+
+
+/* --- plbnk.def was humbly modified by (c)blodd converter v.1.11 on 8/28/2017 9:10am --- */

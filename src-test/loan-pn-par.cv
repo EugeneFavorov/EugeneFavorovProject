@@ -1,0 +1,30 @@
+mPNTypePay = GetXAttrValueEx("loan",{&file}.contract + "," + {&file}.cont-code,"ПНВидПлатежа","").
+mSymbol    = GetXAttrValueEx("loan",{&file}.contract + "," + {&file}.cont-code,"ПНКассПлан","").
+mUseVedKvit = LOGICAL(GetXAttrValueEx("loan",{&file}.contract + "," + {&file}.cont-code,"ВедКвитанция",""),mUseVedKvitFormat) NO-ERROR.
+FIND FIRST xloan WHERE xloan.contract  = {&file}.parent-contract
+                   AND xloan.cont-code = {&file}.parent-cont-code
+NO-LOCK NO-ERROR.
+IF AVAIL xloan THEN DO:
+   {loan-pn-cust.i &file=xloan}
+   IF n-frm = 2 
+   THEN mReceiver = mCustName + (IF {assigned mCustINN} THEN " ИНН " + mCustINN ELSE "").
+   ELSE mReceiver = mCustName.
+   mReceiverNoUse = (GetXAttrValueEx("loan",xloan.contract + "," + xloan.cont-code,"ПННеИсп","Нет") = "Да").
+END.
+mAcct = "".
+mLAIdent = INT64(GetXAttrValueEx("loan",{&file}.contract + "," + {&file}.cont-code,"ПНСчет",?)).
+IF mLAIdent > 0 THEN DO:
+   RUN FindSignsByVal IN h_xclass ("loan-acct", "УникКодСчета", STRING(mLAIdent), OUTPUT mLAOrder, OUTPUT mLASurr).
+   IF {assigned mLASurr} THEN DO:
+      mLARwd = GetRowidBySurrogate("loan-acct",mLASurr).
+      FIND FIRST xloan-acct WHERE ROWID(xloan-acct) = mLARwd NO-LOCK NO-ERROR.
+      IF AVAIL xloan-acct THEN mAcct = xloan-acct.acct.
+   END.
+END.
+FIND FIRST code WHERE code.class  EQ "ПНВидПлатежа"     
+                  AND code.parent EQ "ПНВидПлатежа"
+                  and code.code   eq mPNTypePay
+                  NO-LOCK NO-ERROR. 
+IF AVAIL code THEN DO:
+   mPNTypeCode = code.name.
+END.

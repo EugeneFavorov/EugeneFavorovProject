@@ -1,0 +1,115 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2001 ТОО "Банковские информационные системы"
+     Filename: OP(OK.DEL
+      Comment:
+   Parameters: &user-id
+               &and
+               &xand
+               &fl-del
+               &stat
+               &mes1
+               &mes2
+         Uses:
+      Used by:
+      Created: eagle - удаление документа с определенным кодом транзакции в опердне
+                       должен быть определен буфер xop for op и переменную choice
+     Modified: 14.04.2003 17:21 SEMA     по заявке 0012638 боьба с action segment. Создана процедура DelOpByOpKind -
+                                         удаление документов, созданных указанной транзакцией в указанном дне
+procedure DelOpByOpKind - удаление документов, созданных указанной транзакцией
+                          в указанном дне
+     Modified: 04.08.03 EAGLE 18821 не удаляются доп.реквизиты у документа.
+     Modified: 02.10.03 EAGLE 22088 ошибка - потерян выход из процедуры при
+		                          отказе от удаления существующих документов.
+															Ошибка введена в версии 7 (0012638).
+     Modified: 21.11.2005 TSL    Многофилиальность
+*/
+
+   /* флаг, сигнализирующий что документы созданные предыдущим запуском
+      транзакции были удалены */
+DEFINE  VARIABLE mPrevOpWasDeleted AS LOGICAL NO-UNDO.
+DEFINE  VARIABLE mMustUndo         AS LOGICAL NO-UNDO.
+DEFINE  VARIABLE choice            AS LOGICAL NO-UNDO.
+DEFINE  VARIABLE mSetCode          AS CHARACTER   NO-UNDO.
+
+&IF DEFINED(user-id) NE 0 &THEN
+&SCOPED-DEFINE AND AND op.user-id = USERID("bisquit")
+&SCOPED-DEFINE xand AND xop.user-id = USERID("bisquit")
+&ENDIF
+
+&IF DEFINED(fl-del) NE 0 &THEN
+{&fl-del} = NO. /* флаг, указывающий, что было произведено удаление  */
+&ENDIF
+
+&IF DEFINED (set-code) NE 0 &THEN
+   mSetCode = {&set-code}.
+&ELSE
+   mSetCode = {&op-kind} + "Удал".
+&ENDIF
+
+
+RUN DelOpByOpKind ({&date}, {&op-kind}, OUTPUT mPrevOpWasDeleted, OUTPUT mMustUndo).
+if mMustUndo THEN
+DO:
+   &IF DEFINED (rel-date) &THEN
+   IF GetXAttrValue("op-kind", {&op-kind}, "lck-od") EQ "Нет" THEN 
+   DO:
+      {rel-date.i &in-op-date = {&date}}
+   END.
+   &ENDIF
+   RETURN.
+END.
+&IF DEFINED(fl-del) NE 0 &THEN
+{&fl-del} = mPrevOpWasDeleted.
+&ENDIF
+
+   /*
+   procedure: DelOpByOpKind - удаление документов, созданных указанной
+                              транзакцией в указанном дне
+   Синтаксис: run DelOpByOpKind (iDate, iOpKind, output WasDeleted)
+   */
+PROCEDURE DelOpByOpKind.
+   DEFINE INPUT  PARAMETER iDate   AS DATE      NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpKind AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oResult AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER oUndo   AS LOGICAL   NO-UNDO.
+
+   oResult = NO.
+   oUndo = NO.
+
+   FIND FIRST op WHERE op.filial-id = shFilial
+                   AND op.op-kind   = iOpKind
+                   AND op.op-date   = iDate
+                   {&and} 
+      NO-LOCK NO-ERROR.
+   IF AVAILABLE op THEN
+   DO:
+      FOR EACH xop WHERE xop.filial-id = shFilial
+                     AND xop.op-kind   = iOpKind
+                     AND xop.op-date   = iDate  
+                     {&xand}
+         NO-LOCK:
+         /* peter - а может надо удалять и все реквизиты (банковские, дополнительные и т.д.???? */
+
+         FIND op WHERE
+               RECID(op) = RECID(xop) EXCLUSIVE-LOCK.
+         FOR EACH op-entry OF op EXCLUSIVE-LOCK:
+            {on-esc LEAVE gen}
+            DELETE op-entry.
+         END.
+         FOR EACH op-impexp OF op EXCLUSIVE-LOCK:
+            {on-esc LEAVE gen}
+            DELETE op-impexp.
+         END.
+
+         &IF LOOKUP("xclass","{&VariablesDefined}") > 0 &THEN
+        	 	RUN DelSigns in h_xclass ("op", string(op.op)).
+ 				 &ENDIF
+         DELETE op.
+      END.
+      oResult = YES.
+      HIDE MESSAGE NO-PAUSE.
+   END.
+END PROCEDURE.
+
+

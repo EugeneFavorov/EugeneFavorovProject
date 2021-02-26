@@ -1,0 +1,99 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: hdbrw.QRY
+      Comment: Хозяйственные договоры - запросы
+   Parameters:
+         Uses:
+      Used by:
+      Created:  
+     Modified:  
+*/
+
+FUNCTION PREPARE-FIXED-WHERE RETURNS CHARACTER
+   (INPUT iTable AS CHAR,
+    INPUT iFixedWhere AS CHAR):
+
+   DEF VAR i AS INTEGER. 
+
+   CASE iTable:
+      WHEN "code" THEN 
+      DO:
+         iFixedWhere = " code.class  EQ '" + in-class  + "'" +
+                   " AND code.parent EQ '" + in-parent + "'" .
+         IF mFltAcctCr NE "" THEN DO:
+            iFixedWhere = iFixedWhere + " AND (".
+            DO i = 1 TO NUM-ENTRIES(mFltAcctCr):
+              IF i eq 1 THEN
+                iFixedWhere = iFixedWhere + " code.{&AcctCr} MATCHES '*" + ENTRY(i,mFltAcctCr) + "*'".
+              ELSE 
+                iFixedWhere = iFixedWhere + " OR code.{&AcctCr} MATCHES '*" + ENTRY(i,mFltAcctCr) + "*'".
+            END.
+            iFixedWhere = iFixedWhere + ")".
+         END.
+         IF mFltAcctDb NE "" THEN DO:
+            iFixedWhere = iFixedWhere + " AND (".
+            DO i = 1 TO NUM-ENTRIES(mFltAcctDb):
+              IF i eq 1 THEN
+                iFixedWhere = iFixedWhere + " code.{&AcctDb} MATCHES '*" + ENTRY(i,mFltAcctDb) + "*'".
+              ELSE 
+                iFixedWhere = iFixedWhere + " OR code.{&AcctDb} MATCHES '*" + ENTRY(i,mFltAcctDb) + "*'".
+            END.
+            iFixedWhere = iFixedWhere + ")".
+         END.
+         IF mFltType NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltType + "',code.{&Type})".
+         IF mFltGrpCr NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltGrpCr + "',code.{&GrpDb})".
+         IF mFltGrpDb NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltGrpDb + "',code.{&GrpCr})".
+         IF mFltDocType NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltDocType + "',code.{&DocType})".
+         IF mFltDetails NE "" THEN
+			      iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltDetails + "',code.{&Details})".
+         IF mFltActual EQ 'Да' THEN
+            iFixedWhere = iFixedWhere + " AND code.{&EndDate} EQ ?".
+    		 IF mFltStartDate1 NE ? THEN
+    		    iFixedWhere = iFixedWhere + " AND DATE(code.{&StartDate}) GE " + STRING(DAY(mFltStartDate1)) 
+    																	 + "/" + STRING(MONTH(mFltStartDate1))
+    																	 + "/" + STRING(YEAR(mFltStartDate1)).
+    		 IF mFltStartDate2 NE ? THEN
+    		    iFixedWhere = iFixedWhere + " AND DATE(code.{&StartDate}) LE " + STRING(DAY(mFltStartDate2)) 
+    																	 + "/" + STRING(MONTH(mFltStartDate2))
+    																	 + "/" + STRING(YEAR(mFltStartDate2)).
+    		 IF mFltEndDate1 NE ? THEN
+    		    iFixedWhere = iFixedWhere + " AND DATE(code.{&EndDate}) GE " + STRING(DAY(mFltEndDate1)) 
+    																	 + "/" + STRING(MONTH(mFltEndDate1))
+    																	 + "/" + STRING(YEAR(mFltEndDate1)).
+    		 IF mFltEndDate2 NE ? THEN
+    		    iFixedWhere = iFixedWhere + " AND DATE(code.{&EndDate}) LE " + STRING(DAY(mFltEndDate2)) 
+    																	 + "/" + STRING(MONTH(mFltEndDate2))
+    																	 + "/" + STRING(YEAR(mFltEndDate2)).
+      END.
+      OTHERWISE .
+   END CASE.
+
+   IF iFixedWhere NE ""
+      THEN iFixedWhere = "WHERE " + iFixedWhere.
+
+   RETURN iFixedWhere.
+END FUNCTION.
+   
+FUNCTION UserSortForm RETURN CHARACTER (INPUT iSort AS CHAR):
+   DEFINE VARIABLE vSort AS CHARACTER  NO-UNDO.
+
+      IF n-frm EQ 1 
+           THEN vSort = "BY code.code".
+      ELSE IF n-frm EQ 2 
+           THEN vSort = "".
+      {additem3.i iSort vSort 32}.
+      RETURN iSort.
+   END FUNCTION.
+
+{qrdef.i
+   &buff-list        = "code"
+   &need-buff-list   = "code"
+   &Join-list        = "each"
+   &xSortBy          = "BY code.code"
+   &condition        = "true"
+}

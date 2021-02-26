@@ -1,0 +1,74 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 15/12/2016 12:44:19 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+РЕПО_2:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// РЕПО.РЕПО_2
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// 2-ые части сделок РЕПО
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// РЕПО
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// LOAN
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   DO BEFORE:
+      @__par  = PROMPT("logical!char",
+                      "Прямое/Обратное РЕПО!Распоряжение",
+                      "Прямое/Обратное!x(40)","Прямое!",
+                      "Введите параметры 2-й части сделок РЕПО",60,"!",
+                      "F1=sb_f1log!");
+      
+      IF (@__par == @__ERROR) THEN 0 ELSE (
+        @__vid  = ENTRY(1,@__par,"!");
+        @__rasp = ENTRY(2,@__par,"!");
+      
+        @__par  = ОБЪЕКТ(ДА,"class-code"+CHR(1)+"end-date1"+CHR(1)+"end-date2",
+                  _if(@__vid,"loan-repo-bm","loan-repo-lm")
+                + CHR(1)+ДАТА()+CHR(1)+ДАТА(),
+                  "", 'MULTIPLE,ESC_NO_ERROR,'
+                + _if(@__vid,"loan-repo-bm","loan-repo-lm"));
+      
+        IF @__par == "" THEN 0
+        ELSE ЦИКЛ("РЕПО_2a",1,@__NUM-OBJECTS);
+        ENDIF
+      ) ENDIF
+   END BEFORE.
+
+   DO AFTER:
+      MESSAGE("Обработано " + @__NUM-OBJECTS + " договоров.",
+        MESSAGE)
+   END AFTER.
+
+END TRANSACTION. // ТРАНЗАКЦИЯ РЕПО_2 - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

@@ -1,0 +1,52 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 11/04/2016 17:06:21 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+sbLogIt1:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.07PB.u07PB.sbLogIt1
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// ЦИКЛ: Печать в лог одной строки
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// u07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   DO BEFORE:
+      IF (@__counter == 1) THEN
+        ТРАНЗАКЦИЯ("DateTime");
+        WRITELN(@__t + "- " + ENTRY(@__counter, @__mess, CHR(10)), @__logerr);
+      ELSE
+        WRITELN("                      "
+          + ENTRY(@__counter, @__mess, CHR(10)), @__logerr);
+      ENDIF;
+   END BEFORE.
+
+END TRANSACTION. // ТРАНЗАКЦИЯ sbLogIt1 - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

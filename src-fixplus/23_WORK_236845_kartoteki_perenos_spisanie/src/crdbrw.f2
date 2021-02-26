@@ -1,0 +1,42 @@
+
+ELSE IF  mNavLastKey EQ KEYCODE ("F2")
+THEN DO ON ENDKEY UNDO, NEXT ACTION:
+
+    DEFINE VARIABLE mOpNum   AS INTEGER  NO-UNDO.  
+
+   /*находим проводу постановки на картотеку*/
+    FIND FIRST op-entry WHERE op-entry.op       = INTEGER(ENTRY(1,kau.kau))
+                          AND op-entry.op-entry = INTEGER(ENTRY(2,kau.kau))
+    NO-LOCK NO-ERROR.
+
+    /*находим документ постановки на картотеку*/
+    IF AVAIL op-entry THEN
+    DO:
+       FIND FIRST op OF op-entry NO-LOCK NO-ERROR.
+    END.
+    ELSE
+       FIND FIRST op WHERE op.op EQ INTEGER(ENTRY(1,kau.kau)) NO-LOCK NO-ERROR.
+
+    IF AVAIL op THEN
+    DO:
+       mOpNum = int(GetXattrValueEx("op",string(op.op),"op-bal",?)).
+
+       /*если нет указателя на балансовый документ*/
+       IF mOpNum EQ ? THEN
+       DO:
+          MESSAGE "Не найден доп. реквизит <op-bal> на документе с id =" string(op.op)
+              VIEW-AS ALERT-BOX INFO BUTTONS OK.
+       LEAVE.
+       END.
+       /*запускаем браузер*/
+       ELSE   RUN browseld.p ("opokau","op",mOpNum,"",4).
+    END.
+    ELSE
+    DO:
+       MESSAGE "Не найден внебалансовый документ с op.op =" ENTRY(1,kau.kau)
+           VIEW-AS ALERT-BOX INFO BUTTONS OK.
+       LEAVE.
+    END.
+
+    NEXT REFRESH.
+END.

@@ -1,0 +1,434 @@
+/* Комиссия за СпецСчета */
+/* fev */
+
+{globals.i}
+{pp-corr.p}
+{sh-defs.i}
+{ksh-defs.i NEW}
+
+DEF VAR nameCl  AS char  no-undo.
+DEF VAR tmpdate AS date  no-undo.
+DEF VAR opdate  AS date  no-undo.
+DEF VAR time16  AS int64 no-undo.
+
+DEF VAR fname AS CHAR NO-UNDO.
+
+DEFINE INPUT PARAMETER iForm  AS CHAR.
+
+def new shared stream vvs.
+  
+DEFINE TEMP-TABLE otchet
+        FIELD first_date         AS DATE                /* первая дата */
+        FIELD second_date        AS DATE                /* вторая дата */
+        FIELD acct_cl            AS CHAR                /* счёт клиента */
+        FIELD name_cl            AS CHAR                /* наименование клиента */
+        FIELD count_klb_do_16    AS INT64               /* количество КЛБ проводок до 16:00 */
+        FIELD count_bum_do_16    AS INT64               /* количество БУМ проводок до 16:00 */
+        FIELD count_klb_posle_16 AS INT64               /* количество КЛБ проводок после 16:00 */
+        FIELD count_bum_posle_16 AS INT64               /* количество БУМ проводок после 16:00 */
+        INDEX acct_cl acct_cl       
+    .
+
+IF iForm NE 'NO' THEN DO:
+
+  {empty otchet}
+      
+  fname = "./otchet_spec_acct"  + "_" + userid('bisquit') + ".xml".
+
+  opdate = date(getsysconf("OpDate")).
+  tmpdate  = date(month(opdate),1,year(opdate)).
+  beg-date = tmpdate.
+  end-date = date_correct(month(opdate),0,31,year(opdate)).
+   
+  {getdates.i
+  &NoInit    = "YES"
+  }
+
+
+  for each op where op.op-date >= beg-date
+                and op.op-date <= end-date
+                and can-do('*klb*,*bum*', op.op-kind)
+                and can-do('!40101*,!40102*,!40201*,!40204*,!40402*,*', op.ben-acct)
+                and can-do('01*', op.doc-type)
+                and op.op-status begins "√"
+                /* and ((op.op-status begins "√") or (op.op-status = "ФБН") or (op.op-status = "ФБП") or (op.op-status = "ФДД") or (op.op-status = "КЛБ") or (op.op-status = "БУМ") or (op.op-status = "СКАН")) */
+                /* and can-do('!А*,*', op.op-status) */
+                and op.filial-id = shfilial
+            no-lock,
+      each op-entry of op where can-do('30102*,30223*1,30301*', op-entry.acct-cr) no-lock:
+    
+      find first acct where acct.acct = op-entry.acct-db
+                        and ((acct.contract = "СпецПА") or (acct.contract = "Кон138") or (acct.contract = "КонЗдт") or (acct.contract = "КонРез")) no-lock no-error.
+
+      if avail acct 
+         then
+              do:
+                  /* message string(op.op-date) " " string(op.doc-num) " " string(op-entry.amt-rub) string(op-entry.acct-db) string(acct.details) view-as alert-box. */
+                  find first history where history.file-name = "op"
+                                       and history.field-ref = string(op-entry.op)
+                                           no-lock no-error.
+                  if avail history 
+                     then 
+                          do:
+                              if shFilial EQ '0000' then time16 = 57600.
+                              if shFilial EQ '0300' then time16 = 50400.
+                              if shFilial EQ '0500' then time16 = 46800.
+                              if ((GetXattrValueEx("acct", acct.acct + ',' + acct.currency, "groupOABS", "") EQ '516') or (GetXattrValueEx("acct", acct.acct + ',' + acct.currency, "groupOABS", "") EQ '517')) then time16 = 43200.
+
+                              if history.modif-time <= Time16                                          
+                                 then 
+                                      do:
+                                          find first otchet where otchet.acct_cl = op-entry.acct-db no-error.
+                                          if avail otchet 
+                                             then 
+                                                  do: 
+                                                      /* message op.op-kind view-as alert-box. */
+                                                      if can-do('*klb*', op.op-kind) then otchet.count_klb_do_16 = otchet.count_klb_do_16 + 1.
+                                                      if can-do('*bum*', op.op-kind) then otchet.count_bum_do_16 = otchet.count_bum_do_16 + 1.                                                                                             
+                                                  end.
+                                             else
+                                                  do:
+                                                      if can-do('*klb*', op.op-kind)
+                                                         then
+                                                              do:
+                                                                  /* message op.op-kind view-as alert-box. */
+                                                                  nameCl = ''.
+                                                                  find first acct where acct.acct = op-entry.acct-db no-lock no-error.
+                                                                  if avail acct then RUN GetName (INPUT acct.cust-cat, INPUT acct.cust-id, OUTPUT nameCl).
+                                                                  create otchet.            
+                                                                  assign
+                                                                         otchet.first_date      = beg-date
+                                                                         otchet.second_date     = end-date
+                                                                         otchet.acct_cl         = op-entry.acct-db
+                                                                         otchet.name_cl         = nameCl
+                                                                         otchet.count_klb_do_16 = 1
+                                                                         .
+                                                                  release otchet.
+                                                              end.
+                                                         else
+                                                              do:
+                                                                  /* message op.op-kind view-as alert-box. */
+                                                                  nameCl = ''.
+                                                                  find first acct where acct.acct = op-entry.acct-db no-lock no-error.
+                                                                  if avail acct then RUN GetName (INPUT acct.cust-cat, INPUT acct.cust-id, OUTPUT nameCl).
+                                                                  create otchet.            
+                                                                  assign
+                                                                         otchet.first_date      = beg-date
+                                                                         otchet.second_date     = end-date
+                                                                         otchet.acct_cl         = op-entry.acct-db
+                                                                         otchet.name_cl         = nameCl
+                                                                         otchet.count_bum_do_16 = 1
+                                                                         .
+                                                                  release otchet.
+                                                              end.
+                                                  end.
+                                      end.
+                                 else 
+                                      do:
+                                          find first otchet where otchet.acct_cl = op-entry.acct-db no-error.
+                                          if avail otchet 
+                                             then 
+                                                  do: 
+                                                      /* message op.op-kind view-as alert-box. */
+                                                      if can-do('*klb*', op.op-kind) then otchet.count_klb_posle_16 = otchet.count_klb_posle_16 + 1.
+                                                      if can-do('*bum*', op.op-kind) then otchet.count_bum_posle_16 = otchet.count_bum_posle_16 + 1.                                                                                             
+                                                  end.
+                                             else
+                                                  do:
+                                                      if can-do('*klb*', op.op-kind)
+                                                         then
+                                                              do:
+                                                                  /* message op.op-kind view-as alert-box. */
+                                                                  nameCl = ''.
+                                                                  find first acct where acct.acct = op-entry.acct-db no-lock no-error.
+                                                                  if avail acct then RUN GetName (INPUT acct.cust-cat, INPUT acct.cust-id, OUTPUT nameCl).
+                                                                  create otchet.            
+                                                                  assign
+                                                                         otchet.first_date         = beg-date
+                                                                         otchet.second_date        = end-date
+                                                                         otchet.acct_cl            = op-entry.acct-db
+                                                                         otchet.name_cl            = nameCl
+                                                                         otchet.count_klb_posle_16 = 1
+                                                                         .
+                                                                  release otchet.
+                                                              end.
+                                                         else
+                                                              do:
+                                                                  /* message op.op-kind view-as alert-box. */
+                                                                  nameCl = ''.
+                                                                  find first acct where acct.acct = op-entry.acct-db no-lock no-error.
+                                                                  if avail acct then RUN GetName (INPUT acct.cust-cat, INPUT acct.cust-id, OUTPUT nameCl).
+                                                                  create otchet.            
+                                                                  assign
+                                                                         otchet.first_date         = beg-date
+                                                                         otchet.second_date        = end-date
+                                                                         otchet.acct_cl            = op-entry.acct-db
+                                                                         otchet.name_cl            = nameCl
+                                                                         otchet.count_bum_posle_16 = 1
+                                                                         .
+                                                                  release otchet.
+                                                              end.
+                                                  end.
+                                      end.
+                          end.
+              end.     
+  end.
+
+
+
+  output stream vvs to value (fname)
+          UNBUFFERED  CONVERT  TARGET "UTF-8"  SOURCE "IBM866".
+  put stream vvs unformatted 
+  '
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Author>Фаворов Евгений Владимирович</Author>
+  <LastAuthor>Фаворов Евгений Владимирович</LastAuthor>
+  <Created>2016-10-30T10:43:16Z</Created>
+  <LastSaved>2016-10-21T05:58:29Z</LastSaved>
+  <Version>14.00</Version>
+ </DocumentProperties>
+ <OfficeDocumentSettings xmlns="urn:schemas-microsoft-com:office:office">
+  <AllowPNG/>
+  <Colors>
+   <Color>
+    <Index>14</Index>
+    <RGB>#333399</RGB>
+   </Color>
+   <Color>
+    <Index>15</Index>
+    <RGB>#333333</RGB>
+   </Color>
+   <Color>
+    <Index>52</Index>
+    <RGB>#A9A9A9</RGB>
+   </Color>
+   <Color>
+    <Index>53</Index>
+    <RGB>#201F35</RGB>
+   </Color>
+   <Color>
+    <Index>54</Index>
+    <RGB>#C0C0C0</RGB>
+   </Color>
+   <Color>
+    <Index>55</Index>
+    <RGB>#808080</RGB>
+   </Color>
+  </Colors>
+ </OfficeDocumentSettings>
+ <ExcelWorkbook xmlns="urn:schemas-microsoft-com:office:excel">
+  <WindowHeight>9855</WindowHeight>
+  <WindowWidth>17100</WindowWidth>
+  <WindowTopX>480</WindowTopX>
+  <WindowTopY>105</WindowTopY>
+  <RefModeR1C1/>
+  <ProtectStructure>False</ProtectStructure>
+  <ProtectWindows>False</ProtectWindows>
+ </ExcelWorkbook>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Arial"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="m50945760">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Tahoma" x:CharSet="204" x:Family="Swiss" ss:Size="12"
+    ss:Bold="1"/>
+   <Interior ss:Color="#C0C0C0" ss:Pattern="Solid"/>
+   <NumberFormat ss:Format="@"/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="m50945780">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Tahoma" x:CharSet="204" x:Family="Swiss" ss:Size="12"
+    ss:Bold="1"/>
+   <Interior ss:Color="#C0C0C0" ss:Pattern="Solid"/>
+   <NumberFormat ss:Format="@"/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="m50945800">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Arial" x:CharSet="204" x:Family="Swiss" ss:Size="14"
+    ss:Bold="1"/>
+   <Interior ss:Color="#BFBFBF" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="m50945820">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Arial" x:CharSet="204" x:Family="Swiss" ss:Size="14"
+    ss:Bold="1"/>
+   <Interior ss:Color="#BFBFBF" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="s62">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="s63">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="s69">
+   <Alignment ss:Horizontal="Right" ss:Vertical="Bottom"/>
+  </Style>
+  <Style ss:ID="s78">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+   </Borders>
+   <Font ss:FontName="Tahoma" x:CharSet="204" x:Family="Swiss" ss:Bold="1"/>
+   <Interior ss:Color="#C0C0C0" ss:Pattern="Solid"/>
+   <NumberFormat ss:Format="@"/>
+   <Protection/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Sheet">
+  <Table ss:ExpandedColumnCount="6" ss:ExpandedRowCount="202" x:FullColumns="1"
+   x:FullRows="1">
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="161.25"/>
+   <Column ss:StyleID="s62" ss:AutoFitWidth="0" ss:Width="287.25"/>
+   <Column ss:StyleID="s63" ss:AutoFitWidth="0" ss:Width="66.75" ss:Span="1"/>
+   <Column ss:Index="5" ss:AutoFitWidth="0" ss:Width="66.75" ss:Span="1"/>
+   <Row ss:AutoFitHeight="0" ss:Height="24">
+    <Cell ss:MergeDown="1" ss:StyleID="m50945760"><Data ss:Type="String">СпецСчёт Клиента</Data></Cell>
+    <Cell ss:MergeDown="1" ss:StyleID="m50945780"><Data ss:Type="String">Наименование Клиента</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="m50945800"><Data ss:Type="String">КЛБ</Data></Cell>
+    <Cell ss:MergeAcross="1" ss:StyleID="m50945820"><Data ss:Type="String">БУМ</Data></Cell>
+   </Row>
+   <Row ss:AutoFitHeight="0" ss:Height="49.5">
+    <Cell ss:Index="3" ss:StyleID="s78"><Data ss:Type="String">Количество документов до 16:00</Data></Cell>
+    <Cell ss:StyleID="s78"><Data ss:Type="String">Количество документов после 16:00</Data></Cell>
+    <Cell ss:StyleID="s78"><Data ss:Type="String">Количество документов до 16:00</Data></Cell>
+    <Cell ss:StyleID="s78"><Data ss:Type="String">Количество документов после 16:00</Data></Cell>
+   </Row>
+  '.
+
+
+
+      FOR EACH otchet NO-LOCK:
+          /*
+          FIELD first_date   AS DATE                 /* дата проводки */
+          FIELD acct_cl      AS CHAR                 /* счет заемщика */
+          FIELD name_cl      AS CHAR                 /* наименование заемщика */
+          FIELD summ         AS DECIMAL              /* сумма инкасации */
+          FIELD summ_kom     AS DECIMAL              /* сумма комиссии за инкасацию */
+          FIELD tarif        AS DECIMAL              /* тариф */
+          */
+          
+      put stream vvs unformatted
+      '<Row ss:AutoFitHeight="0">'.
+          IF otchet.first_date EQ ? 
+          THEN     
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String"></Data></Cell>\n'.
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String">'.
+          put stream vvs unformatted otchet.acct_cl + '</Data></Cell>\n'.
+          put stream vvs unformatted '<Cell><Data ss:Type="String">'.
+          put stream vvs unformatted otchet.name_cl + '</Data></Cell>\n'.
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String">'.
+          put stream vvs unformatted trim(string(otchet.count_klb_do_16,"->>>>>>>>>9")) + '</Data></Cell>\n'.
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String">'.
+          put stream vvs unformatted trim(string(otchet.count_klb_posle_16,"->>>>>>>>>9")) + '</Data></Cell>\n'.
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String">'.
+          put stream vvs unformatted trim(string(otchet.count_bum_do_16,"->>>>>>>>>9")) + '</Data></Cell>\n'.
+          put stream vvs unformatted '<Cell ss:StyleID="s63"><Data ss:Type="String">'.
+          put stream vvs unformatted trim(string(otchet.count_bum_posle_16,"->>>>>>>>>9")) + '</Data></Cell>\n'.
+          .
+          put stream vvs unformatted '</Row>'.
+      END.
+  put stream vvs unformatted 
+  '  </Table>
+   </Worksheet>
+  </Workbook>
+  ' .
+
+  output stream vvs close.
+  RUN sndbispc ("file=" + fname + ";class=bq").
+
+END.
+
+
+
+IF iForm = 'YES' THEN DO: 
+  /*объявляем handle для передачи temp-table в УТ*/
+  DEF NEW SHARED VAR hO-tt  AS HANDLE NO-UNDO.
+  DEF VAR            hO-b   AS HANDLE NO-UNDO.
+  DEF VAR            hO-btt AS HANDLE NO-UNDO.
+
+  /*заполняем таблицу для УТ*/
+  hO-b = BUFFER otchet:HANDLE.
+
+  CREATE TEMP-TABLE hO-tt.
+  hO-tt:CREATE-LIKE("otchet").
+  hO-tt:TEMP-TABLE-PREPARE("xotchet").
+  
+  hO-btt = hO-tt:DEFAULT-BUFFER-HANDLE.
+
+  FOR EACH otchet:
+    hO-btt:BUFFER-CREATE.
+    hO-btt:BUFFER-COPY(hO-b).
+  END.
+    RETURN STRING(hO-tt).
+END.
+/*удаляем шаред*/
+IF iForm = 'NO' THEN DELETE OBJECT hO-tt.
+
+
+
+PROCEDURE GetName:
+ DEF INPUT PARAMETER cat AS CHARACTER.
+ DEF INPUT PARAMETER id AS INT64.
+ DEF OUTPUT PARAMETER sname AS CHARACTER.
+ 
+ IF cat = "Ч" THEN
+  DO:
+   FIND FIRST PERSON 
+   WHERE PERSON.PERSON-ID = id
+   NO-LOCK NO-ERROR.
+    IF AVAIL PERSON THEN
+    /* ФИО клиента */
+    sname = "ИП " + PERSON.NAME-LAST + " " + PERSON.FIRST-NAMES.
+  END.
+ ELSE
+  DO:
+   FIND FIRST CUST-CORP 
+   WHERE CUST-CORP.CUST-ID = id
+   NO-LOCK NO-ERROR.
+    IF AVAIL CUST-CORP THEN
+    /* наименование организации */
+    sname = CUST-CORP.CUST-STAT + " " + CUST-CORP.NAME-CORP.
+  END.
+END. 

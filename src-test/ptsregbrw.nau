@@ -1,0 +1,62 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: ptsregbrw.NAU
+      Comment: Получатели страховых премий - выбор по F1
+   Parameters:
+         Uses:
+      Used by:
+      Created:    
+     Modified:   
+*/
+
+IF FRAME-FIELD EQ "Descriptions" THEN DO:
+    DEFINE VARIABLE tmpFIO AS CHAR NO-UNDO INIT "".
+    pick-value = "".
+    RUN n_browseusers.p(4).
+/*    RUN browseld.p("_user", "", "", "", 4). */ 
+    IF KEY-FUNCTION(LAST-KEY) NE "END-ERROR" THEN DO:
+        Descriptions:SCREEN-VALUE IN FRAME edit = TRIM(pick-value).
+        tmpFIO = GetFIO(TRIM(pick-value)).
+        PrinalFIO:SCREEN-VALUE IN FRAME edit = tmpFIO.
+    END.
+END. 
+
+ELSE
+IF FRAME-FIELD EQ "Branch_" THEN DO:
+    pick-value = "".
+    RUN browseld.p("branch", "", "", "", 4).
+    IF KEY-FUNCTION(LAST-KEY) NE "END-ERROR" THEN DO:
+        Branch_:SCREEN-VALUE IN FRAME edit = TRIM(pick-value).
+    END.
+END.   
+
+ELSE IF FRAME-FIELD EQ "NameEvent" THEN
+DO:
+   pick-value = "".
+   RUN codelay.p ("СобытРегДокум","ПТС","События ПТС",4).
+   IF KEY-FUNCTION(LAST-KEY) NE "END-ERROR" THEN DO:
+       NameEvent:SCREEN-VALUE IN FRAME edit = string(pick-value).
+   END.
+END.
+
+ELSE
+IF FRAME-FIELD EQ "DateValue" THEN
+DO:
+   pick-value = "".
+   RUN calend.p.
+   IF KEY-FUNCTION(LAST-KEY) NE "END-ERROR" THEN DO:
+       DateValue:SCREEN-VALUE IN FRAME edit = STRING(DATE(STRING(pick-value)),"99.99.9999").
+   END.
+END.
+
+
+
+
+
+
+
+
+
+
+

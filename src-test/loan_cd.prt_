@@ -1,0 +1,43 @@
+ELSE IF LASTKEY EQ KEYCODE("CTRL-G")
+THEN DO:
+
+    DEF VAR vAllOrOne AS LOGICAL NO-UNDO.
+
+    /* Формирование временной таблицы выбранных записей. */
+    RUN SetSysConf IN h_base("CURRENT-CARD-PERS",{&file}.contract + "," + 
+                                                 {&file}.cont-code).
+    IF NOT CAN-FIND(FIRST tmprecid) THEN 
+    DO:
+       vAllOrOne = LOGICAL(FGetSetting("AllOrOne","","")).
+       IF vAllOrOne THEN
+       DO:
+          CREATE tmprecid.
+             tmprecid.id = getrecid ().
+       END.
+       ELSE
+          RUN CreateTmpRecid.
+    END.
+
+    /* Переносим локальные отметки в глобальные. */
+    RUN rid-keep.p (TABLE tmprecid).
+
+    /* Вызов меню печати */
+    RUN "norm.p" ("ПЕЧАТЬ " + IF GetFltVal ("contract") EQ "кредит"
+                              THEN "КРЕДИТНЫХ ДОГОВОРОВ"
+                              ELSE "ДЕПОЗИТНЫХ ДОГОВОРОВ",
+                  work-parent,
+                  level + 1).   
+    /* удаляем лишнюю запись */
+    RUN DeleteOldDataProtocol IN h_base ("CURRENT-CARD-PERS").
+    /* Удаление выбранных записей */
+    RUN DeleteTmpRecid.
+
+    NEXT REFRESH.
+END.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='30/04/2015 10:54:28.717+04:00' */
+/* $LINTUSER='mimo' */
+/* $LINTMODE='1' */
+/* $LINTFILE='loan_cd.prt' */
+/*prosignUmhVBUoSaCq0BQEaBbDcdQ*/

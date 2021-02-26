@@ -1,0 +1,254 @@
+
+/* +++ strng.def was humbly modified by (c)blodd converter v.1.09 on 9/19/2016 7:56am +++ */
+
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) MCMXCII-MCMXCIX ТОО "Банковские информационные системы"
+     Filename: str.DEF
+      Comment: Объявления основных функций для работы со строками и списками.
+      Created: 10/00/2003   fedm
+     Modified: 14/08/2003 Om Доработка.
+                             Объединены библиотеки по работе со строками.
+     Modified: 19.09.2005 19:21 KSV      (0046989) Добавлена объявление функции
+                                         SortDelimList, для сортировки списков
+                                         строк.
+     Modified: 29.09.2005 19:23 KSV      (0050131) Добавлены объявления функций
+                                         BQEncode и GetUniqueFileName.
+     Modified: 06.05.2006 15:44 VASOV    (0061624) Добавлена функция
+                                         DelDoubleChars
+
+   F/P  Name                   Comment
+   ───  ─────────────────────  ──────────────────────────────────────────
+    F   FStrEmpty              Строка пустая?
+
+    F   FStrNVL                Строка пустая (результат - строка)?
+
+    F   FStrCat                Конкатенация строк asSrc || asCat
+                               с разделителем asDelim
+    F   FStrPad                Дополнение строки asStr пробелами
+                               до длины anLen справа или слева
+    F   FStrPadC               Дополнение строки asStr символами
+                               до длины anLen справа или слева
+    F   FStrCenter             Центрирование строки asStr
+                               по ширине anLen символов
+    F   GetEntries             Надежное получение элемента списка
+
+    F   SetEntries             Надежное присвоение значения для элемента списка
+
+    F   PADR                   Дополнение пробелами справа
+
+    F   PADL                   Дополнение пробелами слева
+
+    F   PADС                   Центрирует строку
+
+
+    F   ConvMatch2Beg          Получить BEGINS-шаблон по MATCHES-шаблону.
+
+    F   GetLstParam            Получить значение параметра с указанным кодом.
+
+    F   GetLstParamS           По списку параметров возвращает список значений.
+
+    F   GetEqParamList         Получить список параметров с указанным значением.
+
+    F   RepSpecSym             Заменить спецсимволы в строке для Prepare выражения
+
+    F   IsValidFormat          Проверяет корректность указанного формата для
+                               типа данных
+
+    F   DelDoubleChars         Удалить из строки повторы заданного символа
+
+    F   GetValueRange          Получение заданного диапазона из строки,
+                               выход её за пределы с какой-либо стороны
+                               дополняет результат специальным символом
+    F   toLogical              Приведение строки к логическому типу
+                               для русского и английского языка (перенос из РСХБ)
+*/
+
+FUNCTION GetPartStr  CHAR (INPUT iText AS CHAR,
+                           INPUT iLen  AS INT64,
+                           INPUT iNum  AS INT64) IN {1}.
+
+FUNCTION ConvMatch2Beg      RETURNS CHAR
+   (iMatch      AS CHAR)
+IN {1}.
+
+FUNCTION GetLstParam        RETURNS CHAR
+   (iCod        AS CHAR, /* Код параметра   */
+    iCodLst     AS CHAR, /* Список кодов    */
+    iValLst     AS CHAR, /* Список значений */
+    iDlm        AS CHAR  /* Разделитель     */
+   )
+IN {1}.
+
+FUNCTION GetLstParamS       RETURNS CHAR
+   (iCod        AS CHAR, /* Коды параметров */
+    iCodLst     AS CHAR, /* Список кодов    */
+    iValLst     AS CHAR, /* Список значений */
+    iDlm        AS CHAR  /* Разделитель     */
+   )
+IN {1}.
+
+FUNCTION GetEqParamList     RETURNS CHAR
+   (iVal        AS CHAR, /* Значение параметра */
+    iCodLst     AS CHAR, /* Список кодов       */
+    iValLst     AS CHAR, /* Список значений    */
+    iDlm        AS CHAR  /* Разделитель        */
+   )
+IN {1}.
+
+FUNCTION FStrEmpty          RETURNS LOGICAL
+   (asValue     AS CHAR)
+IN {1}.
+
+FUNCTION FStrNVL            RETURNS CHAR
+   (asValTrue   AS CHAR,
+    asValFalse  AS CHAR
+   )
+IN {1}.
+
+FUNCTION FStrCat            RETURNS CHAR
+   (INPUT-OUTPUT ASSRC    AS CHAR,
+    INPUT        ASCAT    AS CHAR,
+    INPUT        ASDELIM  AS CHAR
+   )
+IN {1}.
+
+FUNCTION FStrPad            RETURNS CHAR
+   (asStr       AS CHAR,
+    anLen       AS INT64,
+    abRight     AS LOGICAL
+   )
+IN {1}.
+
+FUNCTION FStrPadC           RETURNS CHAR
+   (asStr       AS CHAR,
+    anLen       AS INT64,
+    abRight     AS LOGICAL,
+    asFill      AS CHAR
+   )
+IN {1}.
+
+FUNCTION FStrCenter         RETURNS CHAR
+   (asStr       AS CHAR,
+    anLen       AS INT64
+   )
+IN {1}.
+
+FUNCTION GetEntries         RETURNS CHAR
+   (ipItem      AS INT64,
+    ipText      AS CHAR,
+    ipSplit     AS CHAR,
+    ipDefault   AS CHAR
+   )
+IN {1}.
+
+FUNCTION SetEntries         RETURN CHAR
+   (ipItem      AS INT64,
+    ipText      AS CHAR,
+    ipSplit     AS CHAR,
+    ipValue     AS CHAR
+   )
+IN {1}.
+
+FUNCTION PADR               RETURNS CHAR
+   (ipText      AS CHAR,
+    ipLen       AS INT64
+   )
+IN {1}.
+
+FUNCTION PADL               RETURNS CHAR
+   (ipText      AS CHAR,
+    ipLen       AS INT64
+   )
+IN {1}.
+
+FUNCTION PADC               RETURNS CHAR
+   (ipText      AS CHAR,
+    ipLen       AS INT64
+   )
+IN {1}.
+
+FUNCTION GetNullStr CHAR (INPUT iVal AS CHAR)      IN {1}.
+FUNCTION GetNullNum CHAR (INPUT iVal AS DECIMAL)   IN {1}.
+FUNCTION GetNullInt CHAR (INPUT iVal AS INT64)   IN {1}.
+FUNCTION GetNullDat CHAR (INPUT iVal AS DATE)      IN {1}.
+
+FUNCTION FStrEmpty returns LOGICAL (INPUT asValue AS CHAR) IN {1}.
+FUNCTION FStrNVL RETURN CHAR (INPUT  asValTrue    AS CHAR,
+                              INPUT  asValFalse   AS CHAR) IN {1}.
+FUNCTION FStrCat returns CHAR (INPUT-OUTPUT asSrc    AS CHAR,
+                               INPUT        asCat    AS CHAR,
+                               INPUT        asDelim  AS CHAR) IN {1}.
+FUNCTION FStrPad returns CHAR (INPUT  asStr    AS CHAR,
+                               INPUT  anLen    AS INT64,
+                               INPUT  abRight  AS LOGICAL) IN {1}.
+FUNCTION FStrPadC returns CHAR (INPUT  asStr    AS CHAR,
+                                INPUT  anLen    AS INT64,
+                                INPUT  abRight  AS LOGICAL,
+                                INPUT  asFill   AS CHAR) IN {1}.
+FUNCTION FStrCenter returns CHAR (INPUT asStr AS CHAR, INPUT anLen AS INT64) IN {1}.
+FUNCTION GetEntries RETURN CHAR (INPUT ipItem      AS INT64,
+                                 INPUT ipText      AS CHAR,
+                                 INPUT ipSplit     AS CHAR,
+                                 INPUT ipDefault   AS CHAR) IN {1}.
+FUNCTION PADR RETURN CHAR (INPUT ipText AS CHAR,
+                           INPUT ipLen  AS INT64) IN {1}.
+FUNCTION PADC RETURN CHAR (INPUT ipText AS CHAR,
+                           INPUT ipLen  AS INT64) IN {1}.
+FUNCTION GetMangledName RETURNS CHARACTER (iStr AS CHAR) IN {1}.
+FUNCTION GetOriginalName RETURNS CHARACTER (iMangledStr AS CHAR) IN {1}.
+FUNCTION RemoveDoubleChars RETURNS CHARACTER (iStr AS CHARACTER,
+                                              iChr AS CHARACTER) IN {1}.
+FUNCTION IsAlpha RETURNS LOGICAL (iChr AS CHARACTER) IN {1}.
+FUNCTION IsDigit RETURNS LOGICAL (iChr AS CHARACTER) IN {1}.
+FUNCTION IsAlphaNum RETURNS LOGICAL (iChr AS CHARACTER) IN {1}.
+FUNCTION CheckIdName RETURNS LOGICAL (pName AS CHAR) IN {1}.
+FUNCTION PairTrim RETURNS CHARACTER (iStr    AS CHARACTER,
+                                     iChrs   AS CHARACTER) IN {1}.
+
+FUNCTION RepSpecSym RETURNS CHARACTER (INPUT iStr  AS CHAR, iOper AS CHAR) IN {1}.
+
+FUNCTION IsValidFormat RETURNS LOGICAL (INPUT iDataType AS CHAR,
+                                        INPUT iFormat   AS CHAR) IN {1}.
+
+/* По номеру элемента в списке определяет позицию
+** с которой начиснется данный элемент.*/
+FUNCTION GetPosEntry RETURN INT64 (
+   INPUT iStr   AS CHAR, /* Строка  */
+   INPUT iEntry AS INT64,  /* Елемент, позицию которого необходимо определить. */
+   INPUT iDel   AS CHAR  /* Разделитель элиментов в строке. */
+) IN {1}.
+
+
+FUNCTION SplitStr RETURNS CHAR
+   (iVal   AS CHAR,
+    iLen   AS INT64,
+    iSep   AS CHAR
+   ) IN {1}.
+
+FUNCTION SortDelimList RETURNS CHARACTER (iList   AS CHARACTER,
+                                          iDlm    AS CHARACTER,
+                                          iDsc    AS LOGICAL) IN {1}.
+
+FUNCTION BQEncode RETURNS CHARACTER (iString AS CHARACTER) IN {1}.
+
+FUNCTION GetUniqueFileName RETURNS CHARACTER (iPrefix    AS CHARACTER,
+                                              iExtension AS CHARACTER) IN {1}.
+
+FUNCTION DelDoubleChars RETURNS CHARACTER (iString AS CHARACTER, iChar AS CHARACTER) IN {1}.
+
+/* Находит пересечение двух списков */
+FUNCTION ListsCrossing RETURN CHAR (
+   INPUT iList1 AS CHARACTER,
+   INPUT iList2 AS CHARACTER,
+   INPUT iDelim AS CHARACTER
+) IN {1}.
+
+FUNCTION GetValueRange RETURN CHARACTER (INPUT iValue   AS CHARACTER,
+                                         INPUT iStart   AS INT64,
+                                         INPUT iEnd     AS INT64,
+                                         INPUT iDefault AS CHARACTER) IN {1}.
+
+FUNCTION toLogical RETURN LOGICAL (INPUT iStr AS CHARACTER) IN {1}.
+/*prosignm6I1GpQ30WIS/pzIvnEibw*/
+/* --- strng.def was humbly modified by (c)blodd converter v.1.09 on 9/19/2016 7:56am --- */

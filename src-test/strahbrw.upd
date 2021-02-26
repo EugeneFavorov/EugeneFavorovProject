@@ -1,0 +1,17 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: strahbrw.upd
+      Comment: Получатели страховых премий - обновление
+   Parameters:
+         Uses:
+      Used by:
+      Created:   
+     Modified:    
+*/
+
+ASSIGN                                            
+   code.{&CustCodes} = mCustCat + ":" +
+                          STRING(mCustID).
+   code.{&RaschAcct} = STRING(mRaschAcct). 
+.

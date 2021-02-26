@@ -1,0 +1,8 @@
+
+               vPrIzB FORMAT "X(36)" LABEL "èêàáçÄä àáå."
+               vBIK  vINN  vKPP  vOGRN vRNOM
+               vNAME VIEW-AS FILL-IN SIZE 60 BY 1
+               vAdr  VIEW-AS FILL-IN SIZE 60 BY 1
+               vINDX vCREG vDIST vCITY vNASP vSTRT vHOUS vCORP vAPRT vBRAN 
+               vDATE
+            WITH FRAME vfrm2

@@ -1,0 +1,325 @@
+
+DEFINE INPUT  PARAMETER iRecIDloan AS RECID NO-UNDO. 
+
+DEF temp-table tt13
+	FIELD lineDate AS DATE
+	FIELD lineSum AS DECIMAL
+	FIELD lineSumOst AS DECIMAL
+	FIELD lineType AS INT64
+	INDEX lineDate lineDate
+	.
+ 
+{globals.i} 
+{sh-defs.i}
+{ksh-defs.i NEW}
+{tmprecid.def}
+{intrface.get xclass}
+{intrface.get corr}
+
+DEFINE BUFFER loan FOR loan.
+DEFINE BUFFER loan-int FOR loan-int.
+DEFINE VARIABLE mType AS INT64 NO-UNDO.
+DEFINE VARIABLE lastDate AS DATE NO-UNDO.
+DEFINE VARIABLE lastDate2 AS DATE NO-UNDO.
+DEFINE VARIABLE dateRasch AS DATE NO-UNDO.
+DEFINE VARIABLE ost455 AS DECIMAL NO-UNDO.
+DEFINE VARIABLE stavka AS DECIMAL NO-UNDO.
+DEFINE VARIABLE daysInYear AS int64 NO-UNDO.
+DEFINE VARIABLE sumProc AS DECIMAL NO-UNDO.
+DEFINE VARIABLE sumn AS DECIMAL NO-UNDO.
+DEFINE VARIABLE sumo AS DECIMAL NO-UNDO.
+DEFINE VARIABLE DATEpr AS DATE NO-UNDO.
+
+DATEpr = end-date.
+/* DATE("30/08/2016"). */
+
+{empty tt13}
+FIND FIRST loan
+    WHERE RECID(loan) EQ iRecIDloan
+    NO-LOCK NO-ERROR.
+IF AVAILABLE(loan) THEN
+DO:
+    /*
+  FIND FIRST term-obl OF loan WHERE 
+	(term-obl.end-date = term-obl.fop-date OR term-obl.fop-date = ?)
+	AND term-obl.idnt = 2 
+	AND term-obl.amt-rub <> 0
+	NO-LOCK NO-ERROR.
+  IF AVAIL term-obl THEN DO:
+	CASE term-obl.idnt:
+		WHEN 1 THEN mType = 6. /* Погашение процентов */
+		WHEN 2 THEN mType = 1. /* Выдача кредита */
+		WHEN 3 THEN mType = 2. /* Погашение основного долга */
+	END CASE.
+	CREATE tt13.
+	ASSIGN
+		tt13.lineDate = term-obl.end-date
+		tt13.lineSum  = term-obl.amt-rub
+		tt13.lineType = mType
+		tt13.lineSumOst = 0
+		.
+	RELEASE tt13.
+	/* RUN PrintLine (iRecIDloan,term-obl.end-date,term-obl.amt-rub,term-obl.idnt). */
+  END.
+  */
+  
+  FIND FIRST loan-int OF loan WHERE 
+    loan-int.id-d = 0 
+    AND loan-int.id-k = 3 
+    AND loan-int.mdate < DATEpr
+    AND loan-int.amt-rub <> 0
+    no-lock no-error.
+    if avail loan-int then do:
+       CREATE tt13.
+            ASSIGN
+            tt13.lineDate = loan-int.mdate
+            tt13.lineSum  = loan-int.amt-rub
+            tt13.lineType = 1
+            tt13.lineSumOst = 0
+            .
+    end.
+  
+  
+  FOR EACH term-obl OF loan 
+	WHERE (term-obl.idnt = 1 OR term-obl.idnt = 3)
+	AND term-obl.amt-rub <> 0	
+	NO-LOCK BY term-obl.end-date:
+  	CASE term-obl.idnt:
+		WHEN 1 THEN DO:
+			mType = 6. /* Погашение процентов */
+			lastDate = term-obl.end-date.
+		END.
+		WHEN 2 THEN mType = 1. /* Выдача кредита */
+		WHEN 3 THEN mType = 2. /* Погашение основного долга */
+	END CASE.
+	FIND FIRST tt13 WHERE tt13.lineDate = term-obl.end-date
+		AND tt13.lineType = mType NO-ERROR.
+    IF AVAIL tt13 THEN DO:
+        tt13.lineSum = tt13.lineSum + term-obl.amt-rub.
+    END.
+    ELSE DO:
+    	CREATE tt13.
+    	ASSIGN
+	    	tt13.lineDate = term-obl.end-date
+    		tt13.lineSum  = term-obl.amt-rub
+	    	tt13.lineType = mType
+		    tt13.lineSumOst = 0
+		    .
+	    RELEASE tt13.
+	END. 
+	/* RUN PrintLine (iRecIDloan,term-obl.end-date,term-obl.amt-rub,term-obl.idnt). */
+  END.
+  FOR EACH loan-int OF loan WHERE loan-int.id-d = 4
+	AND loan-int.id-k = 5 
+	AND loan-int.mdate < DATEpr
+	AND loan-int.amt-rub <> 0
+	NO-LOCK BY loan-int.mdate:
+	FIND FIRST tt13 WHERE tt13.lineDate = term-obl.end-date
+		AND tt13.lineType = 5 NO-ERROR.    
+    IF AVAIL tt13 THEN DO:
+        tt13.lineSum = tt13.lineSum + loan-int.amt-rub.
+    END.
+    ELSE DO:
+    	CREATE tt13.
+    	ASSIGN
+	    	tt13.lineDate = loan-int.mdate
+    		tt13.lineSum  = loan-int.amt-rub
+		    tt13.lineType = 5
+		    tt13.lineSumOst = 0
+		    .	
+	    RELEASE tt13.
+	END.
+	
+	lastDate = loan-int.mdate.
+  END.
+
+  FOR EACH loan-int OF loan WHERE loan-int.id-d = 377
+	AND loan-int.id-k = 173 
+	AND loan-int.mdate < DATEpr
+	AND loan-int.amt-rub <> 0
+	NO-LOCK BY loan-int.mdate:
+	FIND FIRST tt13 WHERE tt13.lineDate = term-obl.end-date
+		AND tt13.lineType = 8 NO-ERROR.    
+    IF AVAIL tt13 THEN DO:
+        tt13.lineSum = tt13.lineSum + loan-int.amt-rub.
+    END.
+    ELSE DO:
+	    CREATE tt13.
+	    ASSIGN
+    		tt13.lineDate = loan-int.mdate
+		    tt13.lineSum  = loan-int.amt-rub
+		    tt13.lineType = 8
+		    tt13.lineSumOst = 0
+		    .
+    END.	
+	RELEASE tt13.
+
+	IF lastDate EQ ? THEN 
+           lastDate = loan-int.mdate.
+        ELSE 
+           lastDate = MAX(lastDate,loan-int.mdate).
+  END.
+
+  ost455 = 0.
+  FIND LAST loan-acct OF LOAN WHERE
+		loan-acct.acct-type = 'Кредит' NO-LOCK NO-ERROR.
+  IF AVAIL loan-acct THEN DO:
+		RUN acct-pos IN h_base (loan-acct.acct, loan-acct.currency, DATEpr - 1,DATEpr - 1, ?).
+		IF loan-acct.currency = '' THEN
+			ost455 = abs(sh-bal).
+		ELSE ost455 = abs(sh-val).
+/* ost455 = 895793.30. */
+/*message ost455 view-as alert-box.*/
+  END.
+  stavka = 0.
+  FOR EACH comm-rate
+         WHERE comm-rate.kau EQ loan.contract + "," + loan.cont-code
+		 AND comm-rate.commission = '%Кред'
+         NO-LOCK BY comm-rate.since DESC:
+		 stavka = comm-rate.rate-comm.
+		 LEAVE.
+  END.
+  
+  lastDate2 = lastDate.
+  FOR EACH term-obl OF loan WHERE term-obl.idnt = 3 
+	AND term-obl.end-date > lastDate2
+	AND term-obl.amt-rub <> 0
+	NO-LOCK BY term-obl.end-date:
+	/* WHEN 3 THEN mType = 2.  Погашение основного долга */
+	
+	dateRasch = date_correct(2,0,31,YEAR(lastDate)). 
+	IF day(dateRasch) > 28 THEN daysInYear = 36600.
+	ELSE daysInYear = 36500.
+
+	dateRasch = date_correct(month(lastDate),0,31,year(lastDate)).
+
+	IF dateRasch < term-obl.end-date AND dateRasch > lastDate THEN DO:
+		sumProc = ost455 * (dateRasch - lastDate) * stavka / daysInYear.
+		lastDate = dateRasch.
+		CREATE tt13.
+		ASSIGN
+			tt13.lineDate = lastDate
+			tt13.lineSum  = sumProc
+			tt13.lineType = 5
+			tt13.lineSumOst = ost455
+		.
+		RELEASE tt13.
+	END.
+	dateRasch = date_correct(2,0,31,YEAR(term-obl.end-date)). 
+	IF day(dateRasch) > 28 THEN daysInYear = 36600.
+	ELSE daysInYear = 36500.
+
+	dateRasch = term-obl.end-date.
+
+	IF dateRasch >= lastDate THEN DO:
+		sumProc = ost455 * (dateRasch - lastDate) * stavka / daysInYear.
+		lastDate = dateRasch.
+		CREATE tt13.
+		ASSIGN
+			tt13.lineDate = lastDate
+			tt13.lineSum  = sumProc
+			tt13.lineType = 5
+			tt13.lineSumOst = ost455
+		.
+		RELEASE tt13.
+	END.
+	ost455 = ost455 - term-obl.amt-rub.
+	/* RUN PrintLine (iRecIDloan,term-obl.end-date,term-obl.amt-rub,term-obl.idnt). */
+  END.
+  
+  
+  RUN SETSUM.
+  
+  
+  FOR EACH tt13 where tt13.lineSum <> 0
+  NO-LOCK BY tt13.lineDate:
+/*
+IF tt13.lineType = 5 THen
+ sumn = sumn + tt13.lineSum.
+IF tt13.lineType = 6 THen
+ sumo = sumo + tt13.lineSum.
+*/
+
+	PUT UNFORMATTED
+/* Идентификатор кредитного договора во внешней системе */
+	iRecIDloan 
+	"^"
+/* Дата операции */
+	STRING(YEAR(tt13.lineDate), "9999") + STRING(MONTH(tt13.lineDate), "99") + STRING(DAY(tt13.lineDate), "99")
+	"^"
+/* Сумма операции */
+	STRING(tt13.lineSum, ">>>>>>>>>>>9.99")
+	"^"
+/* Тип операции */
+	tt13.lineType
+	"^"
+/* Система */
+	'ПАО "ПЛЮС БАНК"'
+	CHR(13) + CHR(10)
+	.
+  END.
+  
+END. /* IF AVAILABLE(loan) THEN */
+  {intrface.del}
+/*message sumn sumo view-as alert-box.*/
+RETURN.
+  
+ 
+PROCEDURE SETSUM:
+
+DEF VAR lastDate AS DATE NO-UNDO.
+DEF VAR myMonth AS INT64 NO-UNDO.
+DEF VAR myYear AS INT64 NO-UNDO.
+DEF VAR tekSum AS DECIMAL NO-UNDO.
+DEF VAR tmpDate AS DATE NO-UNDO.
+def buffer tterm-obl for term-obl.
+
+tekSum = 0.
+FOR EACH tt13 WHERE tt13.lineSum > 0 
+    AND (tt13.lineType = 5)
+    AND tt13.lineDate >= date("01/04/2017")
+    BREAK BY tt13.lineDate:
+        
+        IF tt13.lineDate = date("01/04/2017") THEN DO:
+            tekSum = 0.
+            myMonth = Month(tt13.lineDate).
+            myYear = Year(tt13.lineDate).
+            lastDate = date_correct(myMonth,0,31,myYear).
+            tmpDate = DATEpr.
+        /*    message "1 " + string(lastdate) view-as alert-box. */
+        END.
+    
+        tekSum = tekSum + tt13.lineSum.
+        FIND FIRST tterm-obl WHERE 
+            tterm-obl.contract EQ 'Кредит'
+            AND tterm-obl.cont-code = loan.cont-code 
+            AND tterm-obl.idnt = 1  
+            AND tterm-obl.end-date = tt13.lineDate
+            NO-LOCK NO-ERROR.
+        IF AVAIL tterm-obl 
+            OR tt13.lineDate = lastDate
+            OR tt13.lineDate = tmpDate THEN
+            DO:
+        /*        
+message "1 " + string(tt13.lineDate) + ' ' + string(tekSum) view-as alert-box.
+*/
+                tt13.lineSum = tekSum. 
+                tekSum = 0.
+                myMonth = Month(tt13.lineDate).
+                myYear = Year(tt13.lineDate).
+                lastDate = date_correct(myMonth,0,31,myYear).
+            END.
+            ELSE
+                tt13.lineSum = 0.
+
+  /*  IF tt13.lineDate = tmpDate AND tekSum <> 0 THEN do:
+        tt13.lineSum = tekSum.
+        teksum = 0.
+    end.
+    */
+END.
+
+END PROCEDURE.
+
+
+

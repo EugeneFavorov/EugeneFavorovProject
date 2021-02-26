@@ -1,0 +1,974 @@
+/*
+               Å†≠™Æ¢·™†Ô ®≠‚•£‡®‡Æ¢†≠≠†Ô ·®·‚•¨† Åàë™¢®‚
+    Copyright: (C) 1992-1997 áéé "Å†≠™Æ¢·™®• ®≠‰Æ‡¨†Ê®Æ≠≠Î• ·®·‚•¨Î"
+     Filename: memorn.p
+      Comment: è•Á†‚Ï ¨≠Æ£ÆØ‡Æ¢Æ§ÆÁ≠Æ£Æ åé
+      Comment: 
+   Parameters: Input: RID -  RecID(op)
+         Uses: 
+      Used by:
+      Created: 07/09/2009 kraw (0104913)
+     Modified: 21/01/2010 kraw (0122183) è•Á†‚Ï ™Æ´®Á•·‚¢† Ø‡®´Æ¶•≠®© (Ñê "è‡®´ÑÆ™„¨" ® "è‡®´ã®·‚Æ¢")
+     Modified: 26/01/2010 kraw (0123116) ·≠Ô‚Æ Æ£‡†≠®Á•≠®• ≠† §´®≠„ ≠Æ¨•‡† §Æ™„¨•≠‚†.
+     Modified: 01/02/2010 kraw (0123012) ‡†ß°®¢™† ≠† ·‚‡†≠®ÊÎ ® §´Ô op-print
+     Modified: 09/02/2010 kraw (0122629) ëÆ·‚†¢®‚•´Ï ¨Æ¶•‚ °Î‚Ï ™Æ¨°®≠®‡Æ¢†≠≠Î¨ (°†≠™ + ØÆ§‡†ß§•´•≠®•)
+     Modified: 04/03/2010 kraw (0123741) Ä´Ï‚•‡≠†‚®¢≠Æ• ·Æ§•‡¶†≠®• ÆØ•‡†Ê®®.
+     Modified: 09/03/2010 kraw (0125075) "Ç·•£Æ ·‚‡†≠®Ê:" Ø•Á†‚†•¨ ≠†Á®≠†Ô · 2
+     Modified: 17/05/2010 kraw (0120303) ß†ØÆ´≠•≠®• ØÆ´•© 14 ® 15
+     Modified: 28/09/2010 kraw (0134118) ØÆ´Ô 14 ® 15 ¢ £‡†≠®Ê†Â Ø•Á†‚≠Æ£Æ §Æ™„¨•≠‚†
+     Modified: 06/10/2010 kraw (0127152) memornv
+     Modified: 08/07/2011 kraw (0151228) è•Á†‚Ï ¢·•Â ¢†´Ó‚≠ÎÂ ·„¨¨ §´Ô ¨≠Æ£Æ¢†´Ó‚≠Æ£Æ §Æ™„¨•≠‚† · ‡†ß°®¢™Æ©
+     Modified: 25/07/2014 kau ®ß¨•≠•≠®• ·Æ·‚†¢®‚•´Ô ¢ ¨•¨Æ‡®†´Ï≠Æ¨ Æ‡§•‡•, Á‚Æ °Î ØÆ§Â¢†‚Î¢†´Æ·Ï §Æ §¢„Â ØÆ§‡†ß§•´•≠®© ‡Æ§®‚•´•© ¢ ≠†®¨•≠Æ¢†≠®®
+*/ 
+{globals.i}                                 /* £´Æ°†´Ï≠Î• Ø•‡•¨•≠≠Î•         */
+{intrface.get tmcod}  /* ê†°Æ‚† · ‚•¨ØÆ‡†´Ï≠Î¨® ™´†··®‰®™†‚Æ‡†¨®  */
+{intrface.get sgntr}
+{intrface.get instrum}
+{intrface.get exch}  
+{intrface.get cust}  
+
+DEFINE VARIABLE mAcctDetails   AS CHARACTER EXTENT 6 NO-UNDO.
+DEFINE VARIABLE mAcct          AS CHARACTER          NO-UNDO.
+DEFINE VARIABLE mRubDb         AS DECIMAL            NO-UNDO.
+DEFINE VARIABLE mCurDb         AS DECIMAL            NO-UNDO.
+DEFINE VARIABLE mCurrency      AS CHARACTER          NO-UNDO.
+DEFINE VARIABLE mQty           AS INT64            NO-UNDO.
+DEFINE VARIABLE mDocType       AS CHARACTER          NO-UNDO.
+DEFINE VARIABLE mNumProc       AS INT64            NO-UNDO.
+DEFINE VARIABLE mSignatures    AS CHARACTER          NO-UNDO. 
+DEFINE VARIABLE mNumLines      AS INT64            NO-UNDO.
+DEFINE VARIABLE mTotalPagesPos AS INT64            NO-UNDO.
+DEFINE VARIABLE mPrevPageNum   AS INT64 INIT 0     NO-UNDO.
+DEFINE VARIABLE mCurAcctDB     AS LOGICAL            NO-UNDO.
+
+DEFINE VARIABLE mQuanDocs      AS INT64            NO-UNDO.
+DEFINE VARIABLE mQuanPages     AS INT64            NO-UNDO.
+DEFINE VARIABLE mStrTMP        AS CHARACTER          NO-UNDO.
+
+DEFINE VARIABLE mPageNumber    AS INT64 INITIAL 1  NO-UNDO.
+DEFINE VARIABLE mPageSize      AS INT64            NO-UNDO.
+
+DEFINE VARIABLE mItem AS INT64 NO-UNDO.
+
+DEFINE VARIABLE mCanBeSplitted AS LOGICAL            NO-UNDO.
+DEFINE VARIABLE mDoSplit       LIKE ToSplit          NO-UNDO.
+DEFINE VARIABLE mStrPar        AS CHARACTER          NO-UNDO.
+
+DEFINE VARIABLE mMergeSimilarOE AS LOGICAL           NO-UNDO.
+
+DEFINE VARIABLE mSuppressEquiv AS LOGICAL            NO-UNDO.
+
+DEFINE VARIABLE mDBCurr        AS CHARACTER          NO-UNDO.
+
+{chkacces.i}
+
+FUNCTION PageBreak RETURNS LOGICAL (INPUT  iTolerance AS INT64):
+
+   IF mPageSize > 0 AND mPageSize - LINE-COUNTER < iTolerance THEN
+      RETURN YES.
+   ELSE
+      RETURN NO.
+
+END FUNCTION.
+
+FUNCTION GetMemornAuthor RETURN CHARACTER PRIVATE (INPUT iSetting    AS CHARACTER,
+                                                   INPUT iBankName   AS CHARACTER,
+                                                   INPUT iBranchName AS CHARACTER):
+MESSAGE iSetting VIEW-AS ALERT-BOX.
+   CASE TRIM(iSetting):
+      WHEN "Å†≠™" OR WHEN "Å" THEN
+         RETURN iBankName.
+      WHEN "èÆ§‡†ß§•´•≠®•" OR WHEN "è" THEN
+         RETURN iBranchName.
+      WHEN "Åè" THEN
+         RETURN iBankName + (IF iBranchName = "" THEN "" 
+                                                 ELSE (" " + iBranchName)).
+      WHEN "èÅ" THEN
+         RETURN iBranchName + (IF iBankName = "" THEN "" 
+                                                 ELSE (" " + iBankName)).
+   END.
+   RETURN "".
+END FUNCTION.
+
+&GLOBAL-DEFINE op-entry yes
+&GLOBAL-DEFINE tt-op-entry yes
+&SCOPED-DEFINE MORDER YES
+
+{pp-uni.var &multiline-author = YES}        /* ÆØ‡•§•´•≠®• Ø•‡•¨•≠≠ÎÂ        */
+{pp-uni.err}                                /* ·ÆÆ°È•≠®Ô Æ° ÆË®°™†Â          */
+{pp-uni.prg}                     /* ÆØ®·†≠®• ·‚†≠§†‡‚≠ÎÂ Ø‡ÆÊ•§„‡ */
+
+{mo-uni.dec}
+
+{def-wf.i NEW}
+{mo-pars.i}
+
+ASSIGN
+    mStrPar = FGetSetting("è´†‚ÑÆ™", "å•¨é‡§•‡", "")
+    mMergeSimilarOE = LOGICAL(FGetSetting("è´†‚ÑÆ™", "é°Í•§®≠Ô‚Ïè‡Æ¢", "ç•‚") = "Ñ†")
+.
+
+RUN ProcProcessFreeField(mStrPar,?,?).
+
+&IF DEFINED(CONSOLIDATED) &THEN
+FOR EACH tt-op NO-LOCK:
+   rid = tt-op.rcd.
+&ENDIF
+   {mo-uni.chk}                                /* Ø‡Æ¢•‡™† ¢ÂÆ§≠ÎÂ §†≠≠ÎÂ       */
+&IF DEFINED(CONSOLIDATED) &THEN
+END.
+&ENDIF
+
+RUN DecomposeMO.
+
+&IF DEFINED(CONSOLIDATED) &THEN
+FOR EACH mo-entry:
+   mo-entry.grp-num = 1.
+END.
+vGroupNum = 1.
+
+FOR EACH mo-entry NO-LOCK:
+   IF mo-entry.acct-db <> ? THEN DO:
+      IF mAcctDbCheck = ""
+      THEN mAcctDbCheck = mo-entry.acct-db.
+      ELSE IF mAcctDbCheck <> mo-entry.acct-db
+           THEN mAcctDbBad = YES.
+   END.
+   IF mo-entry.acct-cr <> ? THEN DO:
+      IF mAcctCrCheck = ""
+      THEN mAcctCrCheck = mo-entry.acct-cr.
+      ELSE IF mAcctCrCheck <> mo-entry.acct-cr
+           THEN mAcctCrBad = YES.
+   END.
+   IF mAcctDbBad AND mAcctCrBad THEN DO:
+      RUN Fill-SysMes IN h_tmess ("", "", "-1", "Ç §•°•‚• ®´® ™‡•§®‚• Æ‚Æ°‡†≠≠ÎÂ §´Ô Ø•Á†‚® §Æ™„¨•≠‚Æ¢ §Æ´¶•≠ °Î‚Ï Æ§®≠†™Æ¢Î© ·Á•‚.").
+      {intrface.del}
+      RETURN.
+   END.
+END.
+
+&ELSE
+RUN CheckIfComplex(NO, OUTPUT mCanBeSplitted).
+
+mDoSplit = ToSplit.
+IF NOT PackagePrint THEN mDoSplit = ?.
+IF mDoSplit = ? THEN DO:
+   mDoSplit = NO.
+
+   IF mCanBeSplitted AND vGroupNum = 1 THEN DO:
+      &IF DEFINED(SESSION-REMOTE) &THEN
+         pick-value = (IF mDoSplit = YES THEN "yes" ELSE "no").
+         RUN Fill-SysMes ("", "", "4", "ê†ß°®¢†‚Ï?").
+         mDoSplit = (pick-value = "yes").
+      &ELSE
+         DEFINE VARIABLE vStreamPos AS INT64 NO-UNDO.
+         vStreamPos = SEEK(OUTPUT).
+         MESSAGE "ê†ß°®¢†‚Ï?" UPDATE mDoSplit.
+         SEEK OUTPUT TO vStreamPos.
+      &ENDIF
+      ToSplit = mDoSplit.
+   END.
+END.
+
+IF mDoSplit = YES OR vGroupNum > 1 THEN
+    RUN TotallyDecomposeMO.
+&ENDIF
+
+{strtout3.i &cols=84}             /* ØÆ§£Æ‚Æ¢™† ™ ¢Î¢Æ§„           */
+
+IF NOT AVAILABLE printer THEN
+DO:
+   FIND FIRST printer WHERE printer.printer   EQ usr-printer
+                        AND printer.page-cols GE 84
+      NO-LOCK NO-ERROR.
+   
+   IF NOT AVAILABLE printer THEN
+      FIND LAST printer WHERE printer.printer EQ usr-printer
+         NO-LOCK NO-ERROR.
+     
+   IF NOT AVAILABLE printer THEN
+      mPageSize = 56.
+   ELSE
+      mPageSize = printer.page-lines.
+END.
+ELSE
+   mPageSize = printer.page-lines.
+
+FOR EACH tt-op-entry NO-LOCK,
+FIRST op WHERE op.op = tt-op-entry.op NO-LOCK:
+   {empty Info-Store}
+   {pp-uni.run}                                /* ≠•ØÆ·‡•§·‚¢•≠≠Æ ‡†·Á•‚        */
+END.
+
+ASSIGN
+   &IF DEFINED(CONSOLIDATED) &THEN
+   mQuanDocs  = ?
+   mQuanPages = ?
+   &ELSE
+   mQuanDocs  = INT64(GetXAttrValueEx("op", STRING(op.op), "è‡®´ÑÆ™„¨",  "?"))
+   mQuanPages = INT64(GetXAttrValueEx("op", STRING(op.op), "è‡®´ã®·‚Æ¢", "?"))
+   &ENDIF
+.
+
+mNumProc  = INT64(GetSysConf("user-proc-id")) NO-ERROR.
+FIND FIRST user-proc WHERE RECID(user-proc) EQ mNumProc
+   NO-LOCK NO-ERROR.
+
+IF (AVAIL(user-proc) AND 
+    user-proc.procedure NE ENTRY(1, PROGRAM-NAME(1), ".")) OR NOT AVAIL(user-proc)  THEN DO:
+
+   FIND FIRST user-proc WHERE user-proc.PROCEDURE EQ ENTRY(1, PROGRAM-NAME(1), ".")
+      NO-LOCK NO-ERROR.
+   IF AVAIL(user-proc) THEN
+      RUN SetSysConf IN h_base ("user-proc-id",RECID(user-proc)). /* §´Ô signatur.i */
+END.
+
+IF AVAIL(user-proc) THEN 
+    
+   mSignatures = GetXAttrValue("user-proc",
+                 STRING(user-proc.public-number),
+                 "èÆ§Ø®·®").  
+
+IF {assigned mSignatures} THEN 
+   RUN CalcSignLines(INPUT mSignatures, OUTPUT mNumLines).
+
+DEFINE VARIABLE vGrp AS INT64 NO-UNDO.
+
+DO vGrp = 1 TO vGroupNum:
+   RUN PrintGroup(vGrp).
+END.
+{empty mo-entry}
+vGroupNum = 0.
+
+IF AVAIL(user-proc) AND RECID(user-proc) NE mNumProc THEN
+   RUN SetSysConf IN h_base ("user-proc-id",mNumProc).
+
+PROCEDURE PrintGroup.
+   DEFINE INPUT PARAMETER iGrpNum AS INT64 NO-UNDO.
+
+   DEFINE VARIABLE vAcctCat      LIKE op.acct-cat           NO-UNDO.
+   DEFINE VARIABLE vOpForReqv    LIKE op.op                 NO-UNDO.
+   DEFINE VARIABLE vNumEntriesDB AS   INT64       INITIAL 0 NO-UNDO.
+   DEFINE VARIABLE vNumEntriesCR AS   INT64       INITIAL 0 NO-UNDO.
+   DEFINE VARIABLE vNumKindsDb   AS   INT64       INITIAL 0 NO-UNDO.
+   DEFINE VARIABLE vNumKindsCr   AS   INT64       INITIAL 0 NO-UNDO.
+   DEFINE VARIABLE vMerge        AS   LOGICAL               NO-UNDO.
+   DEFINE VARIABLE vSimpleGroup  AS   LOGICAL               NO-UNDO.
+   DEFINE VARIABLE vCompactGroup AS   LOGICAL               NO-UNDO.
+
+   DEFINE BUFFER x-mo-entry FOR mo-entry.
+
+   ASSIGN
+        mPrevPageNum   = PAGE-NUMBER
+        mRubDb         = 0.0
+        mCurDb         = 0.0
+        mCurrency      = ""
+        mQty           = 0
+        mSuppressEquiv = NO
+   .
+   FOR EACH mo-entry WHERE mo-entry.grp-num = iGrpNum
+                       AND {assigned mo-entry.acct-db}
+   BREAK BY mo-entry.acct-db:
+       ASSIGN
+           vNumEntriesDB = vNumEntriesDB + 1
+           vNumKindsDb   = vNumKindsDb   + 1 WHEN FIRST-OF(mo-entry.acct-db)
+       .
+   END.
+   FOR EACH mo-entry WHERE mo-entry.grp-num = iGrpNum
+                       AND {assigned mo-entry.acct-cr}
+   BREAK BY mo-entry.acct-cr:
+       ASSIGN
+           vNumEntriesCR = vNumEntriesCR + 1
+           vNumKindsCr   = vNumKindsCr   + 1 WHEN FIRST-OF(mo-entry.acct-cr)
+       .
+   END.
+   ASSIGN
+       vSimpleGroup  = (vNumKindsDb = 1) AND (vNumKindsCr = 1)
+       vCompactGroup = (vNumEntriesDb = 1) OR (vNumEntriesCr = 1)
+   .
+
+   {empty mo-entry-grp}
+   {empty tt-op-entry-collected}
+   FOR EACH mo-entry WHERE mo-entry.grp-num = iGrpNum
+                       AND mo-entry.acct-db > "",
+   FIRST op WHERE op.op = mo-entry.op NO-LOCK,
+   EACH tt-op-entry WHERE tt-op-entry.op       = op.op
+                      AND tt-op-entry.op-entry = mo-entry.op-entry
+   NO-LOCK:
+      FIND FIRST op-entry WHERE op-entry.op       = tt-op-entry.op
+                            AND op-entry.op-entry = tt-op-entry.op-entry-half-db
+      NO-LOCK NO-ERROR.
+      IF AVAIL(op-entry) AND op-entry.amt-rub EQ 0.00 AND op.op-status BEGINS "Ä"  /* †≠≠„´®‡Æ¢†≠≠Î© §Æ™„¨•≠‚ ØÆ·‚†≠Æ¢™® ≠† ™†‡‚-™„ 2 */
+      THEN RELEASE op-entry.
+
+      IF tt-op-entry.IsHalfEntryComposited THEN DO:
+         IF CAN-FIND(FIRST tt-op-entry-collected WHERE tt-op-entry-collected.op       = tt-op-entry.op
+                                                   AND tt-op-entry-collected.op-entry = (IF AVAIL op-entry THEN op-entry.op-entry ELSE tt-op-entry.op-entry-half-db)
+                     NO-LOCK)
+         THEN NEXT.
+         CREATE tt-op-entry-collected.
+         ASSIGN
+            tt-op-entry-collected.op       = tt-op-entry.op
+            tt-op-entry-collected.op-entry = (IF AVAIL op-entry THEN op-entry.op-entry ELSE tt-op-entry.op-entry-half-db)
+        .
+      END.
+      vMerge = (vNumKindsDb < vNumKindsCr) OR mMergeSimilarOE.
+      {ooe-join.i &side = "db"}
+      &IF DEFINED(CONSOLIDATED) &THEN
+      CASE mDocSort:
+         WHEN "2" THEN mo-entry-grp.SortField = STRING(mo-entry-grp.currency,"x(3)") + STRING((IF mo-entry-grp.currency <> "" THEN mo-entry-grp.amt-cur ELSE mo-entry-grp.amt-rub),"-999999999999999999.99").
+         WHEN "3" THEN mo-entry-grp.SortField = SUBSTR(mo-entry-grp.acct-db,1,8) + SUBSTR(mo-entry-grp.acct-db,10,11).
+         WHEN "4" THEN mo-entry-grp.SortField = STRING(mo-entry-grp.acct-db).         
+         OTHERWISE mo-entry-grp.SortField = STRING(op.op,"999999999999999999").
+      END CASE.
+      &ELSE
+      mo-entry-grp.SortField = STRING(op.op,"999999999999999999").
+      &ENDIF
+      ASSIGN
+         mRubDb    = mRubDb + (IF AVAIL op-entry THEN op-entry.amt-rub ELSE tt-op-entry.amt-rub)
+         mCurDb    = mCurDb + (IF AVAIL op-entry THEN op-entry.amt-cur ELSE tt-op-entry.amt-cur)
+         mQty      = mQty   + (IF AVAIL op-entry THEN op-entry.qty     ELSE tt-op-entry.qty)
+         mCurrency = (IF AVAIL op-entry THEN op-entry.currency ELSE tt-op-entry.currency)
+         vAcctCat  = op.acct-cat
+      .
+   END.
+
+   /* §´Ô ™Æ≠¢•‡·®Æ≠≠ÎÂ §Æ™„¨•≠‚Æ¢ Ø‡® Ø•Á†‚® conv-ord £‡„ØØ®‡„•¨ ØÆ acct-cr */
+   IF mConvOrdType <> {&conv-ord-none} THEN DO:
+       ASSIGN
+           mRubDb       = 0.0
+           mCurDb       = 0.0
+           mQty         = 0
+           mCurrency    = ""
+       .
+       FOR EACH mo-entry WHERE
+           mo-entry.grp-num = iGrpNum AND
+           mo-entry.acct-cr > "",
+       FIRST op WHERE
+           op.op = mo-entry.op
+       NO-LOCK,
+       EACH tt-op-entry WHERE
+           tt-op-entry.op       = op.op AND
+           tt-op-entry.op-entry = mo-entry.op-entry
+       NO-LOCK,
+       FIRST op-entry WHERE
+           op-entry.op       = tt-op-entry.op AND
+           op-entry.op-entry = tt-op-entry.op-entry-half-cr
+       NO-LOCK:
+           ASSIGN
+               mRubDb    = mRubDb + (IF AVAILABLE op-entry THEN op-entry.amt-rub
+                                                           ELSE tt-op-entry.amt-rub)
+               mCurDb    = mCurDb + (IF AVAILABLE op-entry THEN op-entry.amt-cur
+                                                           ELSE tt-op-entry.amt-cur)
+               mQty      = mQty   + (IF AVAILABLE op-entry THEN op-entry.qty
+                                                           ELSE tt-op-entry.qty)
+               mCurrency = IF AVAILABLE op-entry THEN op-entry.currency
+                                                 ELSE tt-op-entry.currency
+           .
+       END.
+   END.
+
+   RELEASE op.
+   &IF DEFINED(CONSOLIDATED) &THEN
+   IF mDocNumType = "1" THEN DO:
+   &ENDIF
+      FOR FIRST mo-entry-grp WHERE mo-entry-grp.grp-num = iGrpNum BY mo-entry-grp.SortField:
+         FIND FIRST mo-entry WHERE mo-entry.grp-num = mo-entry-grp.grp-num
+                               AND mo-entry.acct-db = mo-entry-grp.acct-db
+         NO-LOCK.
+         &IF DEFINED(CONSOLIDATED) &THEN
+         FOR FIRST tt-op BY tt-op.op:
+            FIND FIRST op WHERE op.op = tt-op.op NO-LOCK.
+         END.
+         &ELSE
+         FIND FIRST op WHERE op.op = mo-entry.op NO-LOCK NO-ERROR.
+         &ENDIF
+      END.
+   &IF DEFINED(CONSOLIDATED) &THEN
+   END.
+   IF mDocNumType = "2" THEN DO:
+      FIND FIRST tt-op WHERE CAN-FIND(FIRST op WHERE op.op      = tt-op.op
+                                                 AND op.doc-num = mDocNum)
+      NO-LOCK NO-ERROR.
+      IF AVAIL tt-op
+      THEN FIND FIRST op WHERE op.op = tt-op.op NO-LOCK.
+   END.
+   &ENDIF
+   mDocType = "".
+   IF AVAIL op THEN DO:
+      vOpForReqv = op.op.
+      &IF DEFINED(CONSOLIDATED) &THEN
+      ASSIGN
+         mDocNum    = op.doc-num
+         mQuanDocs  = INT64(GetXAttrValueEx("op",
+                                              STRING(vOpForReqv),
+                                              "è‡®´ÑÆ™„¨",
+                                              "?"))
+         mQuanPages = INT64(GetXAttrValueEx("op",
+                                              STRING(vOpForReqv),
+                                              "è‡®´ã®·‚Æ¢",
+                                              "?"))
+      NO-ERROR.
+      &ENDIF
+      FIND FIRST doc-type WHERE doc-type.doc-type EQ op.doc-type NO-LOCK NO-ERROR.
+      IF AVAILABLE doc-type
+      THEN mDocType = doc-type.digital.
+      ELSE mDocType = op.doc-type.
+   END.
+   ELSE ASSIGN
+      mDocType   = "09"
+      vOpForReqv = ?
+   .
+   IF AVAIL op THEN DO:
+      Author[1] = GetUserBranchId(op.user-id).
+      FIND FIRST branch WHERE branch.branch-id EQ Author[1] NO-LOCK NO-ERROR.
+      Author[1] = IF AVAILABLE branch THEN branch.name ELSE "".
+   END.
+   ELSE Author[1] = "".
+   
+/* kau ®ß¨•≠•≠®• ·Æ·‚†¢®‚•´Ô ¢ ¨•¨Æ‡®†´Ï≠Æ¨ Æ‡§•‡•*/
+    DEFINE BUFFER bufbranch FOR branch.
+    DEF VAR parentbranch AS CHAR NO-UNDO.
+    IF AVAIL branch THEN IF branch.parent-id NE 'TOP' THEN 
+    DO:
+        FIND FIRST bufBranch WHERE bufBranch.branch-id = branch.parent-id NO-LOCK NO-ERROR.
+        IF AVAIL bufBranch then
+        DO:
+/*          Author[1] = bufBranch.name + ", " + Author[1].*/
+            Author[1] = Author[1].
+            parentbranch = bufBranch.parent-id. 
+            if parentbranch NE 'TOP' THEN DO:
+                FIND FIRST bufBranch WHERE bufBranch.branch-id = parentbranch NO-LOCK NO-ERROR.
+/*                IF AVAIL bufBranch THEN Author[1] = bufBranch.name + ", " + Author[1]. */
+                  IF AVAIL bufBranch THEN Author[1] = Author[1].
+            END.
+        END.
+    END.  
+/* end kau*/
+   
+   Author[1] = "ëÆ·‚†¢®‚•´Ï " + Author[1].
+   {wordwrap.i &s=Author &n=3 &l=61}
+   RUN ShiftArrayDown3(INPUT-OUTPUT Author).
+   RUN memorn_pre.
+
+   FOR EACH mo-entry-grp WHERE mo-entry-grp.grp-num = iGrpNum BY mo-entry-grp.SortField:
+      RUN PrintOneBlock(BUFFER mo-entry-grp, "DB", vSimpleGroup, NOT (vCompactGroup OR mMergeSimilarOE)).
+   END.
+
+   PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¥              ≥" SKIP.
+   PUT UNFORMATTED " ç†®¨•≠Æ¢†≠®• ·Á•‚†            ≥ä‡•§®‚ ·Á•‚†        ≥              ≥" SKIP.
+   PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¥              ≥" SKIP.
+
+   {empty mo-entry-grp}
+   {empty tt-op-entry-collected}
+   FOR EACH mo-entry WHERE mo-entry.grp-num = iGrpNum
+                       AND mo-entry.acct-cr > "",
+   FIRST op WHERE op.op = mo-entry.op NO-LOCK,
+   EACH tt-op-entry WHERE tt-op-entry.op       = op.op
+                      AND tt-op-entry.op-entry = mo-entry.op-entry
+   NO-LOCK:
+      FIND FIRST op-entry WHERE op-entry.op       = tt-op-entry.op
+                            AND op-entry.op-entry = tt-op-entry.op-entry-half-cr
+      NO-LOCK NO-ERROR.
+      IF AVAIL(op-entry) AND op-entry.amt-rub EQ 0.00 AND op.op-status BEGINS "Ä"  /* †≠≠„´®‡Æ¢†≠≠Î© §Æ™„¨•≠‚ ØÆ·‚†≠Æ¢™® ≠† ™†‡‚-™„ 2 */
+      THEN RELEASE op-entry.
+
+      IF tt-op-entry.IsHalfEntryComposited THEN DO:
+         IF CAN-FIND(FIRST tt-op-entry-collected WHERE tt-op-entry-collected.op       = tt-op-entry.op
+                                                   AND tt-op-entry-collected.op-entry = (IF AVAIL op-entry THEN op-entry.op-entry ELSE tt-op-entry.op-entry-half-cr)
+                     NO-LOCK)
+         THEN NEXT.
+         CREATE tt-op-entry-collected.
+         ASSIGN
+            tt-op-entry-collected.op       = tt-op-entry.op
+            tt-op-entry-collected.op-entry = (IF AVAIL op-entry THEN op-entry.op-entry ELSE tt-op-entry.op-entry-half-cr)
+        .
+      END.
+      vMerge = (vNumKindsCr <= vNumKindsDb) OR mMergeSimilarOE.
+      {ooe-join.i &side = "cr"}
+      &IF DEFINED(CONSOLIDATED) &THEN
+      CASE mDocSort:
+         WHEN "2" THEN mo-entry-grp.SortField = STRING(mo-entry-grp.currency,"x(3)") + STRING((IF mo-entry-grp.currency <> "" THEN mo-entry-grp.amt-cur ELSE mo-entry-grp.amt-rub),"-999999999999999999.99").
+         WHEN "3" THEN mo-entry-grp.SortField = SUBSTR(mo-entry-grp.acct-cr,1,8) + SUBSTR(mo-entry-grp.acct-cr,10,11).
+         WHEN "4" THEN mo-entry-grp.SortField = STRING(mo-entry-grp.acct-cr).          
+         OTHERWISE mo-entry-grp.SortField = STRING(op.op,"999999999999999999").
+      END CASE.
+      &ELSE
+      mo-entry-grp.SortField = STRING(op.op,"999999999999999999").
+      &ENDIF
+   END.
+   FOR EACH mo-entry-grp WHERE mo-entry-grp.grp-num = iGrpNum BY mo-entry-grp.SortField:
+      RUN PrintOneBlock(BUFFER mo-entry-grp, "CR", vSimpleGroup, NOT (vCompactGroup OR mMergeSimilarOE)).
+   END.
+
+   IF vAcctCat NE "d" THEN
+      RUN x-amtstr.p(mRubDb,"", TRUE, (IF TRUNCATE(mRubDb,0) <> mRubDb THEN TRUE ELSE ?), OUTPUT amtstr[1], OUTPUT amtstr[2]).
+   ELSE
+   DO:
+      RUN x-amtstr.p(mQty,mCurrency, NO, NO, OUTPUT amtstr[1], OUTPUT amtstr[2]).
+      amtstr[2] = "".
+   END.
+   ASSIGN 
+      AmtStr[1] = TRIM(AmtStr[1] + " " + AmtStr[2])
+      AmtStr[2] = "".
+
+   IF LENGTH(AmtStr[1]) > 63 THEN DO:
+     {wordwrap.i &s=AmtStr &n=3 &l=63}
+   END.
+
+   FIND FIRST op WHERE op.op = vOpForReqv NO-LOCK NO-ERROR.
+   IF NOT AVAIL op THEN Detail = "".
+   RUN memorn_post.
+
+END PROCEDURE.
+
+PROCEDURE PrintOneBlock:
+   DEFINE PARAMETER BUFFER mo-entry-grp FOR mo-entry-grp.
+   DEFINE INPUT PARAMETER  iType        AS  CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER  iSimpleGroup AS  LOGICAL   NO-UNDO.
+   DEFINE INPUT PARAMETER  iForceAmts   AS  LOGICAL   NO-UNDO.
+
+   IF iType = "DB"
+   THEN DO:
+      FIND FIRST mo-entry WHERE mo-entry.grp-num = mo-entry-grp.grp-num
+                            AND mo-entry.acct-db = mo-entry-grp.acct-db
+      NO-LOCK.
+      mAcct = mo-entry.acct-db.
+   END.
+   ELSE DO:
+      FIND FIRST mo-entry WHERE mo-entry.grp-num = mo-entry-grp.grp-num
+                            AND mo-entry.acct-cr = mo-entry-grp.acct-cr
+      NO-LOCK.
+      mAcct = mo-entry.acct-cr.
+   END.
+
+   FIND FIRST op WHERE op.op = mo-entry.op NO-LOCK.
+   FIND FIRST tt-op-entry WHERE tt-op-entry.op       = op.op
+                            AND tt-op-entry.op-entry = mo-entry.op-entry NO-LOCK.
+   IF iType = "DB"
+   THEN FIND FIRST op-entry WHERE op-entry.op       = tt-op-entry.op
+                              AND op-entry.op-entry = tt-op-entry.op-entry-half-db NO-LOCK NO-ERROR.
+   ELSE FIND FIRST op-entry WHERE op-entry.op       = tt-op-entry.op
+                              AND op-entry.op-entry = tt-op-entry.op-entry-half-cr NO-LOCK NO-ERROR.
+
+   IF iType = "DB" THEN DO:
+      RUN ProcProcessFreeField(mStrPar, tt-op-entry.op, (IF AVAIL op-entry THEN op-entry.op-entry ELSE ?)).
+   END.
+   RUN PEntry(mo-entry-grp.amt-rub,
+              mo-entry-grp.amt-cur,
+              mo-entry-grp.qty,
+              iType,
+              mo-entry-grp.currency,
+              iSimpleGroup,
+              iForceAmts).
+END PROCEDURE.
+
+{endout3.i  &nofooter=yes}                   /* ß†¢•‡Ë•≠®• ¢Î¢Æ§†             */ 
+{intrface.del}          /* ÇÎ£‡„ß™† ®≠·‚‡„¨•≠‚†‡®Ô. */ 
+
+PROCEDURE memorn_pre:
+   DEFINE VARIABLE vI      AS INT64     NO-UNDO.
+   DEFINE VARIABLE vDocNum AS CHARACTER NO-UNDO.
+
+   &IF DEFINED(CONSOLIDATED) <> 0 &THEN
+      IF FGetSetting("ä„‡·ê", "Å„™ç¨‡", "NO") EQ "NO" THEN
+         DO vI = 1 TO LENGTH(mDocNum):
+            IF NOT CAN-DO("1,2,3,4,5,6,7,8,9,0",SUBSTRING(mDocNum,1,1)) THEN
+               mDocNum = SUBSTRING(mDocNum,2,LENGTH(mDocNum) - 1).
+            ELSE LEAVE.
+         END.
+      vDocNum = mDocNum. 
+   &ELSE
+      vDocNum = op.doc-num. 
+      IF FGetSetting("ä„‡·ê", "Å„™ç¨‡", "NO") EQ "NO" THEN
+         DO vI = 1 TO LENGTH(vDocNum):
+            IF NOT CAN-DO("1,2,3,4,5,6,7,8,9,0",SUBSTRING(vDocNum,1,1)) THEN
+                vDocNum = SUBSTRING(vDocNum,2,LENGTH(vDocNum) - 1).
+            ELSE LEAVE.
+         END.                 
+   &ENDIF
+   PUT UNFORMATTED
+   "                                                               ⁄ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒø" SKIP
+   "                                                               ≥äÆ§ ‰Æ‡¨Î §Æ™„¨•≠‚†≥" SKIP
+   "                                                               ≥      ØÆ éäìÑ      ≥" SKIP
+   "                                                               √ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¥" SKIP
+   " " Author[1] FORMAT "x(61)"                                  " ≥      0401108      ≥" SKIP
+   " " Author[2] FORMAT "x(61)"                                  " ¿ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒŸ" SKIP
+   " " Author[3] FORMAT "x(61)" SKIP(1)
+   .
+   IF AVAIL op THEN DO:
+      {isispmem.i}
+   END.
+   ELSE mIsIspravl = NO.
+   IF mIsIspravl
+   THEN PUT UNFORMATTED " åÖåéêàÄãúçõâ àëèêÄÇàíÖãúçõâ éêÑÖê N "
+   vDocNum
+   FORMAT "x(7)" theDate FORMAT "x(10)" SKIP.
+   ELSE PUT UNFORMATTED " åÖåéêàÄãúçõâ éêÑÖê N "
+   vDocNum
+   FORMAT "x(17)" " " FORMAT "x(5)" theDate FORMAT "x(10)" SKIP.
+   PUT UNFORMATTED
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP
+   " " FORMAT "x(46)" "Ñ†‚†" SKIP
+   "                                                                   " /*ë¢Æ°Æ§≠Æ• ØÆ´• (§´Ô ¢Î¢Æ§† ™Æ´®Á•·‚¢† ·‚‡†≠®Ê)*/
+   .
+   mTotalPagesPos = SEEK(OUTPUT).
+   PUT UNFORMATTED "                " SKIP(1)
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP
+   " ç†®¨•≠Æ¢†≠®• ·Á•‚†            ≥Ñ•°•‚ ·Á•‚†         ≥ë„¨¨† Ê®‰‡†¨®" SKIP
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP
+   .
+END PROCEDURE.
+
+PROCEDURE memorn_post.
+
+   RUN GetDetailManual.
+
+   IF PageBreak(INPUT  23 + mNumLines) THEN DO:
+      PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP.
+      RUN PrintSignatures.
+      PUT UNFORMATTED "                                                                                 " STRING(mPageNumber - mPrevPageNum + 1,">>9") SKIP.
+      PAGE.
+      mPageNumber = mPageNumber + 1.
+      PUT UNFORMATTED
+      SKIP(1)
+      "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒ" SKIP
+      .
+   END.
+   ELSE
+   PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒ¡ƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒ" SKIP.
+
+   PUT UNFORMATTED
+   " ë„¨¨† Ø‡ÆØ®·ÏÓ                                                 ≥ ò®‰‡     ≥"  SKIP
+   "                                                                ≥ §Æ™„¨•≠‚†≥ " mDocType FORMAT "x(2)" SKIP
+   AmtStr[1] FORMAT "x(63)"                                               " √ƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒ" SKIP
+   AmtStr[2] FORMAT "x(63)"                                               " ≥ " mVarName[14] FORMAT "x(9)" "≥ " mVarVal[14] FORMAT "x(5)" SKIP
+   AmtStr[3] FORMAT "x(63)"                                               " √ƒƒƒƒƒƒƒƒƒƒ≈ƒƒƒƒƒƒƒƒ" SKIP
+   "                                                                ≥ " mVarName[15] FORMAT "x(9)" "≥ " mVarVal[15] FORMAT "x(5)" SKIP
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒ" SKIP
+   " ëÆ§•‡¶†≠®• ÆØ•‡†Ê®®, ≠†®¨•≠Æ¢†≠®•, ≠Æ¨•‡ ® §†‚† §Æ™„¨•≠‚†," SKIP
+   " ≠† Æ·≠Æ¢†≠®® ™Æ‚Æ‡Æ£Æ ·Æ·‚†¢´•≠ ¨•¨Æ‡®†´Ï≠Î© Æ‡§•‡" SKIP
+   " "SKIP
+   Detail[1] FORMAT "x(80)" SKIP
+   Detail[2] FORMAT "x(80)" SKIP
+   Detail[3] FORMAT "x(80)" SKIP
+   Detail[4] FORMAT "x(80)" SKIP
+   Detail[5] FORMAT "x(80)" SKIP
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP
+   .
+   RUN PrintSignatures.
+
+   PUT UNFORMATTED
+   "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP(1)
+   "è‡®´Æ¶•≠®•: "
+   .
+
+   IF mQuanDocs EQ ? THEN PUT UNFORMATTED "___________________".
+   ELSE DO:
+      mStrTMP = STRING(mQuanDocs).
+      PUT UNFORMATTED FILL("_", 18 - LENGTH(mStrTMP)) + mStrTMP + "_".
+   END.
+
+   PUT UNFORMATTED " §Æ™„¨•≠‚Æ¢ ≠† ".
+
+   IF mQuanPages EQ ? THEN PUT UNFORMATTED "________".
+   ELSE DO:
+      mStrTMP = STRING(mQuanPages).
+      PUT UNFORMATTED FILL("_", 7 - LENGTH(mStrTMP)) + mStrTMP + "_".
+   END.
+
+   PUT UNFORMATTED " ´®·‚†Â." SKIP(1).
+
+   IF FGetSetting("è´†‚ÑÆ™", "ÇÎ¢Æ§çÆ¨éØ•‡", "ç•‚") = "Ñ†"
+   THEN PUT UNFORMATTED "ì≠®™†´Ï≠Î© ≠Æ¨•‡ ÆØ•‡†Ê®®: " (IF AVAIL op THEN STRING(op.op) ELSE "") SKIP.
+
+   IF mPageNumber - mPrevPageNum > 0 THEN DO:
+      PUT UNFORMATTED "                                                                                 " STRING(mPageNumber - mPrevPageNum + 1,">>9") SKIP.
+      SEEK OUTPUT TO  mTotalPagesPos.
+      PUT UNFORMATTED "Ç·•£Æ ·‚‡†≠®Ê:" + STRING(mPageNumber - mPrevPageNum + 1).
+      SEEK OUTPUT TO END.   
+   END.
+   IF  vGrp NE vGroupNum THEN DO:  /* ≠• ØÆ·´•§≠ÔÔ ·‚‡†≠®Ê† */
+      PAGE.
+      mPageNumber = mPageNumber + 1.
+      PUT UNFORMATTED SKIP(1).
+   END.
+END PROCEDURE.
+
+PROCEDURE PEntry.
+   DEFINE INPUT PARAMETER iAmtRub      AS DECIMAL   NO-UNDO.
+   DEFINE INPUT PARAMETER iAmtCur      AS DECIMAL   NO-UNDO.
+   DEFINE INPUT PARAMETER iQty         AS DECIMAL   NO-UNDO.
+   DEFINE INPUT PARAMETER iType        AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iCurrency    AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iSimpleGroup AS LOGICAL   NO-UNDO.
+   DEFINE INPUT PARAMETER iForceAmts   AS LOGICAL   NO-UNDO.
+
+   DEFINE VARIABLE vRub    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vRub1   AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vCur    AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vCur1   AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vAmtCur AS DECIMAL   NO-UNDO.
+
+   IF AVAIL op-entry THEN DO:
+      {find-act.i &bact=acct  
+                  &acct=mAcct
+                  &curr=op-entry.currency
+      }
+   END.
+   ELSE DO:
+      {find-act.i &bact=acct  
+                  &acct=mAcct
+      }
+   END.
+
+   mAcctDetails = "".
+
+   IF AVAILABLE acct THEN
+   DO:
+      mAcctDetails[1] = acct.Details.
+
+      IF NOT {assigned acct.Details} THEN
+      DO:
+         IF acct.cust-cat EQ "û" THEN
+            RUN GetCustNameFormatted (acct.cust-cat, acct.cust-id, OUTPUT mAcctDetails[1]).
+         ELSE DO:
+            RUN GetCustName IN h_base (acct.cust-cat,
+                                       acct.cust-id,
+                                       ?,
+                                       OUTPUT mAcctDetails[1],
+                                       OUTPUT mAcctDetails[2],
+                                       INPUT-OUTPUT mAcctDetails[3]).
+            mAcctDetails[1] = mAcctDetails[1] + " " + mAcctDetails[2].
+         END.
+      END.
+
+      {wordwrap.i &s=mAcctDetails
+                  &n=6
+                  &l=30}
+   END.
+
+   IF TRUNC(iAmtRub, 0) EQ iAmtRub
+   THEN vRub = STRING(STRING(iAmtRub * 100, "-zzzzzzzzzz999"), "x(12)=").
+   ELSE vRub = STRING(STRING(iAmtRub * 100, "-zzzzzzzzz999"), "x(11)-x(2)").
+
+   IF acct.currency NE "" THEN
+   DO:
+      IF acct.acct-cat NE "d" THEN
+         vAmtCur = iAmtCur.
+      ELSE
+         vAmtCur = iQty.
+
+      IF TRUNC(vAmtCur, 0) EQ vAmtCur
+      THEN vCur = STRING(STRING(vAmtCur, "-zzzzzzz9"), "x(9)=").
+      ELSE vCur = STRING(STRING(vAmtCur * 100, "-zzzzzzz999"), "x(9)-x(2)"). 
+   END.
+
+   ASSIGN
+      vRub1 = vRub
+      vCur1 = vCur
+   .
+
+   IF PageBreak(INPUT  7 + mNumLines) THEN DO:
+      PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¡ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP.
+      RUN PrintSignatures.
+      PUT UNFORMATTED "                                                                                 " STRING(mPageNumber - mPrevPageNum + 1,">>9") SKIP.
+      PAGE.
+      mPageNumber = mPageNumber + 1.
+      PUT UNFORMATTED SKIP(1).
+      PUT UNFORMATTED "ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒ¬ƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒƒ" SKIP.  
+   END.
+
+   IF iSimpleGroup THEN DO:
+      IF iType = "DB" THEN DO:
+         mCurAcctDB = (acct.currency <> "").
+         IF mCurAcctDB THEN
+            vRub = "".
+      END.
+      ELSE DO:
+         IF acct.currency = "" THEN DO:
+            IF NOT mCurAcctDB AND NOT iForceAmts THEN
+               vRub = "".
+         END.
+         ELSE DO:
+            IF mCurAcctDB THEN DO:
+               IF NOT iForceAmts THEN
+                  vCur = "".
+            END.
+            ELSE
+               vRub = "".
+         END.
+      END.
+   END.
+   IF acct.currency = "" THEN
+      vCur = "".
+
+   &IF DEFINED(amtstrval) NE 0 &THEN
+   IF vCur NE "" THEN
+   DO:
+      vCur = vCur + "(" + GetISOCode(iCurrency) + ")".
+
+      IF INDEX(vCur, "=") GT 1 THEN
+         vCur = SUBSTRING(vCur, 2).
+      ELSE
+         vCur = SUBSTRING(vCur, 2).
+   END.
+
+   IF iSimpleGroup AND NOT mSuppressEquiv THEN
+   DO:
+
+      IF iType EQ "DB" AND vCur NE "" THEN
+      DO:
+            vRub = vRub1.
+      END.
+      ELSE IF iType EQ "CR" AND vCur NE "" THEN 
+      DO:
+            vRub = "".
+      END.
+      mSuppressEquiv = YES.
+   END.
+
+   IF     iType     EQ "CR"
+      AND mDBCurr   NE ""
+/*      AND mDBCurr   EQ iCurrency*/
+      AND iCurrency NE "" THEN
+      vRub = "".
+   &ENDIF
+
+   IF mConvOrdType <> {&conv-ord-none} THEN
+       ASSIGN
+           vRub = IF iType = "DB" THEN ""
+                                  ELSE vRub1
+           vCur = vCur1
+       .
+
+   PUT UNFORMATTED mAcctDetails[1]  FORMAT "x(30)"
+                   " ≥" mAcct FORMAT "x(20)" 
+                    "≥" vRub  FORMAT "x(14)" 
+                   "≥" vCur  FORMAT "x(16)" SKIP.
+   DO mItem = 2 TO 6:
+
+      IF LENGTH(TRIM(mAcctDetails[mItem])) GT 0 THEN
+      DO:
+         PUT UNFORMATTED mAcctDetails[mItem] FORMAT "x(30)"
+                         " ≥                    ≥              ≥" SKIP.
+      END.
+   END.
+
+   &IF DEFINED(amtstrval) NE 0 &THEN
+   IF iType EQ "DB" THEN
+      mDBCurr = iCurrency.
+   &ENDIF
+   
+END PROCEDURE.
+
+PROCEDURE PrintSignatures.
+
+      PUT UNFORMATTED " èÆ§Ø®·®" .
+      IF {assigned mSignatures} THEN DO:
+
+         {signatur.i &submit-op-surrogate = YES} 
+      END.
+      ELSE PUT UNFORMATTED "" SKIP.
+           
+END PROCEDURE. 
+
+
+/* éØ‡•§•´Ô•‚, ·™Æ´Ï™Æ ·‚‡Æ™ ß†≠®¨†Ó‚ ØÆ§Ø®·® ®ß signatur.i */
+PROCEDURE CalcSignLines:
+   DEFINE INPUT PARAMETER  iSignsList AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER oLines     AS INT64   NO-UNDO.
+
+   DEF VAR vSigns       AS CHAR    NO-UNDO.
+   DEF VAR vCnt         AS INT64    NO-UNDO.
+
+   IF {assigned iSignsList} THEN DO:
+      oLines  = 2.
+      DO vCnt = 1 TO NUM-ENTRIES(iSignsList):
+             
+         vSigns = getTCodeFld ("Val","èÆ§Ø®·®",ENTRY(vCnt, iSignsList),TODAY).
+         oLines = oLines + NUM-ENTRIES(vSigns,"~~") + 1.
+    
+      END.
+   END.
+
+END PROCEDURE.
+
+PROCEDURE GetDetailManual:  
+   &IF DEFINED(printErr) <> 0 &THEN
+      Detail = "".
+      FOR EACH PackObject WHERE (PackObject.file-name EQ     "op-entry" AND 
+                                 PackObject.Surrogate BEGINS STRING(op.op) + ",")
+                             OR (PackObject.file-name EQ     "op" AND
+                                 PackObject.Surrogate EQ     STRING(op.op))
+      NO-LOCK:
+         FIND FIRST Packet OF PackObject NO-LOCK.
+         RUN FillErrorTable IN h_exch (Packet.ClassError,
+                                       Packet.PackError,
+                                       OUTPUT TABLE ttError).
+         FOR EACH ttError WHERE ttError.type EQ "éË®°™†" NO-LOCK:
+            Detail[1] = Detail[1] + "; " + ttError.name.
+         END.
+         {empty ttError}
+      END.
+      Detail[1] = TRIM(Detail[1],";").      
+   &ELSE
+
+      &IF DEFINED(CONSOLIDATED) = 0 &THEN
+
+      DEFINE VARIABLE vStrTMP AS CHARACTER NO-UNDO.
+ 
+      ASSIGN
+          Detail  = ""
+          vStrTmp = ""
+      .
+      IF mConvOrdType = {&conv-ord-none} THEN
+          vStrTMP = GetXAttrValueEx("op",
+                                    STRING(op.op),
+                                    "alt-details",
+                                    "").
+      IF vStrTMP NE "" THEN
+      DO:
+         Detail[1] = vStrTMP.
+      END.
+      ELSE
+      DO:
+         RUN DefDetail.
+      END.
+
+      &ELSE
+
+      Detail[1] = GetSysConf("cons-ord-override-details").
+
+      &ENDIF
+   &ENDIF
+
+   {wordwrap.i &s=Detail &n=5 &l=80}
+
+END PROCEDURE.
+
+PROCEDURE RotateArrayDown3.
+    DEFINE INPUT-OUTPUT PARAMETER ioArray AS CHARACTER EXTENT 3.
+
+    DEFINE VARIABLE i AS INT64   NO-UNDO.
+    DEFINE VARIABLE s AS CHARACTER NO-UNDO.
+
+    s = ioArray[EXTENT(ioArray)].
+    DO i = EXTENT(ioArray) TO 2 BY -1:
+        ioArray[i] = ioArray[i - 1].
+    END.
+    ioArray[1] = s.
+END PROCEDURE.
+
+PROCEDURE ShiftArrayDown3.
+    DEFINE INPUT-OUTPUT PARAMETER ioArray AS CHARACTER EXTENT 3.
+
+    DEFINE VARIABLE i AS INT64 NO-UNDO.
+
+    DO i = EXTENT(ioArray) TO 1 BY -1:
+        IF LENGTH(ioArray[EXTENT(ioArray)]) = 0 THEN
+            RUN RotateArrayDown3(INPUT-OUTPUT ioArray).
+        ELSE
+            LEAVE.
+    END.
+END PROCEDURE.

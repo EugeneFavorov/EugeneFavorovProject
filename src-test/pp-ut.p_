@@ -1,0 +1,565 @@
+{globals.i}
+{sh-defs.i}
+{intrface.get tmess}
+
+{pfuncdef
+    &LIBDEF="YES"
+    &NAME="myut"
+    &LIBNAME="Библиотека собственных функций"
+    &DESCRIPTION="Библиотека собственных функций"
+ }
+
+/*-----------------Поиск проводок за период----------------------*/
+/*
+  Что делает: Поиск проводки по счету за период
+  Синтаксис : ВалПров ( Параметр1, Параметр2, Параметр3 )
+  Автор     : ara
+*/
+
+{pfuncdef
+    &NAME="ValProv"
+    &DESCRIPTION="Функция поиска валютных проводок за период"
+    &PARAMETERS="Счет,Дата1,Дата2"
+    &RESULT="Возвращает ок если проводки были"
+    &SAMPLE="ValProv('407028100000000000','31/01/2012','31/03/2013') = 0"
+}
+	DEFINE input parameter iacct LIKE acct.acct NO-UNDO.
+	DEFINE input parameter iEndDate AS DATE NO-UNDO.
+	DEFINE input parameter iBegDate AS DATE NO-UNDO.
+	DEF OUTPUT PARAMETER oResult AS CHARACTER NO-UNDO.
+	DEF OUTPUT PARAMeter is-ok AS INT64 NO-UNDO. /* успешно ли выполнена ? */
+           
+
+	        
+	find first op-entry where (op-entry.acct-cr eq iacct or op-entry.acct-db eq iacct) 
+		and op-entry.op-date > ibegDate and op-entry.op-date < iendDate
+		and op-entry.op-status >= CHR(251) no-lock no-error.
+	  if avail op-entry then  
+		  oResult = "1" .
+		  else oResult = "0" .
+is-ok = 0 .
+END PROCEDURE.   
+
+
+
+
+/*-----------------Поиск расчетного счета----------------------*/
+/*
+  Что делает: Поиск ДР f251_dist
+  Синтаксис : RaschSchet ( Параметр1 )
+  Автор     : ara
+*/
+
+
+{pfuncdef
+    &NAME="iBank"
+    &DESCRIPTION="Функция определения др f251_dist"
+    &PARAMETERS="РС,Валюта"
+    &RESULT="Банклиент"
+    &SAMPLE="iBank('40207810404000000023') = Yes"
+}
+
+
+	DEFINE input parameter acct_rasch like acct.acct NO-UNDO.
+	DEFINE input parameter curr like acct.currency NO-UNDO.
+	DEF OUTPUT PARAMETER oResult AS CHAR NO-UNDO.
+	DEF OUTPUT PARAMeter is-ok AS INT64 NO-UNDO. /* успешно ли выполнена ? */
+	DEFINE var BK as char NO-UNDO.	
+	DEFINE var surr as char NO-UNDO.	
+
+	surr = Trim(acct_rasch) + ',' + Trim(curr) .
+	BK = GetXattrValue("acct", surr , "f251_dist").
+		if BK = '' then oResult = "0".
+		else oResult = "1" .
+			
+is-ok = 0 . 
+   
+END PROCEDURE.   
+
+
+/*-----------------Групповое закрытие договоров----------------------*/
+/*
+  Что делает: Закрывает договоры
+  Синтаксис : ГрЗакрДогОмск ( Параметры )
+  Автор     : kam
+*/
+
+{pfuncdef
+   &NAME          = "ГрЗакрДогОмск"
+   &DESCRIPTION   = "Закрывает договоры"
+   &PARAMETERS    = "НАЗНАЧЕНИЕ ДОГОВОРА,ДАТА ЗАКРЫТИЯ,ПАРАМЕТРЫ ДОГОВОРА ДЛЯ ПРОВЕРКИ СУММЫ ПО НИМ[,ФИЛЬТР[,ОТКРЫВАТЬ БРАУЗЕР=НЕТ]]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "ГрЗакрДогОмск(Кредит,ДАТА(),7|0+13+2|33|10+210,bis|loan_cd.p|1|кредит,ДА)"
+   }
+   DEF INPUT  PARAM iContract  AS CHAR NO-UNDO. /* назначение */
+   DEF INPUT  PARAM iDate      AS DATE NO-UNDO. /* дата закрытия */
+   DEF INPUT  PARAM iGrupParam AS CHAR NO-UNDO. /* параметры для проверки */
+   DEF INPUT  PARAM iFilter    AS CHAR NO-UNDO. /* фильтр */
+   DEF INPUT  PARAM iDisplay   AS CHAR NO-UNDO. /* параметры для проверки */
+   DEF OUTPUT PARAM out_Result AS DEC  NO-UNDO. /* сумма операций */ 
+   DEF OUTPUT PARAM is-ok      AS INT64  NO-UNDO.
+
+   {pchkpar iContract iDate iGrupParam}
+
+   RUN n_grclose_l.p(iContract,
+                   iDate,
+                   REPLACE(iGrupParam,"|",","),
+                   REPLACE(iFilter   ,"|",","),
+                   iDisplay EQ "ДА").
+
+END PROCEDURE.
+
+/*-----------------Пакеты услуг для юрлиц----------------------*/
+/*
+  Что делает: ВЫбирает комиссию
+  Синтаксис : КомПакетУсл ( Параметры )
+  Автор     : kau
+*/
+
+{pfuncdef
+   &NAME          = "КомПакетУсл"
+   &DESCRIPTION   = "Выбирает комиссию из учёта пакетов услуг"
+   &PARAMETERS    = "Комиссия начальная,Счет клиента,Дата опердня"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "КомПакетУсл(K19TAR,"4082081050400000001     @0400",ДАТА())"
+   }
+
+
+
+   DEF INPUT  PARAM vKom  	AS CHAR NO-UNDO. /* назначение */
+   DEF INPUT  PARAM vAcct       AS CHAR NO-UNDO. /* дата закрытия */
+   DEF INPUT  PARAM vDate	AS DATE NO-UNDO. /*параметры для проверки */
+   DEF INPUT  PARAM vSumKS      AS DEC NO-UNDO. /* сумма  */
+   /*DEF INPUT  PARAM vSumKSiDisplay   AS DEC NO-UNDO. /* параметры для проверки */*/
+   
+   DEF OUTPUT PARAM oKom AS CHAR  NO-UNDO. /* сумма операций */ 
+   DEF OUTPUT PARAM is-ok      AS INT64  NO-UNDO.
+   
+   DEF VAR vNULL	AS CHAR NO-UNDO.
+   DEF VAR vCust-cat	AS CHAR NO-UNDO.
+   DEF VAR vCust-id	AS DEC 	NO-UNDO.
+   DEF VAR vCust-OP	AS DATE	NO-UNDO.
+   DEF VAR vProd	AS CHAR	NO-UNDO.
+   DEF VAR vDateProd AS DATE	NO-UNDO.
+   DEF VAR vDateN	AS DATE	NO-UNDO.
+   
+/*   vNull = 'Нулевая1'. 
+   
+   vDateN = DATE( '01' + SUBSTRING(STRING(vDate),3) ).
+   
+   	FIND FIRST acct WHERE acct.acct BEGINS vAcct NO-LOCK NO-ERROR.
+	IF AVAIL acct THEN DO:
+		vCust-cat = acct.cust-cat.
+		vCust-id  = acct.cust-id.
+	END.
+	ELSE MESSAGE "Счет не найден " vAcct VIEW-AS ALERT-BOX.
+
+	IF vCust-cat EQ 'Ю'
+	THEN DO:
+	FIND FIRST cust-corp where cust-corp.cust-id EQ vCust-id NO-LOCK NO-ERROR.
+	vCust-op = cust-corp.date-in.
+	find last tmpsigns WHERE tmpsigns.file-name EQ 'cust-corp'
+						and tmpsigns.surrogate EQ STRING(vCust-id)
+						AND tmpsigns.code EQ 'Пакет'
+						AND tmpsigns.since < vDateN NO-LOCK NO-ERROR.
+	IF AVAIL TMPSIGNS THEN DO:
+		vProd = tmpsigns.xattr-value.
+		vDateProd = tmpsigns.since.
+	END.
+	ELSE DO:
+		find last tmpsigns WHERE tmpsigns.file-name EQ 'cust-corp'
+							and tmpsigns.surrogate EQ STRING(vCust-id)
+							AND tmpsigns.code EQ 'Пакет'
+							AND tmpsigns.since EQ vCust-op NO-LOCK NO-ERROR.
+		IF AVAIL tmpsigns THEN DO:
+			vProd = tmpsigns.xattr-value.
+			vDateProd = tmpsigns.since.
+		END.	
+	END.
+	END.
+
+	IF vCust-cat EQ 'Ч'
+	THEN DO:
+	FIND FIRST person WHERE person.person-id EQ vCust-id NO-LOCK NO-ERROR.
+	vCust-op = person.date-in.
+	find last tmpsigns WHERE tmpsigns.file-name EQ 'person'
+						and tmpsigns.surrogate EQ STRING(vCust-id)
+						AND tmpsigns.code EQ 'Пакет'
+						AND tmpsigns.since < vDateN NO-LOCK NO-ERROR.
+	IF AVAIL TMPSIGNS THEN DO:
+		vProd = tmpsigns.xattr-value.
+		vDateProd = tmpsigns.since.
+	END.
+	ELSE DO:
+		find last tmpsigns WHERE tmpsigns.file-name EQ 'person'
+							and tmpsigns.surrogate EQ STRING(vCust-id)
+							AND tmpsigns.code EQ 'Пакет'
+							AND tmpsigns.since EQ vCust-op NO-LOCK NO-ERROR.
+		IF AVAIL tmpsigns THEN DO:
+			vProd = tmpsigns.xattr-value.
+			vDateProd = tmpsigns.since.
+		END.	
+	END.
+	END.
+
+  /*2	Ежемесячное ведение счета*/
+	IF vProd NE '' AND (vKom EQ 'VAcct' OR vKom EQ 'VAcctB')
+	THEN DO:
+	    IF acct.currency = '' THEN DO:
+	        oKom = vNull.
+	        is-ok = 0.
+	    END.
+	    ELSE DO:
+	        oKom = vKom.
+	        is-ok = 0.
+	    END.
+	END.
+
+	/*4	Ежемесячное обслуживание КЛБАНК*/
+	IF vProd NE '' AND vKom EQ 'K27TAR'
+	THEN DO:
+	    IF acct.currency = '' THEN DO:
+	        oKom = vNull.
+	        is-ok = 0.
+	    END.
+	    ELSE DO:
+	        oKom = vKom.
+	        is-ok = 0.
+	    END.
+	END.
+ 
+	IF vProd EQ "" THEN DO:
+		oKom = vKom.
+		is-ok = 0.
+	END. 
+*/
+
+        RUN pack-usl-kom.p (
+                            INPUT vAcct,
+                            INPUT vDate,
+                            INPUT vSumKS,
+                            INPUT-OUTPUT vKom
+                           ).
+        is-ok = 0.
+        oKom = vKom.
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СТАТУС_ПРОВМФР"
+   &DESCRIPTION   = "Изменяет статус документа на заданный ~~nВозвращает YES, если статус был успешно изменен. Параметры: ~ 
+~~nДОКУМЕНТ - номер операции ~~nСТАТУС   - новый статус"
+   &PARAMETERS    = "ДОКУМЕНТ, СТАТУС"
+   &RESULT        = "РЕЗУЛЬТАТ ИЗМЕНЕНИЯ СТАТУСА"
+   &SAMPLE        = "СТАТУС ('16458791','А')"
+}
+   DEFINE INPUT  PARAMETER iOp   AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iStat AS CHARACTER   NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64     NO-UNDO.
+
+   DEFINE BUFFER op        FOR op.
+   DEFINE BUFFER op-entry  FOR op-entry.
+   DEFINE BUFFER kau-entry FOR kau-entry.
+
+   DEFINE VAR vStatus     AS CHARACTER NO-UNDO.
+   DEFINE VAR cur-op-date AS DATE      NO-UNDO.
+   DEFINE VAR flager      AS INT64   NO-UNDO.
+
+   ASSIGN
+      is-ok = 0
+      out_result = "NO".
+
+   CH-STATUS:
+   DO TRANSACTION:
+      vStatus = iStat.
+      FIND FIRST op WHERE op.op EQ INT64 (iOp) 
+         EXCLUSIVE-LOCK NO-WAIT NO-ERROR.
+      IF AVAIL op THEN DO ON ERROR UNDO CH-STATUS, LEAVE CH-STATUS:
+         cur-op-date = op.op-date.
+         assign
+         op.op-status = iStat.
+         validate op.
+         END.
+      &IF DEFINED(Def_Var) = 1 &THEN
+         &UNDEFINE Def_Var
+      &ENDIF
+    /*  {chst(op.i
+         &open-undo = " UNDO CH-STATUS, LEAVE CH-STATUS "
+      } */
+      out_result = "YES".
+   END.
+END PROCEDURE.
+
+/* dcsy.fun */
+/* Подготовка наименования для сравнения */
+FUNCTION PrepName RETURN CHARACTER
+   (INPUT iName AS CHAR):
+   DEFINE VARIABLE vRes     AS CHAR   NO-UNDO.
+   DEFINE VARIABLE vTmp     AS CHAR   NO-UNDO.
+   DEFINE VARIABLE vOne     AS CHAR   NO-UNDO.
+   DEFINE VARIABLE vSymList AS CHAR   NO-UNDO.
+   DEFINE VARIABLE vItm     AS INT64  NO-UNDO.
+ 
+   /* Переводим вх строку в верхний регистр, заменяем лишние символы на " " */
+   ASSIGN
+      vTmp     = CAPS(iName)
+      vSymList = FGetSetting("DS-WS","BadSymInName","")
+   .
+   DO vItm = 0 TO 31:
+      vSymList = vSymList + CHR(vItm).
+   END.
+   
+   DO vItm = 1 TO LENGTH(vSymList):
+      vTmp = REPLACE(vTmp,SUBSTRING(vSymList,vItm,1)," ").
+   END.
+   
+   vRes = "".
+   DO vItm = 1 TO NUM-ENTRIES(vTmp," "):
+      vOne = ENTRY(vItm,vTmp," ").
+      IF vOne NE "" THEN 
+         vRes = vRes + " " + vOne.
+   END.
+   /* Автозамена символов */
+   ASSIGN
+      vRes     = TRIM(vRes)
+      vSymList = FGetSetting("DS-WS","AutoReplaceSym","")
+   .
+   DO vItm = 1 TO NUM-ENTRIES(vSymList,","):
+      vOne = ENTRY(vItm,vSymList,",").
+      IF LENGTH(vOne) EQ 2 
+         THEN vRes = REPLACE(vRes,SUBSTRING(vOne,1,1),SUBSTRING(vOne,2,1)).
+   END.
+   /* Замена краткой формы ОПФ на полную */
+   IF FGetSetting("DS-WS","ReplaceCustStat","") EQ "YES"
+   THEN
+      FOR EACH code WHERE code.class EQ "КодПредп" NO-LOCK:
+         IF INDEX(vRes,code.val) EQ 1 
+         THEN DO:
+            ASSIGN
+               vItm = LENGTH(code.val)
+               vRes = code.name + " " + TRIM(SUBSTRING(vRes,vItm + 1,LENGTH(vRes) - vItm))
+            .
+            LEAVE.
+         END.
+      END.
+
+   RETURN vRes.
+END FUNCTION. /* PrepName */
+
+/* Быстрое сравнение наименований */
+FUNCTION CompareNameFast RETURNS LOGICAL (INPUT iNamesBase  AS CHAR,
+                                          INPUT iNameDoc    AS CHAR,
+                                          INPUT iPercWord   AS INT64):
+   DEF VAR vAll         AS INT64              NO-UNDO.
+   DEF VAR vItm         AS INT64              NO-UNDO.
+   DEF VAR vMth         AS INT64              NO-UNDO.
+   DEF VAR vLen         AS INT64              NO-UNDO.
+   DEF VAR vOne         AS CHAR                 NO-UNDO.
+   DEF VAR vIndx        AS INT64                  NO-UNDO.
+   DEF VAR vNameBase    AS CHAR                 NO-UNDO.
+   DEF VAR vRes         AS LOGICAL INITIAL NO   NO-UNDO.
+   
+MAIN:
+   DO vIndx = 1 TO NUM-ENTRIES(iNamesBase,CHR(250)):
+
+      vNameBase   = ENTRY(vIndx,iNamesBase,CHR(250)).
+
+      IF TRIM(vNameBase) EQ TRIM(iNameDoc) THEN DO:
+         vRes = YES.
+	     LEAVE MAIN.
+      END.
+      IF iPercWord  EQ 0 THEN NEXT MAIN.
+
+      vAll        = NUM-ENTRIES(iNameDoc," ").
+      vMth        = 0.
+      vLen        = 0.
+
+      DO vItm = 1 TO vAll:
+         vOne = ENTRY(vItm,iNameDoc," ").
+         IF LOOKUP(vOne,vNameBase," ") NE 0 THEN
+            ASSIGN
+               vMth = vMth + 1
+               vLen = vLen + LENGTH(vOne).
+      END.
+
+      vRes = (vMth * 100 / vAll                              GT iPercWord) AND
+             (vLen * 100 / LENGTH(REPLACE(vNameBase," ","")) GT iPercWord) AND
+             (vLen * 100 / LENGTH(REPLACE(vNameBase," ","")) LE 100      ).
+      IF vRes THEN LEAVE MAIN.
+   END.
+
+   RETURN vRes.
+
+END FUNCTION. /* CompareNameFast */
+
+{pfuncdef
+   &NAME          = "ПРОВЕРКА_НАИМ_СЧЕТА"
+   &DESCRIPTION   = "Проверяет совпадение ИНН и наименования счет~~nВозвращает пусто, если наименование совпадает. Параметры: ~ 
+~~nДОКУМЕНТ - номер операции ~~nСТАТУС   - новый статус"
+   &PARAMETERS    = "ПРОЦЕНТ, ИНН, НАИМЕНОВАНИЕ, СЧЕТ"
+   &RESULT        = "РЕЗУЛЬТАТ ПРОВЕРКИ"
+   &SAMPLE        = "ПРОВЕРКА_НАИМ_СЧЕТА()"
+}
+   DEFINE INPUT  PARAMETER iPercEq AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iInn    AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iName   AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iAcct   AS CHARACTER   NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64     NO-UNDO.
+
+   ASSIGN
+      is-ok = 0
+      out_result = "".
+
+   DEF VAR iSender AS LOG NO-UNDO INIT no.
+   DEF VAR iTranslit AS LOG NO-UNDO INIT true.
+   DEFINE VARIABLE vErrorTxt  AS CHARACTER NO-UNDO INIT ?.
+   DEFINE VARIABLE vErrMsg1   AS CHARACTER NO-UNDO. /* Сообщение об ошибке ИНН + наименование, если "", то проверка отключена */
+   DEFINE VARIABLE vErrMsg2   AS CHARACTER NO-UNDO. /* Сообщение об ошибке ИНН, если "", то проверка отключена */
+   DEFINE VARIABLE vName      AS CHARACTER NO-UNDO. /* Наименование клиента из базы */
+   DEFINE VARIABLE vNameSh    AS CHARACTER NO-UNDO. /* Краткое наименование клиента из базы */
+   DEFINE VARIABLE viNameT    AS CHARACTER NO-UNDO. /* Транслитерация наименования клиента из транспортной формы */
+   DEFINE VARIABLE vNameT     AS CHARACTER NO-UNDO. /* Транслитерация наименования клиента из базы  */
+   DEFINE VARIABLE vNameShT   AS CHARACTER NO-UNDO. /* Транслитерация краткого наименования клиента из базы */
+   DEFINE VARIABLE vFlBin     AS LOGICAL   NO-UNDO. /* Совпадение ИНН */
+   DEFINE VARIABLE vFlName    AS LOGICAL   NO-UNDO. /* Совпадение наименования */
+   DEFINE VARIABLE mPercEq    AS INT64     NO-UNDO. /* Минимальный процент совпадения наименования */
+
+   DEFINE BUFFER   acct       FOR acct.
+   DEFINE BUFFER   cust-corp  FOR cust-corp.
+   DEFINE BUFFER   cust-role  FOR cust-role.
+   DEFINE BUFFER   xattr      FOR xattr.
+
+   mPercEq   = INTEGER( iPercEq). /*IF iSender THEN INT64(FGetSetting("KZEServices","CmpSendNamePerc","0"))
+                                      ELSE INT64(FGetSetting("KZEServices","CmpRecNamePerc","0"))*/
+
+   FIND FIRST acct WHERE acct.acct EQ iAcct NO-LOCK NO-ERROR.
+   
+   IF AVAIL (acct) AND acct.cust-cat EQ "Ч" THEN DO:
+      FIND FIRST person WHERE person.person-id EQ acct.cust-id NO-LOCK NO-ERROR.
+      IF AVAIL (person) THEN DO:
+         iName = PrepName(iName).
+         vName = PrepName(person.name-last + " " + person.first-names).
+         vNameSh = "Индивидуальный предприниматель " + vName.
+         vFlBin = iInn EQ person.inn. 
+         vFlName = CompareNameFast (INPUT  vName + CHR(250) + vNameSh,
+                                    INPUT  iName,
+                                    INPUT  mPercEq).
+         /* vFlName = iName EQ vName.*/ 
+         IF NOT vFlName THEN DO:
+            IF NOT vFlBin THEN DO:
+               vErrorTxt = "Наименование и ИНН клиента не совпадают. Поступило: " + iInn + " " + iName + " . Найден: " + person.inn + " " + vName.
+            END.
+            vErrorTxt = "Имя клиента не совпадает. Поступило: " + iName + " . Найден: " + vName.
+         END.
+         
+      END.
+      ELSE 
+          vErrorTxt = "Клиент " + acct.cust-cat + "," + STRING(acct.cust-id) + " по счету " + iAcct + " не найден.".   
+   END.
+  
+   IF AVAIL (acct) AND acct.cust-cat EQ "Ю" THEN DO:
+      FIND FIRST cust-corp WHERE cust-corp.cust-id EQ acct.cust-id NO-LOCK NO-ERROR.
+      IF AVAIL (cust-corp) THEN DO:
+         
+         /*vErrMsg1 = "Не найден " + (IF iSender THEN "плательщик" ELSE "получатель") + 
+                    " с реквизитами ИНН " + iInn + ", наименование " + iName + " (счет " + iAcct + ")".   */
+         vErrMsg1 = "реквизиты счета " + DelFilFromAcct(iAcct) + " не совпадают с реквизитами в документе " +
+                    " ИНН " + iInn + ", наименование " + iName.
+         /*FOR FIRST xattr WHERE xattr.class-code EQ "BSSError"
+                           AND xattr.xattr-code EQ (IF iSender THEN "io001" ELSE "io003")
+         NO-LOCK:
+            IF xattr.initial EQ "Ошибка" 
+               THEN vErrMsg1 = REPLACE(REPLACE(xattr.name,"%ss",iName + " (счет " + iAcct + ")"),"%s",iInn).
+               ELSE vErrMsg1 = "".   /* проверка отключена */
+         END.*/
+         vErrMsg2 = "ИНН счета " + DelFilFromAcct(iAcct) + " не совпадает с реквизитами в документе " +
+                    " ИНН " + iInn + ", наименование " + iName.
+         /*FOR FIRST xattr WHERE xattr.class-code EQ "BSSError"
+                           AND xattr.xattr-code EQ (IF iSender THEN "io002" ELSE "io004")
+         NO-LOCK:
+            IF xattr.initial EQ "Ошибка" 
+               THEN vErrMsg2 = REPLACE(xattr.name,"%s",iInn + " (счет " + iAcct + ")").
+               ELSE vErrMsg2 = "".   /* проверка отключена */
+         END.*/
+
+         IF vErrMsg1 NE "" OR vErrMsg2 NE ""
+         THEN DO:
+            ASSIGN
+               iName     = PrepName(iName)
+               vName     = PrepName(cust-corp.cust-stat + " " + cust-corp.name-corp)
+               vNameSh   = PrepName(/* cust-corp.cust-stat + " " +*/ cust-corp.name-short)
+               vFlName   = vErrMsg1 EQ "" OR iName EQ vName OR iName EQ vNameSh
+            .
+            IF iInn EQ '' OR cust-corp.inn EQ '' THEN vFlBin = true.
+            ELSE
+               vFlBin    = (iInn EQ cust-corp.inn) OR DEC(iInn) EQ 0 OR DEC(cust-corp.inn) EQ 0.
+            /* Пробуем сравнить транслитерацию 
+            IF iTranslit AND NOT vFlName THEN DO:
+               RUN SWTransRUR6Ex(NO,NO,YES, iName, OUTPUT viNameT).
+               RUN SWTransRUR6Ex(NO,NO,YES, vName, OUTPUT vNameT).
+               RUN SWTransRUR6Ex(NO,NO,YES, vNameSh, OUTPUT vNameShT).
+               vFlName  = viNameT EQ vNameT OR viNameT EQ vNameShT.
+            END. */ 
+            /* Пробуем сравнить по словам */
+/*
+message vName view-as alert-box.
+message vNameSh view-as alert-box.
+message iName view-as alert-box.
+*/
+            vFlName = CompareNameFast (INPUT  vName + CHR(250) + vNameSh,
+                                      INPUT  iName,
+                                      INPUT  mPercEq).
+               /*IF iTranslit AND NOT vFlName THEN  
+                  vFlName = CompareNameFast (INPUT  vNameT + CHR(250) + vNameShT, 
+                                             INPUT  viNameT,
+                                             INPUT  mPercEq).*/
+            /* Ищем в филиалах
+            IF NOT (vFlBin AND vFlName) THEN DO:
+               FOR EACH cust-role WHERE cust-role.file-name  EQ "cust-corp"
+                                    AND cust-role.surrogate  EQ STRING(cust-corp.cust-id)
+                                    AND cust-role.class-code EQ "Филиал"
+                                    AND cust-role.cust-cat   EQ "Ю" 
+               NO-LOCK:
+                  ASSIGN
+                     vName   = PrepName(cust-role.cust-name)
+                     vFlBin  = iBin EQ cust-role.inn 
+                     vFlName = vErrMsg1 EQ "" OR iName EQ vName
+                  .
+                  IF iTranslit AND NOT vFlName THEN DO:
+                     RUN SWTransRUR6Ex(NO,NO,YES, vName, OUTPUT vNameT).
+                     vFlName = viNameT EQ vNameT. 
+                  END.  
+                  IF NOT vFlName AND mPercEq > 0
+                  THEN DO:
+                     vFlName = CompareNameFast (INPUT  vName,
+                                                INPUT  iName,
+                                                INPUT  mPercEq).
+                     IF iTranslit AND NOT vFlName THEN  
+                        vFlName = CompareNameFast (INPUT  vNameT, 
+                                                   INPUT  viNameT,
+                                                   INPUT  mPercEq).
+                  END.
+                  IF vFlBin AND vFlName THEN LEAVE.
+               END.
+            END. */ 
+            
+            IF vFlBin
+             THEN vErrorTxt = "".
+             ELSE IF vFlName THEN vErrorTxt = "". ELSE vErrorTxt = vErrMsg1.
+
+         END.
+      END. /* AVAIL cust-corp */
+      ELSE 
+          vErrorTxt = "Клиент " + acct.cust-cat + "," + STRING(acct.cust-id) + " по счету " + iAcct + " не найден.".   
+   END.
+   ELSE IF NOT AVAIL acct
+   THEN
+       vErrorTxt = "Счет " + iAcct + " не найден.".   
+  
+   out_result = vErrorTxt.
+   RETURN vErrorTxt.
+END PROCEDURE.

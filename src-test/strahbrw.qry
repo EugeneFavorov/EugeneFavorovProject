@@ -1,0 +1,76 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: strahbrw.QRY
+      Comment: Получатели страховых премий - запросы
+   Parameters:
+         Uses:
+      Used by:
+      Created:  
+     Modified:  
+*/
+
+
+FUNCTION PREPARE-FIXED-WHERE RETURNS CHARACTER
+   (INPUT iTable AS CHAR,
+    INPUT iFixedWhere AS CHAR):
+
+   CASE iTable:
+      WHEN "code" THEN 
+      DO:
+         iFixedWhere = " code.class  EQ '" + in-class  + "'" +
+                   " AND code.parent EQ '" + in-parent + "'" .
+         IF mFltCustCat NE "" THEN
+            IF (mFltCustID NE ?) AND (mFltCustCat NE "Н") THEN
+               iFixedWhere = iFixedWhere + " AND code.code EQ '" + mFltCustCat + ":" + STRING(mFltCustID) + "'".
+            ELSE
+               iFixedWhere = iFixedWhere + " AND code.code BEGINS '" + mFltCustCat + ":'" .
+         ELSE IF mFltCustID NE ? THEN
+            iFixedWhere = iFixedWhere + " AND code.code MATCHES '*:" + STRING (mFltCustID) + "'".
+         IF mFltInn NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltInn + "', code.{&WhiteINN})".
+         IF mFltShortName NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltShortName + "', code.{&ShortName})".
+         IF mFltName NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltName + "', code.{&WhiteName})".
+         IF mFltRaschAcct NE ? THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + string(mFltRaschAcct) + "', string(code.{&RaschAcct})".
+         IF mFltBankName NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltBankName + "', code.{&BankName})".
+         IF mFltCorrAcct NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltCorrAcct + "', code.{&CorrAcct})".
+         IF mFltBankBIC NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltBankBIC + "', code.{&BankBIC})".
+         IF mFltTelefax NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltTelefax + "', code.{&Telefax})".
+      END.
+      OTHERWISE .
+   END CASE.
+
+   IF iFixedWhere NE ""
+      THEN iFixedWhere = "WHERE " + iFixedWhere.
+
+   RETURN iFixedWhere.
+END FUNCTION.
+   
+FUNCTION UserSortForm RETURN CHARACTER (INPUT iSort AS CHAR):
+   DEFINE VARIABLE vSort AS CHARACTER  NO-UNDO.
+
+      IF n-frm EQ 1 
+           THEN vSort = "BY code.misc[6]".
+      ELSE IF n-frm EQ 2 
+           THEN vSort = "".
+      {additem3.i iSort vSort 32}.
+      RETURN iSort.
+   END FUNCTION.
+
+{qrdef.i
+   &buff-list        = "code"
+   &need-buff-list   = "code"
+   &Join-list        = "each"
+   &xSortBy           = "BY code.misc[6] "
+   &condition        = "true"
+}
+
+
+

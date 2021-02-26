@@ -1,0 +1,107 @@
+[OpKindList 4.1d] // ªα―®ΰβ ¤ ­­λε ―ΰ®¨§Ά¥« KSBIS 24/08/2015 12:24:14 „ "-db /home2/bis/quit41d/db-spb/bisquit,-ld bisquit,-Mm 16384,-spin 5000,-U bis,-P"
+// ***************************************************************************
+gorodplmf1:
+DO TRANSACTION NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PSYS.X-Gorod.gorodplmf1
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// ƒ®ΰ®¤: ¬¥¦δ¨« 1 (0000)
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// X-Gorod
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_‘‘_‚λΆ®¤ ªΰ ­>
+   /// ¥β
+   /// </tr_‘‘_‚λΆ®¤ ªΰ ­>
+
+   /// <tr_DisplayForms>
+   /// ¥β
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// ¥β
+   /// </tr_ProgressBar>
+
+   10:
+   DO TEMPLATE CLASS opb ACTION ­¨ζ¨ «¨§ ζ¨ο ROLE ‚Ά®¤ ¤ ­­λε NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      // …‚‡’: op-status (ª®­αβ ­β )
+      @op-status = [”]
+      // …‚‡’: doc-type (ª®­αβ ­β )
+      @doc-type = [01]
+      // …‚‡’: name-send (ª®­αβ ­β )
+      @name-send = []
+      // …‚‡’: name-rec (ª®­αβ ­β )
+      @name-rec = []
+      // …‚‡’: op-date (δ®ΰ¬γ« )
+      @op-date = „€’€()
+
+      // …‚‡’: contract-date (δ®ΰ¬γ« )
+      @contract-date = „€’€()
+
+      // …‚‡’: doc-date (δ®ΰ¬γ« )
+      @doc-date = „€’€()
+
+      // …‚‡’: €’-€‹ƒ (ª®­αβ ­β )
+      @€’-€‹ƒ = []
+      // …‚‡’:  (ª®­αβ ­β )
+      @ = []
+      // …‚‡’: order-pay (ª®­αβ ­β )
+      @order-pay = [5]
+      // …‚‡’: ben-acct (ª®­αβ ­β )
+      @ben-acct = []
+      // …‚‡’: acct-cr (δ®ΰ¬γ« )
+      @acct-cr = ‘€‚—‡("‘η¥ΰ”",”‹€‹() + ",0000",¤ β (),¥β)
+
+      30:
+      DO TEMPLATE CLASS op-entry ACTION ­¨ζ¨ «¨§ ζ¨ο ROLE op-entry:
+         // …‚‡’: acct-cr (δ®ΰ¬γ« )
+         @acct-cr = ‘€‚—‡("‘η¥ΰ”",”‹€‹() + "0000",¤ β (),¥β)
+
+
+      END TEMPLATE. // €‹:   30  - …–
+
+      40:
+      DO TEMPLATE CLASS op-bank ACTION ­¨ζ¨ «¨§ ζ¨ο ROLE op-bank:
+         // …‚‡’: bank-code-type (ª®­αβ ­β )
+         @bank-code-type = [”-9]
+
+      END TEMPLATE. // €‹:   40  - …–
+
+
+   END TEMPLATE. // €‹:   10  - …–
+
+   20:
+   DO TEMPLATE CLASS PGorodOpCr ACTION ¬―®ΰβ ROLE ‚Ά®¤ ¤ ­­λε NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      // …‚‡’: Kind (ª®­αβ ­β )
+      @Kind = [ExchGorod,ExchGorod]
+      // …‚‡’: ClassError (ª®­αβ ­β )
+      @ClassError = [ErrorGorod]
+
+   END TEMPLATE. // €‹:   20  - …–
+
+END TRANSACTION. // ’€‡€– gorodplmf1 - …– 
+// ***************************************************************************
+
+
+
+

@@ -1,0 +1,62 @@
+
+/* +++ brw-toblcm.fnd was humbly modified by (c)blodd converter v.1.09 on 7/15/2015 6:27am +++ */
+
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2007 ЗАО "Банковские информационные системы"
+     Filename: brw-pres.fnd
+      Comment: Postfind для браузера графики комиссий по кредитам
+   Parameters:
+         Uses:
+      Used by:
+      Created: 08.11.2008 16:44 Fepa (95876)
+*/
+
+/* Определяем наименование параметра */
+FIND FIRST loan-par WHERE 
+           loan-par.amt-id EQ term-obl.nn
+NO-LOCK NO-ERROR.
+mParName = IF AVAIL loan-par THEN loan-par.name
+                             ELSE "?".
+
+/* Определяем непогашенный остаток для каждой записи в графике */
+RUN t-otchcm.p (recid(term-obl),loan.open-date,loan.since,OUTPUT mSumm-t).
+
+/* === График платежей по процентам ("term-obl-per-pr") === idnt=301 */
+IF midnt EQ "301" THEN
+DO:
+   RUN summ-t1.p (OUTPUT mSumm-t,
+                  RECID(term-obl),
+                  RECID(loan)).
+END.
+
+
+/* === Плановое погашение ссуды ("term-obl-debt-pr") === idnt=303 */
+IF midnt EQ "303" THEN
+DO:
+      /* Поиск пролонгации срочного обязательства */
+   FIND FIRST pro-obl WHERE
+              pro-obl.contract    EQ loan.contract 
+      AND     pro-obl.cont-code   EQ loan.cont-code 
+      AND     pro-obl.idnt        EQ 303 
+      AND     pro-obl.new-nn      EQ term-obl.nn 
+      AND     pro-obl.n-end-date  EQ term-obl.end-date
+   NO-LOCK NO-ERROR.
+
+   ASSIGN
+       mProl         = AVAIL pro-obl.
+   .
+   RUN summ-t.p (OUTPUT mSumm-t,
+                 loan.contract,
+                 loan.cont-code,
+                 RECID(term-obl),
+                 loan.since
+		).
+END.  /* mClassCode EQ "term-obl-debt" */
+/* $LINTUSER='BIS' */
+/* $LINTENV ='common' */
+/* $LINTVSS ='$/ws3-dpl/common/bq/' */
+/* $LINTDATE='10/12/2014 15:12:38.639+04:00' */
+/* $LINTFILE='brw-toblcm.fnd' */
+/*prosignh8O+D2/O9Pitht1Isiqwbw*/
+/* --- brw-toblcm.fnd was humbly modified by (c)blodd converter v.1.09 on 7/15/2015 6:27am --- */

@@ -1,0 +1,4208 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: PP-PBASE.P
+      Comment: (0019702) Библиотека базовых функций
+               парсера, т.е. функций
+               взаимодействующих с ядром системы.
+   Parameters: нет
+      Created: 12.09.2003 12:40 KSV
+     Modified: 30.09.2003 19:25 KSV      (0019702) Библиотека базовых функций
+                                         парсера, т.е. функций
+                                         взаимодействующих с ядром системы.
+     Modified: 01.10.2003 10:59 KSV      (0019702) Добавлена процедура
+                                         ТРАНЗАКЦИЯ, позволяющая запустить
+                                         указанную транзакцию.
+     Modified: 01.10.2003 17:24 KSV      (0019702) Добавлена парсерная функция
+                                         ГР_ТРАНЗАКЦИЯ, обрабатывающая шаблон
+                                         фильтра.
+     Modified: 03.10.2003 14:48 KSV      (0019702) В процедуру InitBaseLibrary
+                                         добавлена инициализация кода
+                                         транзакции.
+     Modified: 24.10.2003 20:52 KSV      (0020852) Добавлена парсерная функция
+                                         SEARCH, осуществляющая формирование
+                                         запроса для поиска объекта в БД,
+                                         используется методом FIND.
+     Modified: 15.12.2003 11:37 KSV      (0020852) Добавлены две функции
+                                         НОМЕР_СЧЕТА и НАСТРОЙКА, возвращающие
+                                         соответсвенно номер нового лицевого
+                                         счета без его создания и значение
+                                         настроечного параметра.
+     Modified: 26.12.2003 16:32 KSV      (0020852) В процедуру SEARCH добавлена
+                                         возможность задания сортировки для
+                                         выборки. Добавлена процедура ОБЪЕКТ,
+                                         возвращающая идентифкатор объекта
+                                         операции.
+     Modified: 26.12.2003 20:00 KSV      (0020852) Тип возвращаемого значения в
+                                         функции GETVAR сделан жестко
+                                         строковым.
+     Modified: 05.01.2004 10:35 KSV      (0020852) В процедуру RunTransaction
+                                         добавлено сохранение/восстановление
+                                         ссылки на текущий шаблон.
+     Modified: 15.01.2004 13:40 KSV      (0020852) Добавлена функция
+                                         GetBaseTemplate, возвращающая
+                                         идентификатор текущего шаблона.
+     Modified: 23.01.2004 15:40 KSV      (0019947) Добавлена функция ЦИКЛ,
+                                         которая позволяет выполнить
+                                         опредленную транзакцию указанное
+                                         количество раз.
+     Modified: 05.02.2004 13:40 KSV      (0019947) В функцию НОМЕР_СЧЕТА
+                                         добавлено удаление доп.реквизитов
+                                         перед удалением счета.
+     Modified: 05.02.2004 19:39 KSV      (0019947) В процедуры ГР_ТРАНЗАКЦИЯ и
+                                         ЦИКЛ добавлены условия для досрочного
+                                         выхода из процедур, а также ведение
+                                         счетчика итераций.
+     Modified: 09.02.2004 13:10 KSV      (0019947) Изменение интерфейса функции
+                                         GetAttrValue, работающей с буфером
+                                         транзакции.
+     Modified: 10.02.2004 16:02 KSV      (0019947) Доработано управление
+                                         циклическим запуском транзакций,
+                                         добавлена функция СТОПЦИКЛ для
+                                         преждевременного останова транзакции
+                                         без отката.
+     Modified: 11.02.2004 16:02 NIK      (0024907) Добавлены процедуры
+                                                   "КОД_ТРАНЗ"
+     Modified: 15.03.2004 20:32 KSV      (0019702) В функции SEARCH изменен
+                                         способ получения информации об
+                                         обрабатываемом реквизите транзакции.
+     Modified: 16.03.2004 20:27 KSV      (0019702) Исправлено описание функции
+                                         КОД_ТРАНЗ.
+     Modified: 22.03.2004 11:17 serge    20844 Модернизация службы "Права
+                                         доступа"
+     Modified: 22.03.2004 19:42 KSV      (0019947) Добавлена функция
+                                         ПОДРАЗДЕЛЕНИЕ, возвращающая код
+                                         подразделение текущего пользователя.
+     Modified: 23.03.2004 20:19 KSV      (0019947) Добавлена отсечение кавычек
+                                         для парметра iOpkind в функциях
+                                         ТРАНЗАКЦИЯ и ГР_ТРАНЗАКЦИЯ.
+     Modified: 30.03.2004 11:37 KSV      (0019702) Добавлено сохранение хэндла
+                                         процедуры ст. транзакции.
+     Modified: 30.03.2004 20:29 KSV      (0019702) Реструктурирована функция
+                                         GETVAR, добавлена функция DEFINED,
+                                         добавлен ряд вспомогательных процедур.
+     Modified: 04.04.2004 13:20 KSV      (0019702) Удалена функция
+                                         ПроверитьДокумент, т.к. добавлен метод
+                                         валидации, который выполняет ее
+                                         функции.
+     Modified: 12.04.2004 20:18 KSV      (0019702) Доработан механизм
+                                         программного прерывания транзакции.
+                                         Добавлена функция BREAK - для
+                                         инициализации программного прерывания
+                                         транзакции.
+     Modified: 18.04.2004 19:01 KSV      (0019947) Доработана функция ОБЪЕКТ,
+                                         добавлена функция UNDEFINE.
+     Modified: 19.04.2004 19:08 KSV      (0019702) Изменена параметризация
+                                         browseld в функции ОБЪЕКТ.
+     Modified: 21.04.2004 15:03 KSV      (0019702) Добавлено описание функции
+                                         ОБЪЕКТ.
+     Modified: 12.05.2004 20:09 KSV      (0030054) незначительное изменение в
+                                         функции НОМЕР_СЧЕТА.
+     Modified: 13.05.2004 18:28 KSV      (0029314) Исправлена SEARCH, поиск
+                                         реквизита __search в шаблоне.
+     Modified: 24.05.2004 11:48 KSV      (0030641) Добавлена функция РЕКВИЗИТ
+     Modified: 31.05.2004 19:36 KSV      (0030641)  Исправлена обработка
+                                         прерываний.
+     Modified: 01.07.2004 19:10 KSV      (0032389) Изменен результат
+                                         возвращаемый функций ГР_ТРАНЗАКЦИЯ, в
+                                         случае если выборка пуста. Сообщение
+                                         об этом не выдается.
+     Modified: 07.07.2004 12:39 KSV      Добавлена константа __USERID, хранящая
+                                         код текущего пользователя.
+     Modified: 14.07.2004 18:56 KSV      (0032368) Доработана функция ОБЪЕКТ,
+                                         добавлена возможность множественного
+                                         выбора объектов из браузера, добавлена
+                                         возможность обработки ESC в браузере,
+                                         добавлена возможность вызова браузера
+                                         по любому классу.
+     Modified: 30.08.2004 12:27 KSV      (0034436) Из функции ГР_ТРАНЗАКЦИЯ
+                                         убрано удаление таблицы фильтра
+                                         (FilterTable).
+     Modified: 31.08.2004 10:27 KSV      (0034436) Для функции ГР_ТРАНЗАКЦИЯ
+                                         добавлена возможность явного указания
+                                         таблицы фильтра, по которой необходимо
+                                         обеспечить запуск транзакции.
+     Modified: 27.09.2004 19:10 KSV      (0028327) Перенесена функция MESSAGE,
+                                         добавлено сохранение информации
+                                         введенной пользователем в диалоге
+                                         сообщения.
+     Modified: 06.10.2004 17:47 KSV      (0035703) Исправлена ошибка в функции
+                                         ГР_ТРАНЗАКЦИЯ, когда в таблице фильтра
+                                         не содержится записей.
+     Modified: 09.10.2004 16:19 KSV      (0034439) Организован стек запущенных
+                                         транзакций, реализована функция
+                                         GetCallOpkind для доступа к информации
+                                         в стеке, доработана парсерная функция
+                                         КОД_ТРАНЗ для доступа к стеку
+                                         транзакций.
+     Modified: 11.10.2004 11:05 KSV      (0034439) Доработана логика процедуры
+                                         GetVariable, эмулирующей работу
+                                         старого буфера транзакций.
+     Modified: 12.10.2004 16:55 KSV      (0034439) Исправление в GetVariable.
+     Modified: 25.10.2004 15:28 MDY      (0036909) Замена вызова MakeAcct
+                                          на cm_acct_cr
+     Modified: 11.11.2004 12:03 rija     28058: Реализация операций по выдаче подкреплений и приему
+                                         средств по ВОК в Базовом мод
+     Modified: 15.11.2004 11:28 KSV      (0037349) Добавлена функция СЧЕТЧИК
+                                         для управления автонумерацией.
+     Modified: 16.11.2004 16:48 KSV      (0038139) Из функций осуществляющих
+                                         запуск транзакций удалены
+                                         транзакционные скобки.
+     Modified: 22.11.2004 17:40 KSV      (0038814) В функцию НОМЕР_СЧЕТА
+                                         добавлен параметр маска счета.
+     Modified: 25.11.2004 15:56 KSV      (0038520) Функция РЕКВИЗИТ доработана
+                                         т.о., если  доп. реквизит не найден
+                                         для объекта будет возвращено значение
+                                         по умолчанию.
+     Modified: 25.11.2004 17:08 KSV      (0039003) В функцию ОБЪЕКТ добавлен
+                                         обязательный сброс записей таблицы
+                                         tmprecid, что грантирует что
+                                         некорректные записи не попадут в
+                                         браузер документов опердня.
+     Modified: 01.12.2004 16:15 laav     (0035330) В рамках заявки добавлена
+                                         возможность в парсер MESSAGE передавать
+                                         необязательный параметр iAuthor
+                                         (его значение отображается только при
+                                         выводе сообщения в файл)
+     Modified: 20.12.2004 kraw (0037157) "ПЕЧАТЬ"
+     Modified: 20.12.2004 kraw (0044275) модифицирована "ПЕЧАТЬ" для групповой печати.
+     Modified: 27.04.2005 kraw (0045000) "КЛАССИФ"
+     Modified: 28.04.2005 17:45 KSV      (0043874) В стеке запущенных
+                                         транзакций теперь сохраняются
+                                         идентификаторы операции и объекта
+                                         операции.
+     Modified: 02.05.2005 18:45 KSV      (0045435) Добавлены константы __1,
+                                         __NL, __PG, __V.
+     Modified: 30.05.2005 13:56 KSV      (0042330) Исправлен алгоритм поиска
+                                         переменных в буфере транзакции в
+                                         процедуре GetVariable.
+     Modified: 23.07.2005 Om  Доработка.
+                                         Доработана функция "Объект".
+                                         Подключен стандартный механизм для
+                                         получения данных в режиме Multiple.
+     Modified: 18/10/2005 NIK Исключение процедуры FilterToRecid из pp-exch.p
+     Modified: 30/05/2006 kraw (0067719) РОЛЬСУБ
+     Modified: 18/09/2006 NIK Удаление записей из tmprecid в ГР_ПЕЧАТЬ
+     Modified: 30.10.2006 12:46 KSV      (0069804) Исправлены описания ряда
+                                         функций
+     Modified: 24.11.2006 10:41 Om       Исправление процедуры "НОМЕР_СЧЕТА".
+     Modified: 28.11.2006       Ariz  1. Доработана парсерная функция НАИМ_КЛ -
+                                         параметры "тип субъекта" и "код 
+                                         субъекта" теперь необязательны.
+                                         См. &DESCRIPTION функции.
+                                      2. Создана парсерная функция РЕЗИДЕНТ - 
+                                         определяется резидентность клиента.
+                                         См. &DESCRIPTION функции.
+     Modified: 09/02/2007 kraw (0071353) КассЗаявка
+     Modified: 26.06.2007 18:11 KSV      (0078824) Удалены разводки кода на
+                                         SESSION-REMOTE
+     Modified: 02.07.2007 16:37 rija     0078381: ВОК. Технология работы вечерней кассы ОАО
+                                         "СИАБ"(Санкт-Петербург)
+     Modified: 31/01/2008 kraw (0088400) Del_op-entry
+     Modified: 21/04/2008 ksv (для 0091871)
+     Modified: 03/02/2009 kraw (0092351) СОЗДАТЬ_СВЯЗИ - добавили даты
+     Modified: 02/07/2009 kraw (0093522) SetSysConf
+     Modified: 28/01/20101 kraw (0123155) Совместная печать "графики" и "текста"
+     Modified: 23/03/2010 kraw (0125721) в "ПЕЧАТЬ" предварительное удаление _spool.tmp
+     Modified: 15.06.2010 17:50 ksv      (0122273) доработана ГР_ТРАНЗАКЦИЯ     
+     Modified: 04/04/2011 kraw (0144622) PAGE-SIZE 10000 --> 10000000
+     Modified: 19/04/2011 kraw (0139475) В ПЕЧАТЬ чистим TT в ОСП
+
+*/
+
+{globals.i}
+{intrface.get acct}
+{intrface.get tmess}
+{intrface.get instrum}
+{intrface.get trans}
+{intrface.get xclass}
+{intrface.get tparam}
+{intrface.get rights}
+{intrface.get data}
+{intrface.get db2l}
+{intrface.get count}
+{intrface.get strng}
+{intrface.get brnch}
+{intrface.get refer}
+{intrface.get cust}
+{intrface.get osyst}
+{intrface.get print}
+{intrface.get prnvd}
+{intrface.get kau}
+{intrface.get parsr}
+{intrface.get widg}
+{initstrp.i}
+
+{form.def}
+{tmprecid.def}
+{g-trans.equ}
+{ksh-defs.i}
+
+DEFINE VARIABLE mOpDate       AS DATE       NO-UNDO.
+DEFINE VARIABLE mTmplID       AS INT64    NO-UNDO.
+DEFINE VARIABLE mProcHdl      AS HANDLE     NO-UNDO.
+DEFINE VARIABLE mQTemplate    AS HANDLE     NO-UNDO.
+DEFINE VARIABLE mDebugLevel   AS INT64    NO-UNDO.
+DEFINE VARIABLE mOpkind       AS CHARACTER  NO-UNDO.
+DEFINE VARIABLE mBreak        AS INT64    NO-UNDO.
+
+DEFINE STREAM sSpoolTXT.
+DEFINE VARIABLE mMaxWidthTxt AS INT64   NO-UNDO.
+DEFINE VARIABLE vLine        AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mIsMacro     AS LOGICAL   NO-UNDO.
+/****************************************************************************/
+DEF temp-table tt-tmprecop NO-UNDO
+    FIELD op LIKE op.op
+.
+/*****************************************************************************
+ *       Объявление данных для управления циклическим выполнением транзакции *
+ ****************************************************************************/
+/* Commented BY KSV: Хранит информацию обо всех циклах, запущенных из
+** транзакции */
+DEFINE TEMP-TABLE tLoop NO-UNDO
+   FIELD loop-id     AS INT64
+   FIELD src-op-kind AS CHARACTER
+   FIELD dst-op-kind AS CHARACTER
+   FIELD counter     AS INT64
+   INDEX iLoop-id IS PRIMARY UNIQUE loop-id
+   INDEX iDst-op-kind dst-op-kind
+   INDEX iSrc-op-kind src-op-kind.
+/* Commented BY KSV: Счетчик циклов - просто выдает последовательность целых
+** чисел */
+DEFINE VARIABLE mLoopSeq AS INT64    NO-UNDO.
+
+/* Commented BY KSV: Открытие нового цикла */
+&GLOBAL-DEFINE CREATE_TLOOP CREATE tLoop. ~
+                            ASSIGN ~
+                              tLoop.src-op-kind = mOpkind ~
+                              tLoop.loop-id     = mLoopSeq + 1. ~
+                            mLoopSeq = mLoopSeq + 1. ~
+                            DEFINE VARIABLE vLoopID AS INT64    NO-UNDO. ~
+                            vLoopID = tLoop.loop-id.
+/* Commented BY KSV: Получение информации о текущем цикле */
+&GLOBAL-DEFINE GET_LOOPINFO FIND FIRST tLoop WHERE tLoop.loop-id = vLoopID NO-ERROR.
+/* Commented BY KSV: Удаление информации о цикле */
+&GLOBAL-DEFINE DEL_TLOOP    ~{&GET_LOOPINFO~} ~
+                            IF AVAIL tLoop THEN DELETE tLoop.
+
+/* "Приемник" возвращаемых значений. */
+{ttretval.def}
+
+/* Commented BY KSV: Стек запущенных транзакций. Хранит контекст запущенных
+** транзакций */
+DEFINE TEMP-TABLE tStack NO-UNDO
+   FIELD fStackID          AS INT64     /* Идентификатор стека */
+   FIELD fTmplID           AS INT64     /* Идентификатор шаблона */
+   FIELD fOpkind           AS CHARACTER   /* Идентификатор транзакции  */
+   FIELD fOpdate           AS DATE        /* Дата опердня */
+   FIELD fProcHdl          AS HANDLE      /* Хэндл процедуры транзакции */
+   FIELD fObjTransaction   AS INT64     /* Идентификатор операции */
+   FIELD fOpTransaction    AS INT64     /* Идентификатор объекта операции */
+   FIELD fQTemplate        AS HANDLE      /* Хэндл запроса по шаблонам транзакции */
+   INDEX iStackID IS PRIMARY UNIQUE fStackID
+   .
+
+&GLOBAL-DEFINE PUSH_TSTACK CREATE tStack.~
+                           ASSIGN ~
+                              tStack.fStackID = mLoopSeq + 1 ~
+                              tStack.fTmplID  = mTmplID ~
+                              tStack.fOpkind  = mOpkind ~
+                              tStack.fProcHdl = mProcHdl ~
+                              tStack.fQTemplate = mQTemplate ~
+                              tStack.fOpdate  = mOpDate. ~
+                           tStack.fObjTransaction = INT64(GetSysConf("obj-transaction")) NO-ERROR.~
+                           tStack.fOpTransaction = INT64(tGetParam("op-transaction",?,?)) NO-ERROR. ~
+                           mLoopSeq = mLoopSeq + 1.
+&GLOBAL-DEFINE POP_TSTACK  FIND LAST tStack NO-ERROR. ~
+                           IF AVAILABLE tStack THEN ~
+                           DO: ~
+                              ASSIGN ~
+                                 mTmplID  = tStack.fTmplID ~
+                                 mOpkind  = tStack.fOpkind ~
+                                 mProcHdl = tStack.fProcHdl ~
+                                 mQTemplate = tStack.fQTemplate ~
+                                 mOpDate  = tStack.fOpdate. ~
+                              RUN SetSysConf IN h_base ("obj-transaction",tStack.fObjTransaction). ~
+                              RUN tSetParam IN h_tparam ("op-transaction",tStack.fOpTransaction,mProcHdl,?). ~
+                              DELETE tStack. ~
+                           END. ~
+                           ELSE ~
+                           DO: ~
+                              RUN Fill-SysMes("","trans30","","%s=" + mOpkind + ~
+                                                              "%s=" + STRING(mTmplID)). ~
+                              UNDO, RETURN ERROR. ~
+                           END.
+
+
+{pfuncdef
+   &LIBDEF        = "YES"
+   &NAME          = "PBASE"
+   &LIBNAME       = "Библиотека базовых функций парсера."
+   &DESCRIPTION   = "Работа с шаблонами и транзакциями, базовые функции работы с ядром."
+   }
+
+/*------------------------------------------------------------------------------
+  Purpose:     Инициализация библиотеки.
+  Parameters:  iOpkind     - код текущей транзакции
+               iOpDate     - дата текущего опердня.
+               iProcHdl    - хэндл процедуры ст. транзакции
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE InitBaseLibrary:
+   DEFINE INPUT  PARAMETER iOpkind     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpDate     AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iProcHdl    AS HANDLE     NO-UNDO.
+
+   ASSIGN
+      mOpDate     = iOpDate
+      mOpkind     = iOpkind
+      mProcHdl    = iProcHdl.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Запоминает ссылку на текущий обрабатываемый шаблон.
+  Parameters:  iTmplID  - идентификатор текущего обрабатываемого шаблона.
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE InitBaseTemplate:
+   DEFINE INPUT  PARAMETER iTmplID AS INT64    NO-UNDO.
+
+   mTmplID = iTmplID.
+END PROCEDURE.
+
+PROCEDURE InitTemplateQuery:
+   DEFINE INPUT  PARAMETER iQTmpl AS handle    NO-UNDO.
+
+   mQTemplate = iQTmpl.
+
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает идентифкатор текущего шаблона
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetBaseTemplate RETURNS INT64 ():
+   RETURN mTmplID.
+END FUNCTION.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает код текущей транзакции
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetBaseOpkind RETURNS CHARACTER ():
+   RETURN mOpkind.
+END FUNCTION.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает хэндл процедуры ст. транзакции
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetBaseProcedure RETURNS HANDLE ():
+   RETURN mProcHdl.
+END FUNCTION.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает дату текущего операционного дня
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetBaseOpDate RETURNS DATE ():
+   RETURN mOpdate.
+END.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает реквизит транзакции как текущей, так и любой
+               из вызвавших ее транзакций
+  Parameters:  iLevel    - уровень вызова от 1 до N. Если 0, то будет
+                           возвращен реквизит самой верхней транзакции. Если
+                           1, то текущей транзакции, 2 - вызывашей транзакции
+                           и т.д.
+               iTypeInfo - реквизит.
+                           OPKIND   - код транзакции
+                           TMPLID   - идентификатор шаблона
+                           PROCHDL  - хэндл процедуры
+                           OPDATE   - дата опердня
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetCallOpkind RETURNS CHARACTER (iLevel    AS INT64,
+                                          iTypeInfo AS CHARACTER):
+
+   DEFINE VARIABLE vStack AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vField AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vLevel AS INT64    NO-UNDO.
+
+   DEFINE BUFFER bStack FOR tStack.
+
+   IF iLevel = ? THEN iLevel = 1.
+   IF NOT {assigned iTypeInfo} THEN iTypeInfo = "OPKIND".
+
+   IF iLevel = 1 THEN
+   DO:
+      CASE iTypeInfo:
+         WHEN "OPKIND"  THEN RETURN GetBaseOpkind().
+         WHEN "TMPLID"  THEN RETURN STRING(GetBaseTemplate()).
+         WHEN "PROCHDL" THEN RETURN STRING(GetBaseProcedure()).
+         WHEN "OPDATE"  THEN RETURN STRING(GetBaseOpDate()).
+         WHEN "OPTRANSACTION" THEN RETURN STRING(tGetParam("op-transaction",?,?)).
+      END CASE.
+      RETURN ?.
+   END.
+
+   IF iLevel > 1 THEN
+   DO:
+      vLevel = 1.
+      FOR EACH bStack BY bStack.fStackID DESC:
+         vLevel = vLevel + 1.
+         IF vLevel = iLevel THEN LEAVE.
+      END.
+   END.
+   ELSE
+      FIND FIRST bStack WHERE NO-ERROR.
+
+   IF NOT AVAILABLE bStack THEN RETURN ?.
+
+   vStack = BUFFER bStack:HANDLE.
+
+   vField = vStack:BUFFER-FIELD("f" + iTypeInfo) NO-ERROR.
+   IF NOT VALID-HANDLE(vField) THEN RETURN ?.
+
+   RETURN vField:BUFFER-VALUE.
+END FUNCTION.
+
+{pfuncdef
+   &NAME          = "MESSAGE"
+   &DESCRIPTION   = "Выдает сообщение определенного типа на экран и/или в протокол транзакции.~
+Место, куда будет выдано сообщение, зависит от значений реквизитов транзакции: СС_ВыводНаЭкран и СС_УровеньОтладки. ~
+Если сообщение выводится в файл и задан параметр АВТОР СООБЩЕНИЯ, то после тела сообщения вместо системной информации ~
+будет выведено значение параметра.~
+Информация, введенная пользователем в диалоге сообщения, сохраняется в переменной __MESSAGE. ~
+Возвращаемое значение определяется типом сообщения:~~n~
+MESSAGE|QUESTION|INFORMATION|MENU: 1 ~~n~
+ERROR: -1~~nWARNING: 0~~nПРОИЗВОЛЬНОЕ ЧИСЛО"
+   &PARAMETERS    = "СТРОКА[,ТИП СООБЩЕНИЯ = ERROR[,АВТОР СООБЩЕНИЯ[,ПРЕДУСТАНОВЛЕННЫЙ ОТВЕТ[,ОТОБРАЖАТЬ ВСЕГДА]]]]"
+   &RESULT        = "ЦЕЛОЕ ЗНАЧЕНИЕ"
+   &SAMPLE        = "MESSAGE('aaaaaaaaaa') = -1 ~~n~
+MESSAGE('aaaaaaaaaa','ERROR') = -1 ~~n~
+MESSAGE('aaaaaaaaaa','QUESTION','','НЕТ',ДА) вопрос да/нет, по умолч. нет, отобр. всегда~~n~
+MESSAGE('aaaaaaaaaa','WARNING') = 0~~n~
+MESSAGE('aaaaaaaaaa',2) = 2~~n~
+MESSAGE('aaaaaaaaaa',2,'debug') = 2,~~n~
+при выводе в файл: '1 16:30:00 2  aaaaaaaaaa  <debug>',~~n~
+MESSAGE('Выберете тип передачи остатков.|В вечернюю кассу,Из вечерней кассы','MENU')~~n~
+Результат:~~n~
+┌─────────────────[МЕНЮ]─────────────────┐~~n~
+│     Выберете тип передачи остатков.    │~~n~
+├────────────────────────────────────────┤~~n~
+│            В вечернюю кассу            │~~n~
+│            Из вечерней кассы           │~~n~
+└────────────────────────────────────────┘~~n~
+При выборе пункта меню 'В вечернюю кассу' @__massage = 1, при выборе пункта меню 'Из вечерней кассы' @__massage = 2, по 'ESC' @__massage = 0"
+   }
+
+   DEFINE INPUT  PARAMETER in-mess     AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER in-type     AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER in-author   AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iPreAnswer  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iAlwaysShow AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS INT64   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+
+   DEFINE VARIABLE choice  AS LOGICAL  NO-UNDO.
+   DEFINE VARIABLE vType   AS INT64  NO-UNDO.
+
+   {pchkpar in-mess}
+
+   IF in-author = ? THEN in-author = "".
+   IF iPreAnswer <> ? THEN pick-value = iPreAnswer.
+
+   vType = INT64(in-type) NO-ERROR.
+   IF ERROR-STATUS:ERROR OR vType = ? THEN
+   DO:
+      vType = -1.
+      CASE in-type:
+         WHEN "message"       THEN vType = 1.
+         WHEN "question"      THEN vType = 4.
+         WHEN "information"   THEN vType = 1.
+         WHEN "menu"          THEN ASSIGN vType = 3 pick-value = "1".
+         WHEN "warning"       THEN vType = 0.
+      END CASE.
+   END.
+
+   IF vType = 4 THEN DO:
+      IF pick-value = "НЕТ" THEN pick-value = "no".
+      IF pick-value = "ДА"  THEN pick-value = "yes".
+   END.
+
+   IF iAlwaysShow = YES
+   THEN RUN Fill-AlertSysMes IN h_tmess (in-author,"",vType,in-mess).
+   ELSE RUN Fill-SysMes      IN h_tmess (in-author,"",vType,in-mess).
+
+   RUN AddAttr2TableEx ("",0,-1,"",0,"__message",pick-value).
+
+   ASSIGN
+      is-ok      = 0
+      out_result = vType.
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "GETVAR"
+   &DESCRIPTION   = "Возвращает значение реквизита шаблона/переменной."
+   &PARAMETERS    = "КОД РЕКВИЗИТА[,НОМЕР ШАБЛОНА = ТЕКУЩИЙ ШАБЛОН[,КОД ТРАНЗАКЦИИ = ТЕКУЩАЯ ТРАНЗАКЦИЯ]]"
+   &RESULT        = "Значение реквизита"
+   &SAMPLE        = "GETVAR('acct-db') - возвращает значение реквизита ACCT-DB~~n~
+GETVAR('acct-cr',10) - возвращает значение реквизита ACCT-CR из 10-го шаблона текущей транзакции ~~n~
+GETVAR('acct',10,'TR1') - возвращает значение реквизита ACCT из 10-го шаблона транзакции TR1"
+   }
+
+   DEFINE INPUT  PARAMETER iXattrCode    AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder        AS INT64            NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind       AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result    AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   INIT -1  NO-UNDO.
+
+   ASSIGN
+      iOpkind     = TRIM(iOpkind,"~"'")
+      iXattrCode  = TRIM(iXattrCode,"~"'").
+
+   RUN GetVariable(iXattrCode,iOrder,iOpkind,OUTPUT out_result).
+
+   IF out_result <> {&RET-ERROR} THEN
+   DO:
+      is-ok = 0.
+      RETURN .
+   END.
+
+   IF iOrder = ? THEN iOrder = 0.
+
+   CASE RETURN-VALUE:
+      WHEN "trans16" THEN
+         RUN Fill-SysMes("","trans16","","%s=" + iXattrCode +
+                                         "%i=" + STRING(iOrder)).
+      WHEN "trans17" THEN
+         RUN Fill-SysMes("","trans17","", "%s=" + iXattrCode +
+                                          "%i=" + STRING(iOrder)).
+   END CASE.
+
+   /* Commented BY KSV: Возврат VARIANT обозначает, что функция не знает о типе
+   ** возвращаемого значения и парсер должен попытаться самостоятельно
+   ** определить тип */
+   /* RETURN "VARIANT". */
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "DEFINED"
+   &DESCRIPTION   = "Определяет, является ли переменная/реквизит шаблона объявленным и доступным для использования"
+   &PARAMETERS    = "Код реквизита[,номер шаблона = ТЕКУЩИЙ ШАБЛОН [,код транзакции = ТЕКУЩАЯ ТРАНЗАКЦИЯ] ]"
+   &RESULT        = "Да - реквизит доступен для использования~~n~
+Нет - реквизит не может быть использован"
+   &SAMPLE        = "IF DEFINED(amt-rub) THEN @amount = @amt-rub ELSE @amount = 0 ENDIF - ~
+устанавливает значение переменной AMOUNT либо значением реквизита amt-rub, если ~
+он объявлен, либо нулем"
+   }
+   DEFINE INPUT  PARAMETER iXattrCode AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS LOGICAL    NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64    NO-UNDO.
+
+   DEFINE VARIABLE vValue AS CHARACTER  NO-UNDO.
+
+   {pchkpar iXattrCode}
+
+   RUN GetVariable(iXattrCode,iOrder,iOpkind,OUTPUT vValue).
+
+   out_result = vValue <> {&RET-ERROR}.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "UNDEFINE"
+   &DESCRIPTION   = "Удаляет переменную/реквизит шаблона из буфера транзакции"
+   &PARAMETERS    = "Код реквизита[,номер шаблона = ТЕКУЩИЙ ШАБЛОН [,код транзакции = ТЕКУЩАЯ ТРАНЗАКЦИЯ] ]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "UNDEFINE(amt-rub);~~n~
+@xxx = @amt-rub - ошибочная ссылка на переменную amt-rub, т.к. она уже удалена"
+   }
+   DEFINE INPUT  PARAMETER iXattrCode AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64    NO-UNDO.
+
+   DEFINE VARIABLE vOpkind AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vTmplID AS INT64    NO-UNDO.
+
+   {pchkpar iXattrCode}
+
+   RUN GetAttrParams(iOpkind,iOrder,OUTPUT vOpkind,OUTPUT vTmplID).
+   IF RETURN-VALUE <> ""  THEN RETURN.
+
+   RUN DelTransAttr(vOpkind,vTmplID,iXattrCode).
+   IF RETURN-VALUE = {&RET-ERROR} THEN
+      RUN DelTransAttr("",0,iXattrCode).
+
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "SETVAR"
+   &DESCRIPTION   = "Устанавливает значение глобальной переменной или реквизита шаблона. Установленная переменная может быть использована ~
+в любом месте транзакции через оператор @. С помощью данной функции можно получить доступ к системным реквизитам шаблона."
+   &PARAMETERS    = "ИДЕНТИФИКАТОР ПЕРЕМЕННОЙ,ЗНАЧЕНИЕ ПЕРЕМЕННОЙ[,НОМЕР ШАБЛОНА[,КОД ТРАНЗАКЦИИ][,БИЗНЕС-ОПИСАНИЕ]] "
+   &RESULT        = "1"
+   &SAMPLE        = "SETVAR('GLOB-VAR',10,,,'Глобальная переменная') - устанавливает глобальную ~
+переменную GLOB-VAR, присваивает ей значение 10 и бизнес-описание 'Глобальная переменная', ~
+эквивалентно выражению @GLOB-VAR = 10.~~n~
+SETVAR('ACCT-DB','10201810000020010031',10,,'Счет по ДБ 10-го шаблона') - устанавливает значение ~
+реквизита ACCT-DB для 10-го шаблона текущей транзакции и описание 'Счет по ДБ 10-го шаблона''"
+   }
+
+   DEFINE INPUT  PARAMETER iXattrCode    AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iXattrVal     AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder        AS INT64            NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind       AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iXattrDescr   AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result    AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64            NO-UNDO.
+
+   DEFINE VARIABLE vOpkind    AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vTmplID    AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vTmplLnID  AS INT64    NO-UNDO.
+   DEFINE VARIABLE vParent    AS INT64    NO-UNDO INIT -1.
+
+   iXattrCode = TRIM(iXattrCode,"~"'").
+
+   IF iOrder <> ? THEN
+   DO:
+      RUN GetAttrParams(iOpkind,iOrder,OUTPUT vOpkind,OUTPUT vTmplID).
+      vTmplLnID = 1.
+      vParent = ?.
+   END.
+   RUN AddAttr2TableEx (vOpkind,vTmplID,vParent,"",vTmplLnID,iXattrCode,iXattrVal).
+
+   IF {assigned iXattrDescr} THEN 
+      SetVarDescription (iOpkind,iOrder,iXattrCode,iXattrDescr).
+
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "SETVARDESCR"
+   &DESCRIPTION   = "Устанавливает описание глобальной переменной или реквизита шаблона."
+   &PARAMETERS    = "ИДЕНТИФИКАТОР ПЕРЕМЕННОЙ,БИЗНЕС-ОПИСАНИЕ[,НОМЕР ШАБЛОНА[,КОД ТРАНЗАКЦИИ]] "
+   &RESULT        = "1"
+   &SAMPLE        = "SETVAR('GLOB-VAR','Глобальная переменная') - устанавливает описание  ~
+'Глобальная переменная' для переменной GLOB-VAR
+SETVAR('ACCT-DB','10201810000020010031','Счет по ДБ 10-го шаблона',10) - устанавливает описание ~
+'Счет по ДБ 10-го шаблона' для реквизита ACCT-DB для 10-го шаблона текущей транзакции"
+   }
+
+   DEFINE INPUT  PARAMETER iXattrCode    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iXattrDescr   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder        AS INT64      NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind       AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER oUt_Result    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64      NO-UNDO.
+
+   SetVarDescription (iOpkind,iOrder,iXattrCode,iXattrDescr).
+
+END PROCEDURE.
+
+
+
+{pfuncdef
+   &NAME          = "ДАТА"
+   &DESCRIPTION   = "Возвращает дату текущего операционного дня."
+   &PARAMETERS    = "НЕТ"
+   &RESULT        = "Дата операционного дня"
+   &SAMPLE        = "ДАТА()"
+   }
+   DEFINE OUTPUT PARAMETER out_Result    AS DATE      NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+   out_result = mOpDate.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ПЕРЕСЧЕТ"
+   &DESCRIPTION   = "Выполняет пересчет суммы из одной валюты в другую. В случае отсутствия типа курса в классификаторе поиск производится со значением по умолчанию - 'Учетный'.~~nФункционал только для использования в модуле ВОК:~~n при заполнении параметра 'Тип курса' значением из классификатора 'Курсы ВОК' параметр <КОД_ВОК> обязателен. Для параметра <Время> значение по умолчанию - системное время."
+   &PARAMETERS    = "Сумма,Валюта,Валюта для пересчета[,тип курса = УЧЕТНЫЙ[,дата = Дата опердня[,не округлять = NO[,Время = TIME,КОД_ВОК = Код выносной операционной кассы]]]]"
+   &RESULT        = "Сумма в валюте пересчета"
+   &SAMPLE        = "ПЕРЕСЧЕТ(100,840,980,УЧЕТНЫЙ) -  осуществляет пересчет долларов в евро по курсу ЦБ на дату опердня"
+   }
+   DEFINE INPUT  PARAMETER iSumm         AS DECIMAL    NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurr         AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrDst      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iRateType     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate         AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iNoRound      AS LOGICAL    NO-UNDO.
+   DEFINE INPUT  PARAMETER iTime         AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iBranchId     AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result    AS DECIMAL    NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64    NO-UNDO.
+
+   ASSIGN
+      iCurr      = TRIM(iCurr,"~"'")
+      iCurrDst   = TRIM(iCurrDst,"~"'")
+      iRateType  = TRIM(iRateType,"~"'")
+      iRateType  = IF iRateType EQ ? THEN "УЧЕТНЫЙ" ELSE iRateType
+      iDate      = IF iDate     EQ ? THEN mOpDate   ELSE iDate
+      iTime      = IF iTime     EQ ? THEN TIME      ELSE iTime
+      .
+      pick-value = "".
+      IF FGetSetting("КурсСумма","","Нет") EQ "Да" AND (iRateType NE "УЧЕТНЫЙ") THEN /* Для УЧЕТНОГО курса не нужно. */
+      RUN Fill-SysMes ("",
+                       "vok5",
+                       "",
+                       "%s=" + iCurr + "%s=" + iCurrDst).
+
+      out_Result = IF iBranchId EQ ? THEN
+                      CurToCur(iRateType,iCurr,iCurrDst,iDate,iSumm)
+                   ELSE
+                      (IF pick-value EQ "1" THEN
+                         CurToCurTimeBound(iRateType,iCurr,iCurrDst,iBranchId,iDate,iTime,iSumm)
+                      ELSE 
+                         CurToCurTime(iRateType,iCurr,iCurrDst,iBranchId,iDate,iTime,iSumm))
+      .
+
+   IF iNoRound <> YES THEN
+   DO:
+      FIND FIRST currency WHERE
+         currency.currency =  iCurrDst NO-LOCK NO-ERROR.
+      IF AVAILABLE currency THEN
+         out_Result = ROUND(out_Result,currency.frac-places).
+   END.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Устанавливает уровень отладки для отладчика
+  Parameters:  iDebugLevel - уровень отладки
+                             0 - отладка выключена
+                             1 - отладка всего выражения
+                             2 - отладка каждой операции выражения
+                             3 - отладка с отображением экранных форм
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE SetDebugLevel:
+   DEFINE INPUT  PARAMETER iDebugLevel AS INT64    NO-UNDO.
+
+   IF iDebugLevel = ? THEN iDebugLevel = 0.
+
+   iDebugLevel = IF iDebugLevel < 0 OR
+                    iDebugLevel > 2 THEN 2 ELSE iDebugLevel.
+   mDebugLevel = iDebugLevel.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает текущий уровень отладки
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+FUNCTION GetDebugLevel RETURNS INT64 ():
+   RETURN mDebugLevel.
+END FUNCTION.
+
+{pfuncdef
+   &NAME          = "DEBUG"
+   &DESCRIPTION   = "Управляет отладкой парсерных выражений"
+   &PARAMETERS    = "УРОВЕНЬ ОТЛАДКИ (0 - отладчик выключен, 1 - результат обработки всего ~
+выражения, 2 - полная отладка выражения, 3 - отладка с отображением экранных форм)"
+   &RESULT        = "1"
+   &SAMPLE        = "DEBUG(2) - включить полную отладку~~nDEBUG(0) - выключить отладку"
+   }
+   DEFINE INPUT  PARAMETER iDebugLevel AS INT64              NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   INIT "1" NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64              NO-UNDO.
+
+   RUN SetDebugLevel(iDebugLevel).
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Запускает транзакцию с указанным кодом
+  Parameters:  iOpkind  - код транзакции
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE RunTransaction:
+   DEFINE INPUT  PARAMETER iOpkind AS CHARACTER  NO-UNDO.
+
+   DEFINE VARIABLE vRetVal       AS CHARACTER  NO-UNDO.
+
+   FIND FIRST op-kind WHERE op-kind.op-kind = iOpkind NO-LOCK NO-ERROR.
+
+   IF NOT AVAILABLE op-kind THEN
+   DO:
+      RUN Fill-SysMes("","","-1","Транзакция с кодом [" + iOpkind +
+                      "] не найдена.").
+      RETURN ERROR.
+   END.
+
+   IF NOT SearchPFile(op-kind.proc)  THEN
+   DO:
+      RUN Fill-SysMes("","","-1","Не найдена процедура запуска транзакции [" +
+                      iOpkind + "]").
+      RETURN ERROR.
+   END.
+
+   IF NOT GetSurrPermission("op-kind",op-kind.op-kind,"run") THEN
+   DO:
+      RUN Fill-SysMes("","","-1","Пользователь" + CAPS(USERID("bisquit")) +
+                      " не имеет прав для запуска транзакции [" + iOpkind + "]").
+      RETURN ERROR.
+   END.
+
+                        /* Запуск метода проверки возможности запуска транзакции */
+   pick-value = "".
+   RUN RunClassMethod (op-kind.Class-Code,
+                       "BeforeRun",
+                       "","",?,
+                       CHR(1) +      /* Вместо CHR(1) будут подставлены 
+                                        парарметры вызова из метасхемы */
+                       "op-kind," + op-kind.op-kind).
+                        /* Если метод возвращает непустое значение в переменной pick-value,
+                        ** то запуск запрещается */
+   IF {assigned pick-value} THEN
+   DO:
+                        /* Выводим сообщение об ошибке. */
+      RUN Fill-SysMes IN h_tmess ("", "", "-1", pick-value).
+      RETURN ERROR.
+   END.
+
+   mBreak = 0.
+
+   TR:
+   DO ON ERROR UNDO TR,RETURN ERROR
+      ON STOP  UNDO TR,RETURN ERROR:
+      /* Commented BY KSV: Запоминаем контекст текущей транзакции */
+      {&PUSH_TSTACK}
+
+      RUN VALUE(op-kind.proc + ".p") (mOpDate,RECID(op-kind)) NO-ERROR.
+
+      vRetVal = RETURN-VALUE.
+
+      /* Commented BY KSV: Восстанавливаем контекст текущей транзакции */
+      {&POP_TSTACK}
+
+      CASE mBreak:
+         WHEN {&BREAK-ALL-UNDO} OR WHEN {&BREAK-ALL-NOUNDO} THEN
+            IF VALID-HANDLE(mProcHdl) THEN
+               RUN SetBreak IN mProcHdl (mBreak) NO-ERROR.
+         WHEN {&BREAK-CUR-UNDO} THEN UNDO,LEAVE.
+      END CASE.
+
+      IF vRetVal = {&RET-ERROR} THEN UNDO TR,RETURN ERROR.
+   END.  /* END OF TR BLOCK */
+
+   mBreak = 0.
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ТРАНЗАКЦИЯ"
+   &DESCRIPTION   = "Запускает указанную транзакцию"
+   &PARAMETERS    = "КОД ТРАНЗАКЦИИ"
+   &RESULT        = "Результат, возвращенный запускаемой транзакцией"
+   &SAMPLE        = "ТРАНЗАКЦИЯ(0601) - запуск транзакции с кодом 0601"
+   }
+   DEFINE INPUT  PARAMETER iOpkind     AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS LOGICAL.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     INIT -1.
+
+   iOpkind = TRIM(iOpkind,"~"'").
+
+   RUN RunTransaction(iOpkind) NO-ERROR.
+   IF ERROR-STATUS:ERROR THEN RETURN.
+
+   ASSIGN
+      is-ok       = 0
+      out_Result  = YES.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ТРАНЗАКЦИЯ2"
+   &DESCRIPTION   = "Запускает указанную транзакцию с возвратом кода завершения"
+   &PARAMETERS    = "КОД ТРАНЗАКЦИИ"
+   &RESULT        = "код завершения"
+   &SAMPLE        = "@ret = ТРАНЗАКЦИЯ(0601) - запуск транзакции с кодом 0601"
+   }
+   DEFINE INPUT  PARAMETER iOpkind     AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS INT.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     INIT 0.
+
+   iOpkind = TRIM(iOpkind,"~"'").
+
+   RUN RunTransaction(iOpkind) NO-ERROR.
+   IF ERROR-STATUS:ERROR THEN
+      out_Result  = -1.
+   ELSE
+      out_Result  = 0.
+END PROCEDURE.
+
+/* Варианты реакций на ошибку в подтранзакции */
+&GLOBAL-DEFINE ERR_REACT_ERROR      "ОШИБКА"
+&GLOBAL-DEFINE ERR_REACT_IGNORE     "ИГНОР"
+&GLOBAL-DEFINE ERR_REACT_QUESTION   "ВОПРОС"  
+&GLOBAL-DEFINE ERR_REACTIONS        {&ERR_REACT_ERROR} + "," + {&ERR_REACT_IGNORE} + "," + {&ERR_REACT_QUESTION} 
+
+{pfuncdef
+   &NAME          = "ГР_ТРАНЗ"
+   &DESCRIPTION   = "Запускает транзакцию для шаблона фильтра. Указанная транзакция запускается для каждой записи, попавшей в выборку. ~
+Функция формирует таблицу tmprecid и работает по ней, Работает только для транзакций по OP."
+   &PARAMETERS    = "ГР_ТРАНЗ[,ТАБЛИЦА[,РЕАКЦИЯ НА ОШИБКУ = ОШИБКА|ИГНОР|ВОПРОС]]"
+   &RESULT        = "0 - фильтр не содержит ни одного объекта~~n1 - во всех остальных случаях "
+   &SAMPLE        = "ГР_ТРАНЗ('0601') - групповой запуск транзакции с кодом 0601 для текущего шаблона фильтра~~n~
+ГР_ТРАНЗ('0601',@FilterTable(10)) - групповой запуск транзакции с кодом 0601 для фильтра 10-го шаблона~~n~
+ГР_ТРАНЗ('0601',@FilterTable(10),'ИГНОР') - групповой запуск транзакции с кодом 0601 для фильтра 10-го шаблона c игнорированием всех ошибок~~n~"
+   }
+   DEFINE INPUT  PARAMETER iOpkind        AS CHARACTER             NO-UNDO.
+   DEFINE INPUT  PARAMETER iFilterTbl     AS CHARACTER             NO-UNDO.
+   DEFINE INPUT  PARAMETER iErrorReaction AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result     AS INT64     INIT  1   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok          AS INT64.
+
+   DEFINE VARIABLE vFilterTable AS HANDLE     NO-UNDO.
+
+
+   {pchkpar iOpkind}
+   IF {assigned iFilterTbl} THEN
+      vFilterTable = WIDGET-HANDLE(iFilterTbl) NO-ERROR.
+   ELSE
+      vFilterTable = WIDGET-HANDLE(GetAttrValue(mOpkind,mTmplID,"FilterTable")) NO-ERROR.
+                        /* После доработки g-fltr.p указатель vFilterTable
+                        ** всегда существует.
+                        ** Но данную проверку убирать не следует. */
+   IF NOT VALID-HANDLE(vFilterTable) THEN
+   DO:
+      out_Result = 0.
+      RETURN .
+   END.
+
+   /*Отбор записей */
+   RUN fltrecid.p (vFilterTable, 'op') NO-ERROR.
+   IF ERROR-STATUS:ERROR THEN RETURN.
+
+   /* Сохраняем отобранное в отдельную таблицу */
+   {empty tt-tmprecop}
+   FOR EACH tmprecid NO-LOCK:
+      CREATE tt-tmprecop.
+      tt-tmprecop.op = tmprecid.id.
+
+   END.
+   DEF BUFFER ttOP FOR op.
+
+   IF iErrorReaction = ? OR NOT CAN-DO( {&ERR_REACTIONS}, iErrorReaction ) THEN 
+      iErrorReaction = {&ERR_REACT_ERROR}.
+   
+   is-ok = -1.
+
+   TR:
+   DO ON ERROR UNDO TR,LEAVE TR
+      ON STOP  UNDO TR ,LEAVE TR:
+
+      FOR EACH tt-tmprecop,
+         FIRST ttOP WHERE RECID(ttop) EQ tt-tmprecop.op NO-LOCK:
+     
+         DELETE tt-tmprecop.
+         RUN AddAttr2TableEx ("",0,-1,"",0,
+                              "op",
+                              STRING(ttOP.op)).
+     
+         RUN RunTransaction(iOpkind) NO-ERROR.
+
+         IF ERROR-STATUS:ERROR THEN
+         DO:
+            CASE iErrorReaction:
+               WHEN {&ERR_REACT_QUESTION} THEN 
+               DO:
+                  pick-value = ?.
+                  /* Вопрос - продолжаем или нет */
+                  RUN Fill-SysMes IN h_tmess ( "", "trans37", 4, "%s=" + iOpkind ).
+                  /* Выбрали - не продолжать */
+                  IF pick-value <> "yes" THEN UNDO TR, LEAVE TR.            
+               END.
+               WHEN {&ERR_REACT_IGNORE} THEN.
+               OTHERWISE UNDO TR,LEAVE TR.
+            END CASE. 
+            RUN Fill-SysMes IN h_tmess ( "", "trans38", 0, "%s=" + iOpkind ).
+         END.             
+      END. /* FOR EACH tt-xop */
+
+      is-ok = 0.
+   END.  /* END OF TR BLOCK */
+   {empty tt-tmprecop}
+
+END PROCEDURE.
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "ГР_ТРАНЗАКЦИЯ"
+   &DESCRIPTION   = "Запускает транзакцию для шаблона фильтра. Указанная транзакция запускается для каждой записи, попавшей в выборку. ~
+При каждом запуске транзакции формируется значение переменной __counter, соответствующее номеру текущей итерации. ~
+Для досрочного выхода из функции нужно вызвать функцию СТОПЦИКЛ внутри запускаемой ~
+транзакции. При этом результаты транзакции не будут откатываться. Допустимо указание явной ссылки на ~
+выборку через параметр ТАБЛИЦА."
+   &PARAMETERS    = "КОД ТРАНЗАКЦИИ[,ТАБЛИЦА[,РЕАКЦИЯ НА ОШИБКУ = ОШИБКА|ИГНОР|ВОПРОС]]"
+   &RESULT        = "0 - фильтр не содержит ни одного объекта~~n1 - во всех остальных случаях "
+   &SAMPLE        = "ГР_ТРАНЗАКЦИЯ('0601') - групповой запуск транзакции с кодом 0601 для текущего шаблона фильтра~~n~
+ГР_ТРАНЗАКЦИЯ('0601',@FilterTable(10)) - групповой запуск транзакции с кодом 0601 для фильтра 10-го шаблона~~n~
+ГР_ТРАНЗАКЦИЯ('0601',@FilterTable(10),'ИГНОР') - групповой запуск транзакции с кодом 0601 для фильтра 10-го шаблона c игнорированием всех ошибок~~n~"
+   }
+   DEFINE INPUT  PARAMETER iOpkind        AS CHARACTER             NO-UNDO.
+   DEFINE INPUT  PARAMETER iFilterTbl     AS CHARACTER             NO-UNDO.
+   DEFINE INPUT  PARAMETER iErrorReaction AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result     AS INT64     INIT  1   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok          AS INT64.
+
+   DEFINE VARIABLE vFilterTable AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vBuffer      AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vQuery       AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vNum         AS INT64    NO-UNDO.
+   DEFINE VARIABLE vCnt         AS INT64    NO-UNDO.
+
+   {pchkpar iOpkind}
+
+   IF {assigned iFilterTbl} THEN
+      vFilterTable = WIDGET-HANDLE(iFilterTbl) NO-ERROR.
+   ELSE
+      vFilterTable = WIDGET-HANDLE(GetAttrValue(mOpkind,mTmplID,"FilterTable")) NO-ERROR.
+                        /* После доработки g-fltr.p указатель vFilterTable
+                        ** всегда существует.
+                        ** Но данную проверку убирать не следует. */
+   IF NOT VALID-HANDLE(vFilterTable) THEN
+   DO:
+      out_Result = 0.
+      RETURN .
+   END.
+   
+   IF iErrorReaction = ? OR NOT CAN-DO( {&ERR_REACTIONS}, iErrorReaction ) THEN 
+      iErrorReaction = {&ERR_REACT_ERROR}.
+   
+
+   is-ok = -1.
+   vBuffer = vFilterTable:DEFAULT-BUFFER-HANDLE.
+   vNum = vBuffer:NUM-FIELDS.
+   CREATE QUERY vQuery.
+   vQuery:SET-BUFFERS(vBuffer).
+
+   IF vBuffer:INDEX-INFORMATION(2) BEGINS "sortfilttable"
+   THEN vQuery:QUERY-PREPARE("FOR EACH " + vBuffer:NAME + " USE-INDEX sortfilttable").
+   ELSE vQuery:QUERY-PREPARE("FOR EACH " + vBuffer:NAME).
+
+   vQuery:QUERY-OPEN().
+
+   TR:
+   DO ON ERROR UNDO TR,LEAVE TR
+      ON STOP  UNDO TR ,LEAVE TR:
+
+      vQuery:GET-FIRST().
+
+      IF vBuffer:AVAILABLE THEN
+      DO:
+         {&CREATE_TLOOP}
+      END.
+                        /* Если нет ни одной записи, то тихо выходим. */
+      ELSE DO:
+         ASSIGN
+            out_Result  = 0
+            is-ok       = 0
+         .
+         LEAVE TR.
+      END.
+      DO ON ERROR UNDO TR,LEAVE TR WHILE vBuffer:AVAILABLE:
+         /* Commented BY KSV: Записываем идентификаторы ВСЕХ буферов в буфер
+         ** транзакции, как глобальные переменные */
+         DO vCnt = 1 TO vNum:
+            RUN AddAttr2TableEx ("",0,-1,"",0,
+                                 vBuffer:BUFFER-FIELD(vCnt):NAME,
+                                 STRING(vBuffer:BUFFER-FIELD(vCnt):BUFFER-VALUE)).
+         END.
+
+         {&GET_LOOPINFO}
+
+         /* Commented BY KSV: Анализируем флаг преждевременного УСПЕШНОГО
+         ** завершения транзакции */
+         IF tLoop.counter < 0 THEN LEAVE.
+
+         ASSIGN
+            tLoop.counter     = tLoop.counter + 1
+            tLoop.dst-op-kind = iOpkind.
+
+         RUN AddAttr2TableEx (iOpkind,0,-1,"",0,"__counter",tLoop.counter).
+
+         RUN RunTransaction(iOpkind) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN
+         DO:
+            CASE iErrorReaction:
+               WHEN {&ERR_REACT_QUESTION} THEN 
+               DO:
+                  pick-value = ?.
+                  /* Вопрос - продолжаем или нет */
+                  RUN Fill-SysMes IN h_tmess ( "", "trans37", 4, "%s=" + iOpkind ).
+                  /* Выбрали - не продолжать */
+                  IF pick-value <> "yes" THEN UNDO TR, LEAVE TR.            
+               END.
+               WHEN {&ERR_REACT_IGNORE} THEN.
+               OTHERWISE UNDO TR,LEAVE TR.
+            END CASE. 
+            RUN Fill-SysMes IN h_tmess ( "", "trans38", 0, "%s=" + iOpkind ).
+         END.             
+
+         vQuery:GET-NEXT().
+      END.
+
+      {&DEL_TLOOP}
+
+      is-ok = 0.
+   END.  /* END OF TR BLOCK */
+   DELETE OBJECT vQuery.
+
+END PROCEDURE.
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "ГР_ПЕЧАТЬ"
+   &DESCRIPTION   = "Запускает процедуру печати, указанную в первом параметре. Указанная процедура запускается один раз ~
+для всех записей, попавших в выборку. Обязательно указание явных ссылок: на выборку - через параметр ФИЛЬТР ~
+и на буфер - через параметр ТАБЛИЦА"
+   &PARAMETERS    = "ПРОЦЕДУРА ПЕЧАТИ,ФИЛЬТР,ТАБЛИЦА"
+   &RESULT        = "0 - фильтр не содержит ни одного объекта~~n1 - во всех остальных случаях "
+   &SAMPLE        = "ГР_ПЕЧАТЬ('pck-p300',@FilterTable(20),'Packet') - групповая печать сообщений 'Packet' процедурой pck-p300 для фильтра 20-го шаблона"
+   }
+   DEFINE INPUT  PARAMETER iProc          AS CHAR              NO-UNDO.
+   DEFINE INPUT  PARAMETER iFilterTbl     AS CHAR              NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam         AS CHAR              NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result     AS INT64  INIT 1   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok          AS INT64  INIT -1.
+
+   DEF VAR vFilterTable AS HANDLE NO-UNDO.
+   DEF VAR vTmpStr      AS CHAR   NO-UNDO.
+
+   IF {assigned iFilterTbl} THEN
+      vFilterTable = WIDGET-HANDLE(iFilterTbl) NO-ERROR.
+   ELSE
+      ASSIGN
+         vTmpStr      = GetAttrValue(mOpkind,mTmplID,"FilterTable")
+         vFilterTable = WIDGET-HANDLE(vTmpStr) NO-ERROR.
+
+   IF NOT VALID-HANDLE(vFilterTable) THEN DO:
+      out_Result = 0.
+      RETURN.
+   END.
+
+   /*Отбор записей для печати*/
+   RUN fltrecid.p (vFilterTable, iParam) NO-ERROR.
+   IF ERROR-STATUS:ERROR THEN RETURN.
+
+   RUN VALUE(iProc + ".p") NO-ERROR.
+   IF ERROR-STATUS:ERROR THEN RETURN.
+
+   {empty tmprecid}
+   is-ok = 0.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Обработка ДР из условий поиска
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE SearchByXattr:
+   DEFINE INPUT  PARAMETER iField     AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iDefault   AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iWhere     AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64  INIT -1   NO-UNDO.
+   
+   DEFINE VARIABLE vClassCode AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vWhere     AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vInstance  AS HANDLE    NO-UNDO.
+   
+   MAIN_BLOCK:
+   DO ON ERROR  UNDO MAIN_BLOCK, LEAVE MAIN_BLOCK
+      ON ENDKEY UNDO MAIN_BLOCK, LEAVE MAIN_BLOCK:
+   
+      ASSIGN
+         vInstance = GetBaseInstance(getBaseOpkind(), getBaseTemplate())
+         vClassCode = GetInstanceProp2(vInstance, "class-code")
+      .
+      IF vClassCode = {&RET-ERROR}
+      THEN vClassCode = GetInstanceProp2(vInstance, "__class").
+      
+      IF LOGICAL(GetXattrEx(vClassCode, iField, "progress-field")) <> NO 
+      THEN 
+         LEAVE MAIN_BLOCK.
+   
+      vWhere = GetAttrValue2(mOpkind,mTmplID,"__search_signs").
+      IF vWhere = {&RET-ERROR} THEN vWhere = "".
+   
+      vWhere = vWhere + (IF vWhere = "" THEN "" ELSE ",") +
+               iField                                                       + "|" +
+               GetXattrEx(vClassCode, iField, "Data-Type")                  + "|" +
+              (IF iWhere = ? THEN "=" ELSE GetEntries(1, iWhere, " ", ""))  + "|" +
+              (IF iWhere = ? THEN iDefault ELSE GetEntries(2, iWhere, " ", "")).
+         
+      RUN AddAttr2TableEx ("",mTmplID,?,?,0,"__search_signs",vWhere).
+      out_Result = iDefault.
+      is-ok = 0.
+   END.
+
+END PROCEDURE.
+
+/*----------------------------------------------------------------------------*/
+/*                                                                            */
+/*----------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "SEARCH"
+   &DESCRIPTION   = "Добавляет условие поиска для текущего объекта по текущему реквизиту. ~
+Функция может быть использована только в реквизитах шаблона. Если реквизит шаблона начинается с ~
+$, то условие должно содержать выражение сортировки."
+   &PARAMETERS    = "ЗНАЧЕНИЕ РЕКВИЗИТА[,УСЛОВИЕ]~~n~
+Первый параметр задает значение, возвращаемое функцией. ~
+В случае, если его значение ?, то реквизит будет использован ТОЛЬКО для поиска.~~n~
+Второй параметр задает предикат 4GL, который будет использоваться для отбора."
+   &RESULT        = "ЗНАЧЕНИЕ РЕКВИЗИТА"
+   &SAMPLE        = "Поиск лицевого счета:~~n~
+acct = SEARCH(?,'BEGINS 407018108') - будут выбираться счета, начинающиеся с  407018108;~~n~
+bal-acct = SEARCH('40701') - при поиске счета будут использоваться счета 2-го порядка 40701;~~n~
+$sort = SEARCH('BY since DESC') - при поиске будет использована сортировка по убыванию значений реквизита since;"
+   }
+   DEFINE INPUT  PARAMETER iDefault   AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iWhere     AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER          NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64  INIT -1   NO-UNDO.
+
+   DEFINE VARIABLE vWhere  AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vSort   AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vSrtTm  AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vField  AS CHARACTER NO-UNDO.     
+   DEFINE VARIABLE vTmplID AS INT64   NO-UNDO.
+   
+   MAIN_BLOCK:                                     
+   DO ON ERROR  UNDO MAIN_BLOCK, LEAVE MAIN_BLOCK 
+      ON ENDKEY UNDO MAIN_BLOCK, LEAVE MAIN_BLOCK:
+      ASSIGN 
+         iDefault = TRIM(iDefault,"'~"")
+         iWhere   = TRIM(iWhere,"'~"").
+      
+      IF iDefault = '?' THEN iDefault = ?.
+      iWhere = REPLACE(iWhere,"`","'").
+      
+      
+      vField = tGetParam("XATTR-CODE",?,?).
+      
+      IF vField = ? OR (iDefault = ? AND iWhere = ?) THEN
+      DO:
+         RUN Fill-SysMes("","",-1,"Недопустимое использование функции SEARCH").
+         LEAVE MAIN_BLOCK .
+      END.
+      
+      IF iWhere = ? THEN DO:
+         IF vField BEGINS "$" THEN DO:
+            /* в переменной $ передается сортировка */
+            IF INDEX(iDefault,'by') GT 0 THEN
+               ASSIGN
+                  iWhere  = " " + SUBSTRIN(iDefault,1,INDEX(iDefault,'by') - 1) + ""
+                  vSrtTm  = " " + SUBSTRIN(iDefault,INDEX(iDefault,'by')) + ""
+               .
+            ELSE
+               iWhere  = " " + iDefault + "".
+         END.
+         ELSE
+            iWhere = "= '" + iDefault + "'".
+      END.
+
+      IF NOT (vField BEGINS "$") THEN DO:
+
+         vTmplID = GetBaseTemplate().
+         IF NOT CAN-FIND(FIRST op-kind-tmpl WHERE op-kind-tmpl.tmpl-id = vTmplID
+                                              AND CAN-FIND(FIRST op-kind-tmpl-ln WHERE op-kind-tmpl-ln.tmpl-id    = op-kind-tmpl.tmpl-id
+                                                                                   AND op-kind-tmpl-ln.xattr-code  = "$ТолькоШаблон"
+                                                                                   AND (   op-kind-tmpl-ln.xattr-value = "ДА"
+                                                                                        OR op-kind-tmpl-ln.xattr-value = "YES")
+                                                           NO-LOCK)
+                         NO-LOCK)
+         THEN DO:
+            RUN SearchByXattr(vField, iDefault, iWhere, OUTPUT out_Result, OUTPUT is-ok).
+            IF is-ok = 0 THEN LEAVE MAIN_BLOCK.
+         END.
+         
+         vWhere = GetAttrValue2(mOpkind,mTmplID,"__search"). 
+         IF vWhere = {&RET-ERROR} THEN vWhere = "".
+
+         vWhere = vWhere + (IF vWhere = "" THEN "" ELSE " AND ") +
+                  "( " + vField + " " + iWhere + " )".
+
+         RUN AddAttr2TableEx ("",mTmplID,?,?,0,"__search",vWhere).
+      END.
+      ELSE DO:
+         IF {assigned vSrtTm} THEN DO:
+            vSort = GetAttrValue2(mOpkind,mTmplID,"__sortby"). 
+            IF vSort = {&RET-ERROR} THEN vSort = "".
+            vSort = vSort + vSrtTm.
+            RUN AddAttr2TableEx ("",mTmplID,?,?,0,"__sortby",vSort).
+         END.
+         IF {assigned iWhere} THEN DO:
+            vWhere = GetAttrValue2(mOpkind,mTmplID,"__search"). 
+            IF vWhere = {&RET-ERROR} THEN vWhere = "".
+            vWhere = vWhere + iWhere.
+            RUN AddAttr2TableEx ("",mTmplID,?,?,0,"__search",vWhere).
+         END.
+      END.
+
+      
+      out_Result = iDefault.
+      is-ok = 0.
+   END.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "НОМЕР_СЧЕТА_Т"
+   &DESCRIPTION   = "Функция возвращает номер нового лицевого счета (без его открытия) и помещает ~
+его в классификатор СчетаРезерва. В случае, если не указана дата открытия, берется дата ~
+операционного дня. При неуказании ссылки на клиента счет рассчитывается как внутренний. ~
+В отличии от <НОМЕР_СЧЕТА> расчет номера идет без операции создание-откат!!!"
+   &PARAMETERS    = "КЛАСС, СЧЕТ 2-го ПОРЯДКА, ВАЛЮТА [, ДАТА ОТКРЫТИЯ [, ТИП КЛИЕНТА, КОД КЛИЕНТА [,МАСКА Л/СЧЕТА [,ПОДРАЗДЕЛЕНИЕ]]]]"
+   &RESULT        = "НОМЕР_СЧЕТА_Т"
+   &SAMPLE        = "НОМЕР_СЧЕТА_Т(acctb,40702,840,Дата(),@cust-cat,@cust-id) = '40702840000000000007' ~~n~
+НОМЕР_СЧЕТА(acctb,40702,978,Дата(),@cust-cat,@cust-id,'бббббвввкссссууууууу') = '40701978000550000226'"
+   }
+   DEFINE INPUT  PARAMETER iClass      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iBalAcct    AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrency   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate       AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustID     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iAcctMask   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iBranchId   AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64 INIT -1   NO-UNDO.
+
+   DEFINE VARIABLE vAcct    AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vAcctCrt AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vKodDoxRash AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vOk      AS LOGICAL    NO-UNDO.
+   DEFINE VAR vErrMsg AS CHARACTER NO-UNDO.
+
+   {pchkpar iClass iBalAcct}
+
+   IF iCurrency <> "" THEN
+   DO:
+      {pchkpar iCurrency}
+   END.
+   
+   vOk = NO.
+   
+   IF iDate    EQ ?  THEN iDate     = mOpDate.
+   IF iCustCat EQ ?  THEN iCustCat  = "В".
+
+   CNT_ACCT:
+   DO TRANSACTION:
+      RUN "FindAcctMask" /* IN h_acct */
+        (
+        iClass,
+        iBalAcct , 
+        INPUT-OUTPUT iAcctMask,
+        INPUT-OUTPUT vKodDoxRash 
+        ) NO-ERROR.
+      {was-err.i &LBL="CNT_ACCT" &TODO="LEAVE CNT_ACCT"}
+     
+
+      RUN CreateAcctNumber IN h_acct (iClass,
+                            iBalAcct,
+                            iCurrency,
+                            GetXAttrInit(iClass,"acct-cat"),
+                            iAcctMask,
+                            iBranchId,
+                            iCustCat,
+                            iCustID,
+
+                            vKodDoxRash,
+
+                            "",
+
+                            OUTPUT vAcct,
+                            OUTPUT vErrMsg) NO-ERROR.
+      {was-err.i &LBL="CNT_ACCT" &TODO="LEAVE CNT_ACCT"}
+      
+      RUN AcctKeep IN h_acct (vAcct,OUTPUT vOk).
+      IF vOk NE YES THEN 
+      UNDO CNT_ACCT, LEAVE CNT_ACCT.
+   END.
+   IF vOk NE YES THEN
+      RETURN.
+
+   ASSIGN
+      out_Result  = vAcct
+      is-ok       = 0
+   .
+   RETURN.
+END PROCEDURE.
+
+
+
+
+{pfuncdef
+   &NAME          = "НОМЕР_СЧЕТА"
+   &DESCRIPTION   = "Функция возвращает номер нового лицевого счета (без его открытия) и помещает ~
+его в классификатор СчетаРезерва. В случае, если не указана дата открытия, берется дата ~
+операционного дня. При неуказании ссылки на клиента счет рассчитывается как внутренний."
+   &PARAMETERS    = "КЛАСС, СЧЕТ 2-го ПОРЯДКА, ВАЛЮТА [, ДАТА ОТКРЫТИЯ [, ТИП КЛИЕНТА, КОД КЛИЕНТА [,МАСКА Л/СЧЕТА [,ПОДРАЗДЕЛЕНИЕ[,номер филиала]]]]]"
+   &RESULT        = "НОМЕР СЧЕТА"
+   &SAMPLE        = "НОМЕР_СЧЕТА(acctb,40702,840,Дата(),@cust-cat,@cust-id) = '40702840000000000007' ~~n~
+НОМЕР_СЧЕТА(acctb,40702,978,Дата(),@cust-cat,@cust-id,'бббббвввкссссууууууу') = '40701978000550000226'"
+   }
+   DEFINE INPUT  PARAMETER iClass      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iBalAcct    AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrency   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate       AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCustID     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iAcctMask   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iBranchId   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iFilialId   AS CHARACTER  NO-UNDO.   
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64 INIT -1   NO-UNDO.
+
+   DEFINE VARIABLE tmp_filialid   AS CHARACTER  NO-UNDO.   
+   DEFINE VARIABLE vAcct          AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vAcctCrt       AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vOk            AS LOGICAL    NO-UNDO.
+
+   {pchkpar iClass iBalAcct}
+   tmp_filialid = shFilial.
+   IF iCurrency <> "" THEN
+   DO:
+      {pchkpar iCurrency}
+   END.
+
+   IF iDate    EQ ?  THEN iDate     = mOpDate.
+   IF iCustCat EQ ?  THEN iCustCat  = "В".
+
+   TR:
+   DO
+   TRANSACTION
+   ON ERROR UNDO TR, LEAVE TR
+   ON STOP  UNDO TR, LEAVE TR:
+
+      RELEASE acct NO-ERROR.
+      shFilial = IF  {assigned iFilialId} 
+                 AND CAN-FIND(FIRST branch WHERE branch.branch-id EQ iFilialId)      
+                 THEN iFilialId ELSE shFilial.
+      _crt_acct_and_undo:
+      DO ON ERROR UNDO _crt_acct_and_undo, LEAVE _crt_acct_and_undo:
+         RUN Cm_acct_cr IN h_acct (
+            iClass,              /* iClass                  */
+            iBalAcct,            /* iBal                    */
+            iCurrency,           /* iCurr                   */
+            iCustCat,            /* iCustCat                */
+            iCustID,             /* iCustID                 */
+            iDate,               /* iOpenDate               */
+            OUTPUT vAcct,        /* oAcct                   */
+            BUFFER acct,         /* BUFFER iacct FOR acct . */
+            iAcctMask,           /* iAcctMask               */
+            ?,                   /* iDetails                */
+            ?,                   /* iKauId                  */
+            ?,                   /* iContract               */
+            USERID('bisquit'),   /* iUserId                 */
+            iBranchId,           /* iBranchId               */
+            YES                  /* iCopyBalXattr           */
+         ) NO-ERROR.
+&SCOPED-DEFINE msg
+         {was-err.i &LBL="_crt_acct_and_undo" &TODO="LEAVE _crt_acct_and_undo"}
+&UNDEFINE msg
+         IF vAcct = ? THEN UNDO _crt_acct_and_undo, LEAVE _crt_acct_and_undo.
+         
+         {find-act.i &bact=acct &acct=vAcct &curr=iCurrency}
+         IF AVAIL acct THEN vAcctCrt = acct.acct.
+         UNDO _crt_acct_and_undo, LEAVE _crt_acct_and_undo.
+      END.
+      shFilial = tmp_filialid.
+      IF NOT {assigned vAcctCrt} THEN UNDO TR, LEAVE TR.
+      
+      /* Сохранение информации в кл-ре "СчетаРезерва". */
+      RUN AcctKeep IN h_acct (vAcctCrt,OUTPUT vOk).
+      IF vOk NE YES THEN UNDO TR, LEAVE TR.
+      ASSIGN
+         out_Result  = vAcctCrt
+         is-ok       = 0
+      .
+
+   END.
+   shFilial = tmp_filialid.
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "НАСТРОЙКА"
+   &DESCRIPTION   = "Возвращает значение настроечного параметра"
+   &PARAMETERS    = "КОД ПАРАМЕТРА [, СУБКОД ПАРАМЕТРА [, ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ]]"
+   &RESULT        = "Значение настроечного параметра"
+   &SAMPLE        = "НАСТРОЙКА(LoginParameters,MinPwdLen,5) - вернет значение настроечного параметра ~
+LoginParamaters/MinPwdLen (минимальная длина пароля), если параметр не определен, будет ~
+возвращено 5"
+   }
+   DEFINE INPUT  PARAMETER iSetCode    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iSubCode    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDefault    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64    NO-UNDO.
+
+   ASSIGN
+      iSetCode   = TRIM(iSetCode,"~"'")
+      iSubCode   = TRIM(iSubCode,"~"'")
+      iDefault   = TRIM(iDefault,"~"'").
+
+   out_result = FGetSettingEx(iSetCode,iSubCode,iDefault,NO).
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ОБЪЕКТ"
+   &DESCRIPTION   = "Возвращает идентификатор(ы) объекта(ов) операции. Если транзакция запускается ~
+из меню операций, то будет возвращен идентификатор текущего объекта, если транзакция запущена ~
+из опердня, то запускается метод BROWSE для класса шаблона для выбора объекта(ов) операции. ~
+Можно установить режим, при котором браузер будет вызываться всегда. Есть возможность ~
+предустановить выборку в браузере через списки атрибутов и значений. Для разделения ~
+элементов списка необходимо использовать функцию CHR(1). Список опций позволяет настроить поведение ~
+браузера: [MULTIPLE],[ESC_NO_ERROR],[Код класса]. Использование опций автоматически включает параметр ВСЕГДА ПОКАЗЫВАТЬ БРАУЗЕР. ~~n~
+Опция MULTIPLE позволяет выбрать несколько выделенных в браузере объектов. ~
+Количество выбранных объектов сохраняется в реквизите __NUM-OBJECTS. ~
+Идентификаторы выбранных объектов возвращаются в виде списка, разделенного символом CHR(1) ~~n~
+Опция ESC_NO_ERROR позволяет выполнить обработку нажатия в браузере клавиши ESC без ошибки транзакции. ~~n~
+Если задан код класса в третьем элементе списка, то браузер будет запущен по объектам этого класса, ~
+что позволяет использовать данную функцию не только в шаблонах транзакции.~~n~
+ЕСЛИ ФУНКЦИЯ НЕ ЗАПУСКАЕТ БРАУЗЕР ОБЪЕКТОВ БЕЗ ПАРАМЕТРОВ, ТО НЕОБХОДИМО ~
+ПРОКОНСУЛЬТИРОВАТЬСЯ С РАЗРАБОТЧИКОМ ДЛЯ КОРРЕКТНОЙ ПАРАМЕТРИЗАЦИИ ФУНКЦИИ."
+   &PARAMETERS    = "[ВСЕГДА ПОКАЗЫВАТЬ БРАУЗЕР[,СПИСОК АТРИБУТОВ ДЛЯ ОТБОРА[,СПИСОК ЗНАЧЕНИЙ ДЛЯ ОТБОРА[,~
+СПИСОК ЗАКРЫТЫХ АТРИБУТОВ[,СПИСОК ОПЦИЙ = (MULTIPLE,ESC_NO_ERROR,Код класса)]]]]]"
+   &RESULT        = "СПИСОК ИДЕНТИФИКАТОРОВ ОБЪЕКТА"
+   &SAMPLE        = "ОБЪЕКТ() - вызов браузера объектов класса текущего шаблона ~~n~
+ОБЪЕКТ(НЕТ,'bal-acct','47425','') - для шаблона класса acctb в случае запуска из опердня показывает браузер ~
+всех лицевых счетов, открытых на б/с 2-го порядка 47425~~n~
+ОБЪЕКТ(НЕТ,'bal-acct','47425','','MULTIPLE,ESC_NO_ERROR,acctbi') - показывает браузер ~
+всех лицевых счетов, относящихся к классу acctbi, открытых на б/с 2-го порядка 47425. Первая опция указывает ~
+на возможность выбора нескольких счетов в браузере, вторая указывает на возможность нажатия ESC в браузере без ошибки транзакция, ~
+третья определяет класс, по объектам которого будет запущен браузер.~~n~
+ОБЪЕКТ(НЕТ,'bal-acct' + chr(1) + 'cust-cat' + chr(1) + 'cust-id','47425' + chr(1) + 'Ю' + chr(1) + '299') - ~
+для шаблона класса acctb в случае запуска из опердня показывает браузер всех лицевых, открытых на б/с ~
+2-го порядка 47425 для юридического лица с идентификатором 299"
+   }
+   DEFINE INPUT  PARAMETER iManualChoose  AS LOGICAL    NO-UNDO.
+   DEFINE INPUT  PARAMETER iAttrList      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iValList       AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDisList       AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOptions       AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result     AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok          AS INT64    NO-UNDO.
+
+   DEFINE VARIABLE vTable     AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vSurrogate AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vTmpSur    AS CHARACTER  NO-UNDO.
+
+   DEFINE VARIABLE vMulti     AS LOGICAL    INIT NO   NO-UNDO.
+   DEFINE VARIABLE vEscError  AS LOGICAL    INIT YES  NO-UNDO.
+   DEFINE VARIABLE vClass     AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vUseFlt    AS CHARACTER  NO-UNDO.
+
+   DEFINE VARIABLE vNumOptions AS INT64    NO-UNDO.
+   DEFINE VARIABLE vNumObjects AS INT64    NO-UNDO.
+
+   iOptions = (IF {assigned iOptions} THEN iOptions ELSE "").
+   vNumOptions = NUM-ENTRIES(iOptions).
+
+   IF vNumOptions > 0 THEN vMulti      = ENTRY(1,iOptions) = "MULTIPLE".
+   IF vNumOptions > 1 THEN vEscError   = NOT (ENTRY(2,iOptions) = "ESC_NO_ERROR").
+   IF vNumOptions > 2 THEN vClass      = ENTRY(3,iOptions).
+
+   IF {assigned vClass} OR vMulti OR NOT vEscError THEN iManualChoose = YES.
+
+   /* Commented BY KSV: Берем идентификатор объекта из стека глобальных
+   ** параметров. Устанавливается в OP-MENU.P */
+   IF iManualChoose <> YES THEN
+   DO:
+      vTable      = GetSysConf("oper-filename").
+      vSurrogate  = GetSysConf("oper-surrogate").
+   END.
+
+   IF NOT {assigned vClass} THEN
+   DO:
+      FIND FIRST op-kind-tmpl WHERE
+         op-kind-tmpl.tmpl-id = mTmplID NO-LOCK NO-ERROR.
+      IF AVAILABLE op-kind-tmpl THEN
+         vClass = op-kind-tmpl.work-class-code.
+   END.
+
+   vUseFlt = GetXAttrValueEx ("op-kind-tmpl",STRING(mTmplID),"ИспФильтрУт","?").
+   IF vUseFlt EQ "?" THEN
+      vUseFlt = GetXattrValueEx("op-kind",mOpkind,"ИспФильтрУт","?").
+   IF vUseFlt EQ "?" THEN
+      vUseFlt = fGetSetting  ("ИспФильтр","ИспФильтрУТ","Да").
+
+   /* Commented BY KSV: Если идентифкатор не опредлен, запускаем браузер для
+   ** выбора из него объекта */
+   IF vSurrogate = ? OR iManualChoose THEN
+   DO:
+
+      EMPTY TEMP-TABLE tmprecid.
+
+      DO TRANSACTION:
+         IF vMulti
+         THEN ASSIGN
+            iAttrList = (IF {assigned iAttrList}
+                             THEN iAttrList + CHR(1)
+                             ELSE "") +
+                           "RetRcp~001RetFld~001RetType"
+              iValList  = (IF {assigned iValList}
+                             THEN iValList + CHR(1)
+                             ELSE "") +
+                           STRING (TEMP-TABLE ttRetVal:HANDLE) + CHR(1) +
+                           "Surrogate~001Multi"
+            .
+         /* Обнуляем значения во временной таблице. */
+         EMPTY TEMP-TABLE ttRetVal.
+         
+         /* В зависимости от настройки - отключаем использование пользовательских фильтров */
+         IF vUseFlt EQ "Нет" THEN
+            RUN browseld.p (vClass, 
+                            "MustOffLdFlt|" + (IF {assigned iAttrList} THEN iAttrList ELSE ""),
+                            "YES|"          + (IF {assigned iValList}  THEN iValList ELSE ""),
+                            (IF {assigned iDisList}  THEN iDisList ELSE ""),4).
+         ELSE
+            RUN browseld.p (vClass,
+                            (IF {assigned iAttrList} THEN iAttrList ELSE ""),
+                            (IF {assigned iValList}  THEN iValList ELSE ""),
+                            (IF {assigned iDisList}  THEN iDisList ELSE ""),4).
+         IF LAST-EVENT:FUNCTION NE "END-ERROR" THEN
+         DO:
+            IF vMulti THEN
+            DO:
+               BLCK_MKLST:
+               FOR EACH ttRetVal:
+                  ASSIGN
+                     vSurrogate =   vSurrogate +
+                                    (IF vSurrogate = "" THEN "" ELSE CHR(1)) +
+                                    ttRetVal.PickValue
+                     vNumObjects = vNumObjects + 1
+                  NO-ERROR.
+                  IF ERROR-STATUS:ERROR
+                  THEN DO:
+                        /* Откатываем счетчик на 1-цу, т.к. произошла ошибка. */
+                     vNumObjects = vNumObjects - 1.
+                     RUN Fill-SysMes IN h_tmess (
+                        "", "", "0",
+                        "Список отобранных объектов слишком велик.~n" +
+                        "Будет обработано ~"" + STRING (vNumObjects) + "~" объектов."
+                     ).
+                     LEAVE BLCK_MKLST.
+                  END.
+               END.
+               /* Commented BY KSV: Записываем количество найденных объектов
+               ** в буфер транзакции */
+               RUN AddAttr2TableEx ("",0,-1,"",0,"__NUM-OBJECTS",vNumObjects).
+            END.
+            ELSE
+               IF pick-value <> ? THEN vSurrogate = pick-value.
+         END.
+         ELSE
+            is-ok = IF vEscError THEN -1 ELSE 0.
+      END. /* END OF TRANSACTION */
+      /* Commented BY KSV: Гарантирует, что некорректные значения не попадут
+      ** в браузер документов опердня */
+      EMPTY TEMP-TABLE tmprecid.
+   END.
+   out_result = IF {assigned vSurrogate} THEN vSurrogate ELSE "".
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ЦИКЛ"
+   &DESCRIPTION   = "Запускает транзакцию указанное количество раз. ~
+При каждом запуске транзакции формируется значение переменной __counter, соответвующее номеру текущей ~
+итерации. Для досрочного выхода из функции нужно вызвать функцию СТОПЦИКЛ внутри запускаемой ~
+транзакции. При этом результаты транзакции не будут откатываться."
+   &PARAMETERS    = "КОД ТРАНЗАКЦИИ,НАЧАЛЬНОЕ ЗНАЧЕНИЕ ЦИКЛА,КОНЕЧНОЕ ЗНАЧЕНИЕ ЦИКЛА"
+   &RESULT        = "Результат, возвращенный запускаемой транзакцией"
+   &SAMPLE        = "ЦИКЛ('0601',11,20) - запуск транзакции с кодом 0601 10 раз."
+   }
+   DEFINE INPUT  PARAMETER iOpkind     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iFrom       AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iTo         AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iBar        AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS LOGICAL              .
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64    INIT -1   .
+
+   DEFINE VARIABLE vCnt AS INT64    NO-UNDO.
+   DEFINE VARIABLE vBar AS INTEGER NO-UNDO.
+
+   iOpkind = TRIM(iOpkind,"~"'").
+   IF iFrom = ? THEN iFrom = 1.
+   IF iTo = ?   THEN iTo   = {&BQ-MAX-INT}.
+
+   {&CREATE_TLOOP}
+
+   IF {assigned iBar} THEN
+   DO:
+      IF iBar = "?" THEN
+         iBar = "ОБРАБОТКА " + STRING(iTo - iFrom + 1) + " ОБЪЕКТОВ ТРАНЗАКЦИЕЙ " + QUOTER(iOpKind).
+      RUN InitBarEx(iTo - iFrom + 1,iBar, YES, OUTPUT vBar).
+      RUN ProgressBar(vBar,0).
+   END.
+   TR:
+   DO ON ERROR UNDO TR,LEAVE TR
+      ON STOP  UNDO TR,LEAVE TR:
+
+      DO vCnt = iFrom TO iTo ON ERROR UNDO TR, LEAVE TR:
+         {&GET_LOOPINFO}
+
+         /* Commented BY KSV: Анализируем флаг преждевременного УСПЕШНОГО
+         ** завершения транзакции */
+         IF tLoop.counter < 0 THEN LEAVE.
+
+         ASSIGN
+            tLoop.counter     = vCnt
+            tLoop.dst-op-kind = iOpkind.
+
+         RUN AddAttr2TableEx (iOpkind,0,-1,"",0,"__counter",vCnt).
+         RUN RunTransaction(iOpkind) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN UNDO TR,LEAVE TR.
+         IF {assigned iBar} THEN
+            RUN ProgressBar(vBar,vCnt).
+      END.
+
+      {&DEL_TLOOP}
+
+      ASSIGN
+         is-ok       = 0
+         out_Result  = YES.
+   END.  /* END OF TR BLOCK */
+   IF {assigned iBar} THEN
+      RUN ClearBar(vBar).
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "СТОПЦИКЛ"
+   &DESCRIPTION   = "Останавливает циклическое выполнение транзакции в функциях ГР_ТРАНЗАКЦИЯ и ЦИКЛ. ~
+Если вызов функции встретился в транзакции, не выполняемой в цикле, вызов функции будет проигнорирован."
+   &PARAMETERS    = "[КОД ТРАНЗАКЦИИ = ТЕКУЩАЯ ТРАНЗАКЦИЯ]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "СТОПЦИКЛ('0601') - останавливает циклическое выполнение транзакции 0601"
+   }
+   DEFINE INPUT  PARAMETER iOpkind     AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   iOpkind = IF iOpkind = ? THEN mOpkind ELSE TRIM(iOpkind,"~"'").
+
+   /* Commented BY KSV: Ищем последний цикл, запустивший данную транзакцию
+   ** и устанавливаем для него флаг останова */
+   FOR EACH tLoop WHERE tLoop.dst-op-kind = iOpkind BY tLoop.loop-id DESC:
+      tLoop.counter = -1.
+      RETURN .
+   END. /* END OF FOR */
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "КОД_ТРАНЗ"
+   &DESCRIPTION   = "Возвращает информацию о запущенной транзакции. ~
+В зависимости от параметра УРОВЕНЬ возможно получение информации как о текущей ~
+транзакции, так и обо всех вызвавших ее транзакциях. Уровень, равный 1, указывает ~
+на текущую траназакцию, равный 2 - на вызвавшую ее транзакцию и т.д. Уровень, равный 0, ~
+указывает на самую верхнюю транзакцию в стеке. Параметр АТРИБУТ определяет тип ~
+возвращаемой информации. Допустимы следующие атрибуты: ~~n~
+- OPKIND    - код транзакции; ~~n~
+- OPDATE    - дата опердня; ~~n~
+- TMPLID    - идентификатор шаблона;~~n~
+- PROCHDL   - ссылка на процедуру транзакции."
+   &PARAMETERS    = "[УРОВЕНЬ = 1[,АТРИБУТ = 'OPKIND']]"
+   &RESULT        = "Значение атрибута транзакции"
+   &SAMPLE        = "КОД_ТРАНЗ() - Возвращает код текущей транзакции; ~~n~
+КОД_ТРАНЗ(2,'TMPLID') - Возвращает идентификатор текущего шаблона транзакции, вызвавшей текущую транзакцию; ~~n~
+КОД_ТРАНЗ(0) - Возвращает код самой верхней запущенной транзакции"
+   }
+   DEFINE INPUT  PARAMETER iLevel      AS INT64           NO-UNDO.
+   DEFINE INPUT  PARAMETER iAttribute  AS CHARACTER         NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER         NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64  INIT -1  NO-UNDO.
+
+   out_result = GetCallOpkind(iLevel,iAttribute).
+   is-ok = 0.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ПОДРАЗДЕЛЕНИЕ"
+   &DESCRIPTION   = "Возвращает код подразделения пользователя. Если код пользователя ~
+не задан, возвращается код подразделения текущего пользователя"
+   &PARAMETERS    = "[КОД ПОЛЬЗОВАТЕЛЯ]"
+   &RESULT        = "КОД ПОДРАЗДЕЛЕНИЯ"
+   &SAMPLE        = "ПОДРАЗДЕЛЕНИЕ('KSV') = '002' - подразделение пользователя KSV ~n~
+ПОДРАЗДЕЛЕНИЕ() = '001' - подразделение текущего пользователя"
+   }
+   DEFINE INPUT  PARAMETER iUserID     AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   iUserID = TRIM(iUserID,"~"'").
+   IF iUserID = ? THEN iUserID = USERID("bisquit").
+   out_result = GetUserBranchId(iUserID).
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Интерпретирует параметры реквизита/переменной в точную ссылку
+               на буфер транзакции
+  Parameters:  iOpkind  - код транзакции
+               iOrder   - порядковый номер шаблона
+               oOpkind  - код транзакции для доступа к буферу транзакции
+               oTmplID  - идентификатор шаблона
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE GetAttrParams:
+   DEFINE INPUT  PARAMETER iOpkind  AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder   AS INT64    NO-UNDO.
+   DEFINE OUTPUT PARAMETER oOpkind  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER oTmplID  AS INT64    NO-UNDO.
+
+   DEFINE BUFFER op-kind-tmpl FOR op-kind-tmpl.
+
+   oOpkind = IF iOpkind = ? THEN mOpkind ELSE iOpkind.
+
+   IF iOrder <> ? AND iOrder <> 0 THEN
+   DO:
+      FOR FIRST op-kind-tmpl NO-LOCK WHERE
+         op-kind-tmpl.op-kind = oOpkind AND
+         op-kind-tmpl.order   = iOrder:
+          LEAVE.
+      END. /* END OF FOR */
+      IF NOT AVAILABLE op-kind-tmpl THEN
+      DO:
+         RETURN "trans17".
+      END.
+   END.
+
+   oTmplID = IF iOrder = ? OR iOrder = 0 THEN mTmplID ELSE op-kind-tmpl.tmpl-id.
+
+   IF iOrder = 0 THEN
+      ASSIGN
+         oTmplID = 0
+         oOpkind = "".
+
+   RETURN.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает значение константы
+  Parameters:  iConstant   - идентификатор константы
+               oValue      - возвращаемое значение
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE GetConstant:
+   DEFINE INPUT  PARAMETER iConstant AS CHARACTER                   NO-UNDO.
+   DEFINE OUTPUT PARAMETER oValue    AS CHARACTER INIT {&RET-ERROR} NO-UNDO.
+
+   CASE iConstant:
+      WHEN "__ERROR"  THEN oValue = {&TRANS-ERROR}.
+      WHEN "__OPKIND" THEN oValue = mOpkind.
+      WHEN "__OPDATE" THEN oValue = STRING(mOpDate).
+      WHEN "__USERID" THEN oValue = USERID("bisquit").
+      WHEN "__1"      THEN oValue = "~001". /* Разделитель в атрибутов в функции ОБЪЕКТ */
+      WHEN "__NL"     THEN oValue = "~n".   /* Символ новой строки */
+      WHEN "__PG"     THEN oValue = "~014". /* Символ новой страницы */
+      WHEN "__V"      THEN oValue = CHR(251). /* Крыжик */
+   END CASE.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Возвращает значение переменной/реквизита шаблона
+  Parameters:  iXattrCode  - идентификатор переменной/реквизита шаблона
+               iOrder      - порядковый номер шаблона
+               iOpkind     - код транзакции
+               oValue      - возвращаемое значение
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE GetVariable:
+   DEFINE INPUT  PARAMETER iXattrCode AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iOrder     AS INT64    NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpkind    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER oValue     AS CHARACTER  NO-UNDO.
+
+   DEFINE VARIABLE vOpkind    AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vTmplID    AS INT64    NO-UNDO.
+   DEFINE VARIABLE vObject    AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vGoodValue AS CHARACTER  NO-UNDO.
+
+   vGoodValue = {&RET-ERROR}.
+
+   /* Commented BY KSV: Обработка ряда предопределенных констант */
+   IF iOrder = ? AND iOpkind = ? THEN
+   DO:
+      RUN GetConstant(iXattrCode,OUTPUT oValue).
+      IF oValue <> {&RET-ERROR} THEN RETURN.
+   END.
+
+   RUN GetAttrParams(iOpkind,iOrder,OUTPUT vOpkind,OUTPUT vTmplID).
+   IF RETURN-VALUE <> "" THEN
+   DO:
+      oValue = {&RET-ERROR}.
+      RETURN RETURN-VALUE.
+   END.
+
+   /* Commented BY KSV: GetAttrValue2 нельзя будут потеряны переменные типа
+   ** __counter */
+   oValue = GetAttrValue(vOpkind,vTmplID,iXattrCode).
+
+   /* Commented BY KSV: Если функция вернула значение из буфера транзакции
+   ** анализируем, обрабатывался ли этот атрибут транзакцией или нет */
+   IF oValue <> {&RET-ERROR} THEN
+   DO:
+      /* Commented BY KSV: Получаем хэндл поля набора данных к которому был
+      ** доступ */
+      vObject = GetLastProperty().
+      /* Commented BY KSV: PRIVATE-DATA = FORM-DEF, указывает, что данный
+      ** реквизит обрабатывался транзакцией и был помещен ею в буфер, если
+      ** признак FORM-DEF не найден, то "придерживаем" возврат значения.
+      ** Правило не срабатывает в случае, если шаблон уже обрабатывался методом
+      ** и доступ к реквизиту идет из выражения ВЫПОЛНИТЬ ПОСЛЕ, на это
+      ** указывает наличие реквизита __return.  */
+      IF VALID-HANDLE(vObject)                AND
+         vObject:PRIVATE-DATA <> {&FORM-DEF}  AND
+         GetAttrValue2(vOpkind,vTmplID,"__return") = {&RET-ERROR} THEN
+      DO:
+         vGoodValue = oValue.
+         oValue = {&RET-ERROR}.
+      END.
+   END.
+
+   IF oValue = {&RET-ERROR} AND iOrder = ? AND iOpkind = ? THEN
+      oValue = GetAttrValue("",0,iXattrCode).
+                        /* Если не нашли реквизит ни в буфере шаблона, ни в
+                        ** буфере транзакции, поищем в буфере главного объекта -
+                        ** для случая, когда транзакция запущена из каталога
+                        ** услуг объекта (например, клиента). В этом случае
+                        ** В буфер транзакции добавляется объект типа инстанс
+                        ** с именем __object и кодом транзакции __MAIN. */
+   IF oValue = {&RET-ERROR} AND iOrder = ? AND iOpkind = ? THEN
+      oValue = GetAttrValue("__MAIN",0,iXattrCode).
+
+   /* Commented BY KSV: Если второй вызов безуспешен, но ранее функция уже
+   ** возвращала "хорошее" значение, то возвращаем его */
+   IF oValue = {&RET-ERROR} AND vGoodValue <> {&RET-ERROR} THEN
+      oValue = vGoodValue.
+
+   IF oValue = {&RET-ERROR} THEN RETURN "trans16".
+
+   RETURN .
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:     Устанавливает флаг прерывания для процедуры RunTransaction.
+  Parameters:  iBreakMode - тип прерывания (значения констант BREAK* из
+                            g-trans.equ)
+  Notes:
+------------------------------------------------------------------------------*/
+PROCEDURE SetBreakTrans:
+   DEFINE INPUT  PARAMETER iBreakMode AS INT64    NO-UNDO.
+   mBreak = iBreakMode.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "BREAK"
+   &DESCRIPTION   = "Осуществляет прерывание транзакции с различными вариантами ее завершения.~~n~
+Типы прерывания:~~n~
+1 - прерывает ТОЛЬКО текущую транзакцию с ее откатом, эквивалентно значению 0 в выражении ВЫПОЛНИТЬ ДО/ПОСЛЕ транзакции~~n~
+2 - прерывает ТОЛЬКО текущую транзакцию без ее отката~~n~
+3 - прерывает ВСЕ запущенные транзакции с откатом всех действий, эквивалентно возникновению ошибки (по умолчанию)~~n~
+4 - прерывает ВСЕ запущенные транзакции без отката всех действий"
+   &PARAMETERS    = "[ТИП ПРЕРЫВАНИЯ = 3]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "BREAK() - прервать все транзакции с откатом~~n~
+BREAK(1) - прерывает текущую транзакцию с откатом."
+   }
+   DEFINE INPUT  PARAMETER iBreakMode AS INT64      NO-UNDO.
+   DEFINE INPUT  PARAMETER iBreakMess AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64      NO-UNDO.
+
+   IF iBreakMode = ? THEN iBreakMode = 3.
+   IF iBreakMess <> ? THEN RUN Fill-SysMes IN h_tmess ("", "", "0", iBreakMess).
+   RUN SetBreak IN mProcHdl (iBreakMode) NO-ERROR.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "РЕКВИЗИТ"
+   &DESCRIPTION   = "Возвращает значение реквизита объекта, как основного так и дополнительного. ~
+В случае, если объект с указанным идентификатором не найден в БД и задано значение по умолчанию, то функция вернет это значение. ~
+Если значение по умолчанию не задано, то отсутствие объекта в БД приведет к ошибке выполнения транзакции. Если указанный для объекта ~
+реквизит не найден и задано значение по умолчанию, то функция вернет значение по умолчанию."
+   &PARAMETERS    = "КЛАСС,ИДЕНТИФИКАТОР,КОД РЕКВИЗИТА,ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ"
+   &RESULT        = "ЗНАЧЕНИЕ РЕКВИЗИТА"
+   &SAMPLE        = "РЕКВИЗИТ('acctb','40702810000000000008,','bal-acct') = '40702' - возвращает номер балансового счета 2-го порядка.~~n~
+РЕКВИЗИТ('acctb','40702810000000000008,','Карт2ВнСчет') = '90902810000004567902,' - возвращает номер счета на картотеке 2.~~n~
+РЕКВИЗИТ('code','КодДокум,Паспорт','name',@__error) = 'Паспорт гражданина РФ' - возвращает название документа с кодом 'Паспорт' из классификатора 'КодДокум'.~
+Если документа с таким кодом не будет найдено, то функция вернет константу @__ERROR без прерывания работы транзакции."
+   }
+   DEFINE INPUT  PARAMETER iClass      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iSurrogate  AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDefault    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64    NO-UNDO.
+
+   DEFINE VARIABLE vHBuffer   AS HANDLE     NO-UNDO.
+   DEFINE VARIABLE vOk        AS LOGICAL    NO-UNDO.
+   DEFINE VARIABLE vExtInd    AS INT64      NO-UNDO.
+
+   DEF BUFFER xattr FOR xattr.
+   DEF BUFFER class FOR class.
+
+   {pchkpar iClass iSurrogate iCode}
+
+   MAIN_BLOCK:
+   DO:
+                        /* Обработка реквизитов вида xxx[1] */
+      ASSIGN
+         iCode   = REPLACE(iCode,"]","[")
+         vExtInd = (IF NUM-ENTRIES(iCode,"[") GT 1
+                    THEN INT64(ENTRY(2,iCode,"["))
+                    ELSE 0)
+         iCode   = ENTRY(1,iCode,"[")
+      NO-ERROR.
+                        /* Поиск описания класса и реквизита */
+      FOR FIRST class WHERE class.Class-Code EQ iClass NO-LOCK,
+      FIRST xattr WHERE xattr.Class-Code EQ iClass
+                    AND xattr.Xattr-Code EQ iCode
+      NO-LOCK:
+         LEAVE.
+      END.
+      IF NOT AVAIL xattr THEN LEAVE MAIN_BLOCK.
+
+                        /* Поиск объекта осуществляется и для основного, и
+                        ** для дополнительного реквизита, чтобы проверить
+                        ** наличие объекта в системе. */
+      CREATE BUFFER vHBuffer FOR TABLE class.Progress-Code.
+      vHBuffer:FIND-FIRST("WHERE " + GetWhereSurr(class.Progress-Code,iSurrogate),NO-LOCK) NO-ERROR.
+      IF NOT vHBuffer:AVAILABLE THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "comm01", "", "%s=" + class.Progress-Code + "%s=" + iSurrogate).
+         LEAVE MAIN_BLOCK.
+      END.
+                        /* Получение значения основного реквизита */
+      IF xattr.Progress-Field THEN
+      DO:
+         out_result = STRING(vHBuffer:BUFFER-FIELD(iCode):BUFFER-VALUE(vExtInd)) NO-ERROR.
+         IF ERROR-STATUS:ERROR THEN LEAVE MAIN_BLOCK.
+      END.
+                        /* Получение значения дополнительного реквизита с учетом значения по-умолчанию */
+      ELSE out_result = GetXAttrValueEx(class.Progress-Code,iSurrogate,iCode,IF xattr.static THEN xattr.initial ELSE iDefault).
+
+      vOK = YES.
+   END.
+   IF vOk <> YES THEN
+   DO:
+      IF iDefault = ? THEN
+         is-ok = -1.
+      ELSE
+         out_result = iDefault.
+   END.
+   IF VALID-HANDLE (vHBuffer) THEN DELETE OBJECT vHBuffer.
+   RETURN .
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "РЕКВИЗИТ_НАЧ_ЗН"
+   &DESCRIPTION   = "Возвращает начальное значение реквизита объекта, установленного на метасхеме. ~
+Если реквизит не найден или его начальное значение не определено и задано значение по умолчанию, ~
+то функция вернет значение по умолчанию."
+   &PARAMETERS    = "КЛАСС,КОД РЕКВИЗИТА,ЗНАЧЕНИЕ ПО УМОЛЧАНИЮ"
+   &RESULT        = "НАЧАЛЬНОЕ ЗНАЧЕНИЕ РЕКВИЗИТА"
+   &SAMPLE        = "РЕКВИЗИТ_НАЧ_ЗН('bill-contract','Op-kind_Acct','Bill_acct') = 'New_acct' - возвращает код транзакции открытия счетов."
+   }
+   DEFINE INPUT  PARAMETER iClass      AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iDefault    AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64    NO-UNDO.
+
+   DEFINE VARIABLE vXattrs    AS CHARACTER  NO-UNDO.
+
+   {pchkpar iClass iCode}
+   vXattrs = GetXAttrInit(iClass,iCode).
+   IF vXattrs EQ ?  OR
+      vXattrs EQ "" THEN
+   DO:
+      {pchkpar iDefault}
+      vXattrs = iDefault.
+   END.
+   out_result = vXattrs.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ФЛ_СОХРАНИТЬ_АДРЕС"
+   &DESCRIPTION   = "Сохраняет адрес клиента-физ.лица"
+   &PARAMETERS    = "КОД КЛИЕНТА,АДРЕС"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "ФЛ_СОХРАНИТЬ_АДРЕС(@person-id,@Адрес)"
+   }
+  
+   DEFINE INPUT  PARAMETER iPersonId  AS INT64   NO-UNDO.  
+   DEFINE INPUT  PARAMETER iAddress   AS CHARACTER NO-UNDO.  
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1 NO-UNDO.
+
+   DEFINE BUFFER xperson FOR person.
+
+   {pchkpar iPersonId}
+
+   out_Result = "".
+
+   DO TRANSACTION:
+      FIND FIRST xperson WHERE xperson.person-id = iPersonId EXCLUSIVE-LOCK NO-ERROR NO-WAIT.
+      IF AVAIL xperson THEN
+      DO:
+         xperson.address[1] = iAddress.
+         RELEASE xperson.
+         is-ok = 0.
+      END.
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "РАЗБИТЬ_СТРОКУ"
+   &DESCRIPTION   = "Разбивает строку на несколько частей определенной длины. Возвращает части как одну переменную, где части разделены CHR(1)."
+   &PARAMETERS    = "СТРОКА,КОЛ-ВО ЧАСТЕЙ,ДЛИНА ЧАСТЕЙ"
+   &RESULT        = "СТРОКИ"
+   &SAMPLE        = "РАЗБИТЬ_СТРОКУ('aabbccdd',2,3) = 'aab' + CHR(1) + 'bccdd'"
+   }
+   DEFINE INPUT  PARAMETER iString    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iCount     AS INT64   NO-UNDO.
+   DEFINE INPUT  PARAMETER iLength    AS INT64   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1.
+
+   {wordwrap.def}
+   DEFINE VAR vString AS CHARACTER EXTENT 1000 NO-UNDO.
+   DEFINE VAR vInt    AS INT64   NO-UNDO.
+
+   {pchkpar iCount iLength}
+   IF NOT {assigned iString} THEN iString = "".
+
+   _break_str:
+   DO ON ERROR UNDO _break_str, LEAVE _break_str:
+      vString[1] = iString.
+      {wordwrap.i
+         &s = vString
+         &n = iCount
+         &l = iLength
+      }
+      DO vInt = 1 TO iCount:
+         IF vInt > 1 THEN out_Result = out_Result + CHR(1).
+         out_Result = out_Result + (IF vString[vInt] = ? THEN "" ELSE vString[vInt]).
+      END.
+      is-ok = 0.
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СУММА_ПРОПИСЬЮ"
+   &DESCRIPTION   = "Возвращает сумму прописью."
+   &PARAMETERS    = "СУММА[,ВАЛЮТА]"
+   &RESULT        = "СТРОКА"
+   &SAMPLE        = "СУММА_ПРОПИСЬЮ(125.46) = 125 руб. 46 коп."
+   }
+   DEFINE INPUT  PARAMETER iSumma     AS DECIMAL   NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrency  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1.
+
+   DEFINE VAR vStrSum1 AS CHARACTER NO-UNDO.
+   DEFINE VAR vStrSum2 AS CHARACTER NO-UNDO.
+
+   {pchkpar iSumma}
+   IF iCurrency = ? THEN iCurrency = "".
+
+   DO ON ERROR UNDO, LEAVE:
+      RUN x-amtstr.p (iSumma,iCurrency,YES,YES,OUTPUT vStrSum1, OUTPUT vStrSum2).
+      ASSIGN
+         out_Result = TRIM(vStrSum1 + " " + vStrSum2)
+         is-ok      = 0
+      .
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "НАЙТИ_БАНК_ПО_КОДУ"
+   &DESCRIPTION   = "Возвращает код банка по идентификатору."
+   &PARAMETERS    = "ИДЕНТИФИКАТОР,ТИП ИДЕНТИФИКАТОРА"
+   &RESULT        = "bank-id"
+   &SAMPLE        = "НАЙТИ_БАНК_ПО_КОДУ('044599766','МФО-9') = @bank-id"
+   }
+   DEFINE INPUT  PARAMETER iCode      AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iCodeType  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS INT64   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1.
+
+   DEFINE BUFFER banks FOR banks.
+
+   {pchkpar iCode iCodeType}
+
+   DO ON ERROR UNDO, LEAVE:
+      {getbank.i banks iCode "'МФО-9'"}
+      IF AVAIL banks
+      THEN out_Result = banks.bank-id.
+      ELSE out_Result = ?.
+      is-ok = 0.
+   END.
+
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "T_GET_PARAM"
+   &DESCRIPTION   = "Возвращает информацию из временной таблицы tParam"
+   &PARAMETERS    = "ИМЯ ПЕРЕМЕННОЙ[,МОДУЛЬ[,УСЛОВИЕ]] - ~
+Первый параметр определяет имя передаваемой переменной. ~~n~
+Второй параметр определяет модуль, к которому относится переменная.~~n~
+Третий параметр задает предикат 4GL, который будет использоваться для отбора."
+   &RESULT        = "ЗНАЧЕНИЕ"
+   &SAMPLE        = "T_GET_PARAM('My-T-Param')"
+   }
+
+   DEFINE INPUT  PARAMETER iParamName AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iModule    AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iExtQry    AS CHARACTER          NO-UNDO.
+
+
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER INIT ""  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1  NO-UNDO.
+
+   {pchkpar iParamName}
+
+   out_Result = tGetParam(iParamName, iModule, iExtQry).
+   is-ok = 0.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "T_DEL_PARAM"
+   &DESCRIPTION   = "Очищает информацию из временной таблицы tParam"
+   &PARAMETERS    = "ИМЯ ПЕРЕМЕННОЙ[,МОДУЛЬ[,УСЛОВИЕ]] - ~
+Первый параметр определяет имя передаваемой переменной. ~~n~
+Второй параметр определяет модуль, к которому относится переменная.~~n~
+Третий параметр задает предикат 4GL, который будет использоваться для отбора."
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "T_DEL_PARAM('Dpr-Id','vok')"
+   }
+
+   DEFINE INPUT  PARAMETER iParamName AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iModule    AS CHARACTER          NO-UNDO.
+   DEFINE INPUT  PARAMETER iExtQry    AS CHARACTER          NO-UNDO.
+
+
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER INIT ""  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   INIT -1  NO-UNDO.
+
+   {pchkpar iParamName}
+
+   RUN tDelParam IN h_tparam (iParamName, iModule, iExtQry).
+   is-ok = 0.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СЧЕТЧИК"
+   &DESCRIPTION   = "Возвращает следующее значение счетчика. Если функции передан ~
+параметр ЗНАЧЕНИЕ, то это значение будет установлено в качестве текущего для счетчика. ~~n~
+Функция работает с счетчиками, задаваемыми в классификаторе COUNTERS."
+   &PARAMETERS    = "КОД СЧЕТЧИКА[,ЗНАЧЕНИЕ[,БАЗОВАЯ ДАТА[,ID ПЕРИОДА]]]"
+   &RESULT        = "ЧИСЛО"
+   &SAMPLE        = "СЧЕТЧИК('COUNTER') - возвращает следующее значение счетчика COUNTER. ~~n~
+СЧЕТЧИК('COUNTER',10) - устанавливает для счетчика COUNTER значение 10."
+   }
+   DEFINE INPUT  PARAMETER iCounterCode   AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iValue         AS INT64      NO-UNDO.
+   DEFINE INPUT  PARAMETER iBaseDate      AS DATE       NO-UNDO.
+   DEFINE INPUT  PARAMETER iPeriodCharId  AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result     AS INT64      NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok          AS INT64      NO-UNDO.
+
+   DEF VAR vBaseDate AS DATE   NO-UNDO.
+
+
+   {pchkpar iCounterCode}
+   IF iBaseDate EQ ? THEN iBaseDate = mOpDate.
+
+   out_Result = SetCounterValueEx (iCounterCode,iValue,iBaseDate,iPeriodCharId).
+
+   IF out_Result = ? THEN
+   DO:
+      RUN Fill-SysMes("","","-1",
+                      "Ошибка получения/присвоения значения для счетчика [" +
+                      iCounterCode + "].").
+      is-ok = -1.
+   END.
+END PROCEDURE.
+
+
+/* ' */
+
+{pfuncdef
+   &NAME          = "ПЕЧАТЬ"
+   &DESCRIPTION   = "Печать платежного документа. ~~n~
+Вызывает процедуру, которая должна присутствовать в справочнике ~
+процедур печати 'ПЕЧДОКУМ'. Первый параметр может содержать OP.OP или список, состоящий из OP.OP. ~
+В последнем случае будет произведена групповая печать. ~
+В параметре ПРОЦЕДУРА ПЕЧАТИ можно указать: ~~n~
+1) пустой список - будет выбран список процедур печати из справочника расчетно-денежных документов ~
+(для соответствующего вида документов); ~~n~
+2) имя процедуры печати ~~n~
+3) список имен процедур печати ~~n~~n~
+Если параметр ПРОЦЕДУРА ПЕЧАТИ опущен, то это равносильно пустому списку в качестве значения этого параметра"
+   &PARAMETERS    = "OP.OP[, ПРОЦЕДУРА ПЕЧАТИ]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "ПЕЧАТЬ(@op, 'pp-uni_1,pp-uni')"
+   }
+   DEFINE INPUT  PARAMETER iOp           AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iProc         AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result    AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+
+   iOp = TRIM(iOp).
+
+   {pchkpar iOp}
+
+   DEFINE VARIABLE vItem    AS INT64   NO-UNDO.
+   DEFINE VARIABLE vNameLst AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vCodeLst AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vProc    AS CHARACTER NO-UNDO.
+
+   _preview:
+   DO ON ERROR  UNDO _preview, LEAVE _preview
+      ON ENDKEY UNDO _preview, LEAVE _preview
+      ON STOP   UNDO _preview, LEAVE _preview:
+
+      vProc = iProc.
+      
+      IF NUM-ENTRIES(iOp) GT 1 THEN
+      DO:
+      
+         IF NUM-ENTRIES(vProc) GT 1 THEN
+         DO:
+            vNameLst = "".
+            vCodeLst = "".
+      
+            DO vItem = 1 TO NUM-ENTRIES(vProc):
+               FIND FIRST user-proc WHERE user-proc.PROCEDURE = ENTRY(vItem,vProc)
+                  NO-LOCK NO-ERROR.
+      
+               IF AVAILABLE user-proc THEN
+               DO:
+                  {additem.i vNameLst user-proc.name-proc }
+                  {additem.i vCodeLst ENTRY(vItem,vProc) }
+               END.
+            END.
+            RUN messmenu.p(9, "[Выберите процедуру печати]", "", vNameLst).
+      
+            IF LASTKEY EQ 27 THEN
+               RETURN.
+            vProc = ENTRY(INT64(pick-value), vCodeLst) NO-ERROR.
+      
+         END.
+      
+         ASSIGN
+            FirstPrint   = NO
+            PackagePrint = YES
+            ToSplit      = ?
+         .
+
+         OS-DELETE _spool.tmp .
+      
+         DO vItem = 1 TO NUM-ENTRIES(iOp):
+      
+            RUN CleanTT IN h_print(?).
+            RUN Clear_TTName IN  h_prnvd.
+            OUTPUT TO _txt__spool.tmp PAGED PAGE-SIZE 10000000.
+
+            IF NUM-ENTRIES(vProc) EQ 1 AND vProc NE "" THEN
+               RUN pvPrintOp(ENTRY(vItem, iOp),vProc, OUTPUT is-ok).
+            ELSE
+            DO:
+      
+               IF vProc EQ "" OR vProc EQ ? THEN
+      
+                  FIND FIRST op WHERE op.op EQ INT64(ENTRY(vItem, iOp)) NO-LOCK NO-ERROR.
+      
+                  IF AVAILABLE op THEN
+                  DO:
+      
+                     FIND FIRST doc-type OF op NO-LOCK NO-ERROR.
+      
+                     IF AVAILABLE doc-type AND doc-type.printout NE "" THEN
+                        RUN pvPrintOp(ENTRY(vItem, iOp),doc-type.printout, OUTPUT is-ok).
+      
+                  END.
+               END.
+            OUTPUT CLOSE.
+            RUN op_print_print.
+         END.
+      
+         PackagePrint = NO.
+         {setdest.i  &nodef="/*" &append=" APPEND "}
+         {preview.i}
+         RUN SetSysConf IN h_base("printvd_file","").
+         RUN SetSysConf IN h_base("printvd_options","").
+         RUN SetSysConf IN h_base("DocCount","").
+      END.
+      ELSE
+         RUN pvPrintOp(iOp, vProc, OUTPUT is-ok).
+   END.
+
+&IF DEFINED(SESSION-REMOTE) <> 0 &THEN
+   LASTKEY = -1.
+&ENDIF
+
+END PROCEDURE.
+
+{op-print.pro}
+
+PROCEDURE pvPrintOp:
+   DEFINE INPUT PARAMETER iOp   AS CHARACTER NO-UNDO.
+   DEFINE INPUT PARAMETER iProc AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+
+   DEFINE VARIABLE vOp   AS INT64 NO-UNDO.
+
+   vOp = INT64(iOp) NO-ERROR.
+
+   IF ERROR-STATUS:ERROR THEN
+   DO:
+      RUN Fill-SysMes("","","-1","Ошибочный OP.OP = " + TRIM(iOp)).
+      RETURN.
+   END.
+
+   FIND FIRST op WHERE op.op EQ vOp NO-LOCK NO-ERROR.
+
+   IF AVAILABLE op THEN
+   DO:
+
+      IF iProc EQ "" OR iProc EQ ? THEN
+      DO:
+         {op#.prt &NO_KEYBOARD=YES}
+      END.
+      ELSE IF NUM-ENTRIES(iProc) EQ 1 THEN
+      DO:
+
+         FIND FIRST user-proc WHERE user-proc.PROCEDURE EQ iProc
+            NO-LOCK NO-ERROR.
+
+         IF AVAILABLE user-proc THEN
+         DO:
+            IF    SEARCH(iProc + ".p") NE ?
+               OR SEARCH(iProc + ".r") NE ? THEN
+            DO:
+               RUN SetSysConf IN h_base ("user-proc-id", STRING(RECID(user-proc))).
+               RUN VALUE(iProc + ".p")(RECID(op)).
+               RUN SetSysConf IN h_base ("user-proc-id", "").
+            END.
+            ELSE
+            DO:
+               is-ok = -1.
+               RUN Fill-SysMes("","","-1","Не найден  файл процедуры печати " + iProc).
+            END.
+         END.
+         ELSE
+         DO:
+            is-ok = -1.
+            RUN Fill-SysMes("","","-1","Не найдена процедура печати " + iProc + " в справочнике").
+         END.
+      END.
+      ELSE
+      DO:
+         vRID      = RECID(op).
+         RUN proc-prt.p(iProc).
+         {op#i.prt}
+      END.
+   END.
+   ELSE
+   DO:
+      is-ok = -1.
+      RUN Fill-SysMes("","","-1","Не найден документ (" + "op = " + TRIM(iOp) + ")").
+   END.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "КЛАССИФ"
+   &DESCRIPTION   = "Выбор из классификатора. ~
+Возвращает название, код или значение параметра из классификатора."
+   &PARAMETERS    = "Название классификатора [, Заголовок [,0|1|2 [, поле классификатора]]]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "КЛАCСИФ(BaseFunc) - возврат наименования записи из классификатора BaseFunc ~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ') - возврат наименования записи из ~~n~
+                                        классификатора BaseFunc ~~n~
+                                        (другой заголовок) ~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ', 1) - возврат кода записи из ~~n~
+                                           классификатора BaseFunc ~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ', 0) - возврат наименования записи из ~~n~
+                                           классификатора BaseFunc ~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ', 2) - возврат значения записи из ~~n~
+                                           классификатора BaseFunc ~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ', 3-10) - возврат misc[1] - misc[8] ~~n~
+                                              из классификатора BaseFunc ~~n~~~n~
+КЛАCСИФ(BaseFunc, 'ВЫБЕРИТЕ ФУНКЦИЮ', 11-13) - возврат desription[1] - description[3] ~~n~
+                                              из классификатора BaseFunc ~~n~~~n~
+***запуск без вызова браузера на экран*** ~~n~
+КЛАCСИФ(CNT, '', 1, 2) -     возврат кода записи из классификатора CNT ~~n~
+                             по указанному значению (2) (первый найденный) ~~n~
+КЛАCСИФ(CNT, '', 0, 111) -   возврат наименования записи из классификатора~~n~
+                             CNT по указанному коду (111) ~~n~
+КЛАCСИФ(CNT, '', 2, 111) -   возврат значения записи из классификатора CNT ~~n~
+                             по указанному коду (111)"
+   }
+   DEFINE INPUT  PARAMETER iClassif      AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iTitle        AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iModa         AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iValue        AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result    AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+
+   DEFINE VARIABLE vTitle AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vModa  AS INT64   NO-UNDO.
+
+   iClassif = TRIM(iClassif).
+
+   {pchkpar iClassif}
+
+   IF iTitle EQ "" OR iTitle EQ ? THEN
+      vTitle = 'ВЫБЕРИТЕ ЗАПИСЬ'.
+   ELSE
+      vTitle = iTitle.
+
+   vModa = INT64(iModa) NO-ERROR.
+
+   IF vModa EQ ? THEN
+      vModa = 0.
+
+   IF iValue NE "" AND iValue NE ? THEN
+   DO:
+       /*запуска парсера без вывода броуза классификаторов на экран*/
+
+      CASE vModa:
+         /*возвращаем наименование*/
+         WHEN 0 THEN
+            out_Result = GetCodeName(iClassif, iValue).
+
+         /*возвращает код*/
+         WHEN 1 THEN
+            out_Result = GetCodeVal(iClassif, iValue).
+
+         /*возвращает значение*/
+         WHEN 2 THEN
+            out_Result = GetCode(iClassif, iValue).
+
+         OTHERWISE
+         DO:
+            IF vModa GT 13 THEN
+               out_Result = "".
+            ELSE IF vModa GT 10 THEN
+               out_Result = GetCodeDesc (iClassif, iValue, vModa - 10, "").
+            ELSE         /*возвращает misc[vModa - 2]*/
+               out_Result = GetCodeMisc(iClassif, iValue, vModa - 2).
+         END.
+      END CASE.
+   END.
+   ELSE
+   DO:
+      /*запуск парсера с последующим вызовом броуза*/
+
+      /* Список всех или избранных классификаторов */
+
+      IF CAN-DO ("Д*,Y*",FGetSetting ("БыстрыйВводНазн","КлассПольз","Нет")) THEN
+         RUN fclass.p (iClassif,iClassif,vTitle,6).
+      ELSE
+         RUN pclass.p (iClassif,iClassif,vTitle,6).
+
+      IF     (LASTKEY EQ 10 OR LASTKEY EQ 13)
+         AND pick-value NE ''
+         AND pick-value NE ? THEN
+      DO:
+         out_Result = pick-value.
+
+         IF vModa EQ 0 THEN
+            out_Result = GetCodeName(iClassif, out_Result).
+
+         IF vModa EQ 2 THEN
+            out_Result = GetCode(iClassif, out_Result).
+
+         IF vModa GT 2 AND vModa LT 11 THEN
+            out_Result = GetCodeMisc(iClassif, out_Result, vModa - 2).
+      END.
+   END.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "BRANCHIDNEW"
+   &DESCRIPTION   = "Возвращает следующее значение для элемента оргструктуры."
+   &RESULT        = "ЗНАЧЕНИЕ КОДА ЭЛЕМЕНТА ОРГСТРУКТУРЫ"
+   &SAMPLE        = "BRANCHIDNEW() - возвращает следующее значение для элемента оргструктуры."
+   }
+
+   DEFINE OUTPUT PARAMETER out_Result    AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+
+   out_Result = BranchIdNew().
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СПРАВОЧНИК"
+   &DESCRIPTION   = "Возвращает значение по набору значений критерия."
+   &PARAMETERS    = "Класс объекта,Идентификатор объекта,Код набора критериев,Дата[,Требуется ли отладка (ДА/НЕТ) = НЕТ]"
+   &RESULT        = "Значение по набору критериев"
+   &SAMPLE        = "СПРАВОЧНИК('dep_person_t', 'dps,100_7', 'loan-acct', 01/01/01, Да)"
+   }
+
+   DEFINE INPUT  PARAMETER iClassCode  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iSurrogate  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iRefCode    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iRefDate    AS DATE      NO-UNDO.
+   DEFINE INPUT  PARAMETER iDebug      AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iClassCode iSurrogate iRefCode iRefDate}
+
+   IF iDebug EQ ? THEN
+      iDebug = NO.
+
+   /* Получение значения из справочника. */
+   out_Result = IF iDebug
+                THEN GetRefObjDebug (iClassCode, iSurrogate, iRefCode, iRefDate)
+                ELSE GetRefObj      (iClassCode, iSurrogate, iRefCode, iRefDate).
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СПРАВОЧНИКЗН"
+   &DESCRIPTION   = "Возвращает значение по набору значений критерия."
+   &PARAMETERS    = "Код набора критериев,Значения справочника,[Дата[,Требуется ли отладка (ДА/НЕТ) = НЕТ]]"
+   &RESULT        = "Значение по набору критериев"
+   &SAMPLE        = "СПРАВОЧНИКЗН('loan-acct', '276',DATE('01/01/01'),ДА)"
+   }
+
+   DEFINE INPUT  PARAMETER iRefCode    AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iCrValue    AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iRefDate    AS DATE      NO-UNDO.
+   DEFINE INPUT  PARAMETER iDebug      AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+
+   /* Проверка входных параметров. */
+   {pchkpar iRefCode }
+
+   IF iRefDate EQ ? THEN
+      iRefDate = gend-date.
+   IF iDebug EQ ? THEN
+      iDebug = NO.
+
+   IF iCrValue = ? THEN DO:
+       DEF BUFFER buf_DataBlock FOR DataBlock.
+       DEFINE VARIABLE vFlErr     AS INT64    NO-UNDO.
+
+       FIND LAST buf_DataBlock NO-LOCK 
+           WHERE buf_DataBlock.DataClass-id = iRefCode
+             AND buf_DataBlock.Beg-Date <= iRefDate
+       NO-ERROR .
+       IF NOT AVAILABLE buf_DataBlock THEN DO:
+           {pchkpar iCrValue }
+       END.
+       /* iCrValue = buf_DataBlock.Comment . */
+       RUN ParsMain IN h_parsr (buf_DataBlock.Comment,?,?,OUTPUT vFlErr,OUTPUT iCrValue).
+       MESSAGE 
+           buf_DataBlock.Comment SKIP
+           iCrValue
+           VIEW-AS ALERT-BOX INFO BUTTONS OK.
+       IF vFlErr < 0 THEN
+       DO:
+          RUN Fill-SysMes IN h_tmess ("","trans26","","%s=" + buf_DataBlock.Comment + "%s=" + CAPS(SUBSTR(ENTRY(1,PROGRAM-NAME(1)," "),10))).
+          is-ok = -1.
+          RETURN .
+       END.
+   END.
+
+   /* Получение значения из справочника. */
+   out_Result = IF iDebug
+                THEN GetRefValDebug (iRefCode, iRefDate, iCrValue)
+                ELSE GetRefVal      (iRefCode, iRefDate, iCrValue).
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "СОЗД_СПРАВОЧНИКЗН"
+   &DESCRIPTION   = "Создает запись в универсальном справочнике. Параметры: ~
+1) код универсального справочника, в котором необходимо создать запись; ~
+2) набор значений критериев и значение, которые необходимо сохранить в записи; ~
+3) разделитель значений во втором параметре. Необязательный. Если не задан, то ~
+разделителем считается символ CHR(1); ~
+4) дата, на которую действует справочник, в котором будет создана запись. ~
+Необязательный. Если дата не задана, датой по-умолчанию является дата текущего опер.дня."
+   &PARAMETERS    = "Код справочника,Набор значений критериев[,Разделитель[,Дата]]"
+   &RESULT        = "Флаг успешного создания (1) или ошибки при создании (-1) записи в справочнике"
+   &SAMPLE        = "СОЗД_СПРАВОЧНИКЗН('КодСпр', 'ЗнКрит1~001ЗнКрит2~001Знач'); СОЗД_СПРАВОЧНИКЗН('КодСпр', 'ЗнКрит1|ЗнКрит2|Знач','|')"
+   }
+   DEFINE INPUT  PARAMETER iRefCode    AS CHARACTER NO-UNDO.   /* Код справочника */
+   DEFINE INPUT  PARAMETER iCrValue    AS CHARACTER NO-UNDO.   /* Набор значений критериев */
+   DEFINE INPUT  PARAMETER iCrDelim    AS CHARACTER NO-UNDO.   /* Разделитель */
+   DEFINE INPUT  PARAMETER iRefDate    AS DATE      NO-UNDO.   /* Дата */
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO INIT "-1".
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   MAIN_BLOCK:
+   DO:
+      IF    NOT {assigned iRefCode}
+         OR NOT {assigned iCrValue}
+      THEN DO:
+         is-ok = -1.
+         LEAVE MAIN_BLOCK.
+      END.
+                        /* Устанавливаем дату по-умолчанию (дата ОД), если не задана */
+      IF iRefDate EQ ? THEN
+         iRefDate = gend-date.
+                        /* Если задан разделитель, заменяем его в строке на разделитель CHR(1) */
+      IF {assigned iCrDelim} THEN
+         iCrValue = REPLACE (iCrValue,iCrDelim,CHR(1)).
+                        /* Сохраняем запись справочника */
+      RUN CreateCriterialString IN h_refer (iRefCode, iCrValue, iRefDate) NO-ERROR.
+      IF ERROR-STATUS:ERROR THEN
+      DO:
+         RUN Fill-SysMes IN h_tmess ("", "", "1", RETURN-VALUE + "~n" + 
+                                     "Запись " + QUOTER (REPLACE (iCrValue,CHR(1),"│")) + 
+                                     " не была создана в справочнике " + QUOTER (iRefCode)).
+         LEAVE MAIN_BLOCK.
+      END.
+      ELSE out_Result = "1".
+   END.
+   RETURN.
+END PROCEDURE.
+
+
+/*------------------------------------------------------------------------------
+  Purpose:      код текущего филиала
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "ФИЛИАЛ"
+   &DESCRIPTION   = "Возвращает код филиала"
+   &PARAMETERS    = "НЕТ"
+   &RESULT        = "КОД ФИЛИАЛА"
+   &SAMPLE        = "ФИЛИАЛ() = '002' - код текущего филиала"
+   }
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   out_result = ShFilial.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      код головного филиала
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "ФИЛИАЛГО"
+   &DESCRIPTION   = "Возвращает код головного филиала"
+   &PARAMETERS    = "НЕТ"
+   &RESULT        = "КОД ГОЛОВНОГО ФИЛИАЛА"
+   &SAMPLE        = "ФИЛИАЛ() = '0000' - код головного филиала"
+   }
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   out_result = ShFilHead.
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      код текущего пользователя
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "ПОЛЬЗОВАТЕЛЬ"
+   &DESCRIPTION   = "Возвращает код пользователя"
+   &PARAMETERS    = "НЕТ"
+   &RESULT        = "КОД ПОЛЬЗОВАТЕЛЯ"
+   &SAMPLE        = "ПОЛЬЗОВАТЕЛЬ() = 'SELENA' - код текущего пользователя"
+   }
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   out_result = CAPS(USERID("bisquit")).
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "НАИМ_КЛ"
+   &DESCRIPTION   = "Возвращает наименование субъекта. ~
+Функция имеет 2 необязательных параметра. ~
+Если оба параметра переданы - определяется наименование клиента из параметров. ~
+Если параметры не переданы - в буфере транзакции ищется текущий обрабатываемый ~
+объект (независимо от класса) и определяется наименование клиента этого объекта ~
+(если для данного объекта клиент есть)"
+   &PARAMETERS    = "[ТИП СУБЪЕКТА, ИДЕНТИФИКАТОР СУБЪЕКТА]"
+   &RESULT        = "Наименование субъекта (клиента)"
+   &SAMPLE        = "НАИМ_КЛ ('Ч', 123) ~~n~
+НАИМ_КЛ()"
+   }
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER   NO-UNDO. /* Тип клиента. */
+   DEFINE INPUT  PARAMETER iCustId     AS CHARACTER   NO-UNDO. /* Идентификатор клиента. */
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   DEF VAR vName     AS CHAR   NO-UNDO EXTENT 2.
+   DEF VAR vCustInn  AS CHAR   NO-UNDO.
+   DEF VAR vCustCat  AS CHAR   NO-UNDO.   /* категория клиента */
+   DEF VAR vCustId   AS CHAR   NO-UNDO.   /* идентиф. клиента */
+   DEF VAR vInstance AS HANDLE NO-UNDO.   /* handle на текущий обрабатываемый объект транзакции */
+   DEF VAR vBuffer   AS HANDLE NO-UNDO.   /* буффер текущего обрабатываемого объекта транзакции */
+   
+   ASSIGN
+      vCustCat =  iCustCat
+      vCustId  =  iCustId.
+
+   PROC:
+   DO ON ERROR UNDO PROC, LEAVE PROC:
+      /* параметры функции не заданы */
+      IF    vCustCat EQ ?
+         OR vCustId  EQ ?
+      THEN DO:
+         /* Получить текущий обрабатываемый объект транзакции */
+         vInstance = GetBaseInstance(GetBaseOpkind(), GetBaseTemplate()).
+         /* если handle на объект получен */
+         IF vInstance NE ? THEN DO:
+            /* Найти и спозиционировать буфер */
+            vBuffer = vInstance:DEFAULT-BUFFER-HANDLE NO-ERROR.
+            /* Получить из буфера поля cust-cat и cust-id  */
+            ASSIGN
+               vCustCat = vBuffer:BUFFER-FIELD("cust-cat"):BUFFER-VALUE
+               vCustId  = vBuffer:BUFFER-FIELD("cust-id" ):BUFFER-VALUE
+            NO-ERROR.
+            IF ERROR-STATUS:ERROR THEN DO:
+               RUN Fill-SysMes IN h_tmess ("", "", "-1", "Реквизиты 'Тип клиента' и 'N клиента' не найдены для текущего объекта").
+               is-ok = -1.
+               LEAVE PROC.
+            END.
+         END.
+         ELSE DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", "Нет объекта обрабатываемого транзакцией").
+            is-ok = -1.
+            LEAVE PROC.
+         END.
+      END.
+      
+      RUN GetCustName IN h_base (
+         vCustCat,
+         vCustId,
+         ?,
+         OUTPUT vName [1],
+         OUTPUT vName [2],
+         INPUT-OUTPUT vCustInn
+      ).
+      out_Result = TRIM (vName [1] + " " + vName [2]).
+   END.  /* of PROC block */
+   RETURN.
+END PROCEDURE.
+/*------------------------------------------------------------------------------
+  Purpose:     NEXT-VALUE
+  Parameters:  iSeq - имя т. н. "секвенции"
+  Notes:
+------------------------------------------------------------------------------*/
+
+{pfuncdef
+   &NAME          = "NEXT-VALUE"
+   &DESCRIPTION   = "Следующее значение указанной последовательности." 
+   &PARAMETERS    = "Имя секвенции или таблицы"
+   &RESULT        = "ЗНАЧЕНИЕ"
+   &SAMPLE        = "NEXT-VALUE(person)"
+   }
+
+   DEFINE INPUT PARAMETER iSeq AS CHARACTER NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   DEFINE VARIABLE vInt AS INT64 NO-UNDO.
+   DEFINE VARIABLE vFnd AS LOGICAL NO-UNDO.
+
+   DEFINE BUFFER person FOR person.
+
+   IF (iSeq EQ "person")    OR 
+      (iSeq EQ "person-id") THEN
+   DO:
+
+      vInt = NEXT-VALUE(person-id) .
+
+      FIND FIRST person WHERE person.person-id EQ vInt NO-LOCK NO-ERROR.
+
+      IF AVAILABLE person THEN
+
+         DO WHILE YES:
+            &IF DEFINED(ORACLE) &THEN
+               ORA-SET-CURRENT-VALUE("person-id",person.person-id).
+            &ELSE
+               CURRENT-VALUE(person-id) = person.person-id.
+            &ENDIF
+            vInt = NEXT-VALUE(person-id) NO-ERROR.
+
+            FIND FIRST person WHERE person.person-id EQ vInt NO-LOCK NO-ERROR.
+            
+            IF NOT AVAILABLE person THEN
+               LEAVE.
+
+         END.
+
+      out_Result = STRING(vInt).
+   END.
+
+   IF (iSeq EQ "cust-corp") OR
+      (iSeq EQ "cust-id")   THEN
+   DO:
+
+      vInt = NEXT-VALUE(cust-id) .
+
+      FIND FIRST cust-corp WHERE cust-corp.cust-id EQ vInt NO-LOCK NO-ERROR.
+
+      IF AVAILABLE cust-corp THEN
+
+         DO WHILE YES:
+            &IF DEFINED(ORACLE) &THEN
+               ORA-SET-CURRENT-VALUE("cust-id",cust-corp.cust-id).
+            &ELSE
+               CURRENT-VALUE(cust-id) = cust-corp.cust-id.
+            &ENDIF
+            vInt = NEXT-VALUE(cust-id) NO-ERROR.
+
+            FIND FIRST cust-corp WHERE cust-corp.cust-id EQ vInt NO-LOCK NO-ERROR.
+            
+            IF NOT AVAILABLE cust-corp THEN
+               LEAVE.
+
+         END.
+
+      out_Result = STRING(vInt).
+   END.
+   
+   IF (iSeq EQ "op")    OR
+      (iSeq EQ "op-id") THEN
+   DO:
+      vInt = NEXT-VALUE(op-id) .
+
+      FIND FIRST op WHERE op.op EQ vInt NO-LOCK NO-ERROR.
+      IF AVAILABLE op THEN
+         DO WHILE YES:
+            &IF DEFINED(ORACLE) &THEN
+               ORA-SET-CURRENT-VALUE("op-id",op.op).
+            &ELSE
+               CURRENT-VALUE(op-id) = op.op.
+            &ENDIF
+            vInt = NEXT-VALUE(op-id) NO-ERROR.
+            FIND FIRST op WHERE op.op EQ vInt NO-LOCK NO-ERROR.
+            IF NOT AVAILABLE op THEN
+               LEAVE.
+         END.
+
+      out_Result = STRING(vInt).
+   END.   
+
+   IF (iSeq EQ "pack-id")    OR
+      (iSeq EQ "Packet")     OR
+      (iSeq EQ "PackObject") OR
+      (iSeq EQ "PacketText") 
+   THEN
+   DO:
+      vInt = NEXT-VALUE(pack-id) .
+
+      DO WHILE TRUE:
+         FIND FIRST Packet WHERE Packet.PacketID EQ vInt NO-LOCK NO-ERROR.
+         vFnd = AVAIL Packet.
+         IF NOT vFnd THEN
+         DO:
+            FIND FIRST PackObject WHERE PackObject.PackObjectID EQ vInt NO-LOCK NO-ERROR.
+            vFnd = AVAIL PackObject.
+         END.
+         IF NOT vFnd THEN
+         DO:
+            FIND FIRST PacketText WHERE PacketText.PacketTextId EQ vInt NO-LOCK NO-ERROR.
+            vFnd = AVAIL PacketText.
+         END.
+         IF vFnd THEN
+         DO:
+            &IF DEFINED(ORACLE) &THEN
+               ORA-SET-CURRENT-VALUE("pack-id",vInt).
+            &ELSE
+               CURRENT-VALUE(pack-id) = vInt.
+            &ENDIF
+            vInt = NEXT-VALUE(pack-id).
+         END.
+         ELSE
+            LEAVE.
+      END. /* DO WHILE */
+
+      out_Result = STRING(vInt).
+   END. 
+
+   IF (iSeq EQ "mail-user-num") THEN
+   DO:
+      vInt = NEXT-VALUE(mail-user-num).
+
+      FIND FIRST mail-user WHERE mail-user.mail-user-num EQ vInt NO-LOCK NO-ERROR.
+      IF AVAILABLE mail-user THEN
+         DO WHILE YES:
+            &IF DEFINED(ORACLE) &THEN
+               ORA-SET-CURRENT-VALUE("mail-user-num",mail-user.mail-user-num).
+            &ELSE
+               CURRENT-VALUE(mail-user-num) = mail-user.mail-user-num.
+            &ENDIF
+            vInt = NEXT-VALUE(mail-user-num) NO-ERROR.
+            FIND FIRST mail-user WHERE mail-user.mail-user-num EQ vInt NO-LOCK NO-ERROR.
+            IF NOT AVAILABLE mail-user THEN
+               LEAVE.
+         END.
+
+      out_Result = STRING(vInt).
+   END.   
+
+   IF NOT {assigned out_Result} THEN
+      out_Result = STRING( DYNAMIC-NEXT-VALUE( iSeq, "bisquit" ) ) NO-ERROR.
+
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      Устанавливает значение роль субъекта "клиент" / "нет".
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "РОЛЬСУБ"
+   &DESCRIPTION   = "Устанавливает значение роль субъекта 'клиент' / 'нет'."
+   &PARAMETERS    = "Указатель на объект,Тип клиента,Клиент / не клиент"
+   &RESULT        = "УСПЕШНО/НЕУСПЕШНО"
+   &SAMPLE        = "РОЛЬСУБ(@__object, 'Ч', НЕТ)"
+   }
+   DEFINE INPUT  PARAMETER iObject     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iClType     AS CHARACTER  NO-UNDO.
+   DEFINE INPUT  PARAMETER iClNCl      AS LOGICAL    NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   DEFINE VARIABLE vBuffer AS HANDLE NO-UNDO.
+
+   out_result = "0".
+   vBuffer = WIDGET-HANDLE(iObject) NO-ERROR.
+   vBuffer = vBuffer:DEFAULT-BUFFER-HANDLE.
+
+   IF ERROR-STATUS:ERROR THEN
+      RETURN.
+
+   RUN SetClientRole IN h_cust(vBuffer, iClType, iClNCl) NO-ERROR.
+
+   IF ERROR-STATUS:ERROR THEN
+      out_result = "0".
+   ELSE
+      out_result = "1".
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      Создание дополнительной связи
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "СОЗДАТЬ_СВЯЗЬ"
+   &DESCRIPTION   = "Создает связь между объектами"
+   &PARAMETERS    = "Класс объекта,КодСвязи,СурогатОбъекта,СурогатОбъекта2,ЗначениеСвязи[,ДатаНачала = ДАТА()[,ДатаОкончания]]"
+   &RESULT        = "Возвращает признак успешного создания связи"
+   &SAMPLE        = "Создать_Связь('oppd','PnTrans',@op,@xop,'',01/01/07,01/01/08)"
+   }
+  
+   DEFINE INPUT  PARAMETER iClassName AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iLinkName  AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iSurr1     AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iSurr2     AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iLinkVal   AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iBegDate   AS DATE      NO-UNDO.
+   DEFINE INPUT  PARAMETER iEndDate   AS DATE      NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   NO-UNDO.
+
+   iClassName = TRIM(iClassName, "~"'").
+   iLinkName  = TRIM(iLinkName,  "~"'").
+   IF iBegDate EQ ? THEN iBegDate = gend-date.
+
+   RUN CreateLinks(iClassName,
+                   iLinkName,
+                   iSurr1,
+                   iSurr2,
+                   iBegDate,
+                   iEndDate,
+                   iLinkVal).
+
+   IF GetLinks(iClassName,
+              iSurr1,
+              ?,
+              iLinkName,
+              "~n",
+               ?) > ""  
+      THEN 
+         ASSIGN 
+            out_Result = YES
+            is-ok      = 0
+         .
+   ELSE 
+   DO:
+      ASSIGN 
+         out_Result = NO
+         is-ok      = -1.
+      RUN Fill-SysMes("","","-1","Не удалось создать связь " + iLinkName + " класса " 
+                                  + iClassName).
+      RETURN ERROR.
+   END.
+
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      Создание дополнительных связей
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "СОЗДАТЬ_СВЯЗИ"
+   &DESCRIPTION   = "Создает связи между объектам и несколькими объектами"
+   &PARAMETERS    = "Класс объекта,КодСвязи,СурогатОбъекта,СписокСурогатов,ЗначениеСвязи[,ДатаНачала = ДАТА()[,ДатаОкончания]]"
+   &RESULT        = "Возвращает признак успешного создания связи"
+   &SAMPLE        = "Создать_Связи('oppd','PnTrans',@op,@xop,'',01/01/07,01/01/08)"
+   }
+  
+   DEFINE INPUT  PARAMETER iClassName AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iLinkName  AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iSurrList  AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iSurr      AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iLinkCode  AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iBegDate   AS DATE      NO-UNDO.
+   DEFINE INPUT  PARAMETER iEndDate   AS DATE      NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS LOGICAL   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   NO-UNDO.
+
+   DEFINE VARIABLE mItem AS INT64 NO-UNDO.
+
+   IF iBegDate EQ ? THEN iBegDate = gend-date.
+
+   ASSIGN 
+      out_Result = YES
+      is-ok      = 0
+   .
+
+   DO mItem = 1 TO NUM-ENTRIES(iSurrList):
+       RUN PARSFUNC-СОЗДАТЬ_СВЯЗЬ(iClassName, 
+                                  iLinkName, 
+                                  ENTRY(mItem,iSurrList), 
+                                  iSurr,
+                                  iLinkCode, 
+                                  iBegDate,
+                                  iEndDate,
+                                  OUTPUT out_Result, 
+                                  OUTPUT is-ok) NO-ERROR.
+
+       IF ERROR-STATUS:ERROR THEN
+       DO:
+
+          ASSIGN 
+             out_Result = NO
+             is-ok      = -1
+          .
+          /*RUN Fill-SysMes("","","-1","Не удалось создать связь " + iLinkName + " класса " 
+                                      + iClassName).*/
+          RETURN ERROR.
+       END.
+   END.
+
+END PROCEDURE.
+
+/*------------------------------------------------------------------------------
+  Purpose:      Дополнительные связи
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "СВЯЗЬ"
+   &DESCRIPTION   = "Получить дополнительную связь"
+   &PARAMETERS    = "Класс объекта,КодСвязи,СурогатОбъекта"
+   &RESULT        = "Возвращает сурогат связанного объекта (если несколько, то список)"
+   &SAMPLE        = "Связь('oppd','PnTrans',@op)"
+   }
+  
+   DEFINE INPUT  PARAMETER iClassName AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iLinkName  AS CHARACTER NO-UNDO.  
+   DEFINE INPUT  PARAMETER iSurr      AS CHARACTER NO-UNDO.  
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   NO-UNDO.
+
+   iClassName = TRIM(iClassName, "~"'").
+   iLinkName  = TRIM(iLinkName,  "~"'").
+
+   out_Result =  GetLinks(iClassName,
+                          iSurr,
+                          ?,
+                          iLinkName,
+                          ",",
+                          ?).
+   is-ok = 0.
+
+END PROCEDURE.
+
+
+/*------------------------------------------------------------------------------
+  Purpose:      к/с банка в РКЦ
+  Parameters:  <none>
+  Notes:
+------------------------------------------------------------------------------*/
+{pfuncdef
+   &NAME          = "КОРСЧЕТ"
+   &DESCRIPTION   = "Получить к/с банка в РКЦ"
+   &PARAMETERS    = "bank-id[,ОШИБКА ЕСЛИ НЕ НАЙДЕН = ДА]"
+   &RESULT        = "Возвращает к/с"
+   &SAMPLE        = "Корсчет(@bank-id(10))"
+   }
+  
+   DEFINE INPUT  PARAMETER iBankId    AS INT64   NO-UNDO.  
+   DEFINE INPUT  PARAMETER iErrIfNotFound AS LOGICAL   NO-UNDO.  
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64   NO-UNDO.
+
+
+   FIND FIRST banks-corr WHERE banks-corr.bank-corr EQ iBankId 
+                           AND CAN-FIND(FIRST banks OF banks-corr WHERE banks.flag-rkc)
+      NO-LOCK NO-ERROR.
+
+   IF NOT AVAILABLE banks-corr THEN
+   DO:
+      out_Result = "".
+      IF iErrIfNotFound = ? THEN iErrIfNotFound = YES.
+      IF iErrIfNotFound THEN DO:
+      is-ok      = -1.
+      RUN Fill-SysMes("","","-1","Не найден к/с банка " + STRING(iBankId)).
+   END.
+      ELSE DO:
+         ASSIGN
+            out_Result = ""
+            is-ok      = 0
+         .
+         RETURN.
+      END.
+   END.
+
+   out_Result = banks-corr.corr-acct.
+   is-ok = 0.
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "ДатаОС"
+   &DESCRIPTION   = "Возвращает общесистемные даты."
+   &PARAMETERS    = "В качестве параметра необходимо указать тип даты:
+'ГН' - дата начала глобального периода,
+'ГО' - дата окончания глобального периода"
+   &RESULT        = "Дата"
+   &SAMPLE        = "ДатаОС('ГН') - вернет дату начала глобального периода"
+   }
+   DEFINE INPUT  PARAMETER iDateType     AS CHARACTER NO-UNDO. /* Тип даты. */
+   DEFINE OUTPUT PARAMETER out_Result    AS DATE      NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok         AS INT64   NO-UNDO.
+
+   CASE iDateType:
+      WHEN "ГН"   THEN  out_Result  =  gBeg-Date.
+      WHEN "ГО"   THEN  out_Result  =  gEnd-Date.
+      OTHERWISE         out_Result  =  ?.
+   END CASE.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "GET_CODE_MISC"
+   &DESCRIPTION   = "Возврашает значение, расширения классификатора (code.misc[i]) ~n i принимает значения от 1 до 8 "
+   &PARAMETERS    = "Название классификатора,Код параметра[, код расширения]"
+   &RESULT        = "Значение, расширения классификатора (code.misc[i])"
+   &SAMPLE        = "GET_CODE_MISC('ТипыКарт','VISA',1)"
+   }
+   DEFINE INPUT  PARAMETER iClass      AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iMisc       AS INT64     NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   {pchkpar iClass iCode}
+
+   iMisc = IF iMisc < 1 THEN 1 ELSE iMisc.
+   iMisc = IF iMisc > 8 THEN 8 ELSE iMisc.
+
+   out_Result = GetCodeMisc(iClass,iCode,IF iMisc EQ ? THEN 1 ELSE iMisc).
+   is-ok      = 0.
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "РЕЗИДЕНТ"
+   &DESCRIPTION   = "Проверяет, является ли резидентом указанный клиент. ~
+Возможны 2 параметра - Тип клиента и Код клиента - оба необязательны. ~
+Если оба параметра переданы - определяется резидентность клиента из параметров. ~
+Если параметры не переданы - в буфере транзакции ищется текущий ~
+обрабатываемый объект (независимо от класса) и определяется резидентность ~
+клиента этого объекта (если для данного объекта клиент есть)"
+   &PARAMETERS    = "[ТИП СУБЪЕКТА, ИДЕНТИФИКАТОР СУБЪЕКТА]"
+   &RESULT        = "ДА, если субъект - резидент; НЕТ - в ином случае"
+   &SAMPLE        = "РЕЗИДЕНТ ('Ч', 123) - определить резидентность ~
+физического лица с кодом 123. ~~n~
+РЕЗИДЕНТ() - поличить параметры клиента из текущего обрабатываемого транзакцией ~
+объекта в буфере транзакции и определить его резинтность."
+   }
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER   NO-UNDO. /* Тип клиента. */
+   DEFINE INPUT  PARAMETER iCustId     AS CHARACTER   NO-UNDO. /* Идентификатор клиента. */
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64     NO-UNDO.
+
+   DEF VAR vName     AS CHAR   NO-UNDO EXTENT 2.
+   DEF VAR vSCountry  AS CHAR  NO-UNDO.   /* Значение настроечного параметра КодРез */
+   DEF VAR vCCountry AS CHAR   NO-UNDO.   /* страна клиента */
+   DEF VAR vCustCat  AS CHAR   NO-UNDO.   /* категория клиента */
+   DEF VAR vCustId   AS CHAR   NO-UNDO.   /* идентиф. клиента */
+   DEF VAR vInstance AS HANDLE NO-UNDO.   /* handle на текущий обрабатываемый объект транзакции */
+   DEF VAR vBuffer   AS HANDLE NO-UNDO.   /* буффер текущего обрабатываемого объекта транзакции */
+   
+   ASSIGN
+      vCustCat =  iCustCat
+      vCustId  =  iCustId.
+
+   PROC:
+   DO ON ERROR UNDO PROC, LEAVE PROC:
+      /* параметры функции не заданы */
+      IF    vCustCat EQ ?
+         OR vCustId  EQ ?
+      THEN DO:
+         /* Получить текущий обрабатываемый объект транзакции */
+         vInstance = GetBaseInstance(GetBaseOpkind(), GetBaseTemplate()).
+         /* если handle на объект получен */
+         IF vInstance NE ? THEN DO:
+            /* Найти и спозиционировать буфер */
+            vBuffer = vInstance:DEFAULT-BUFFER-HANDLE NO-ERROR.
+            /* Получить из буфера поля cust-cat и cust-id  */
+            ASSIGN
+               vCustCat = vBuffer:BUFFER-FIELD("cust-cat"):BUFFER-VALUE
+               vCustId  = vBuffer:BUFFER-FIELD("cust-id" ):BUFFER-VALUE
+            NO-ERROR.
+            IF ERROR-STATUS:ERROR THEN DO:
+               RUN Fill-SysMes IN h_tmess ("", "", "-1", "Реквизиты 'Тип клиента' и 'N клиента' не найдены для текущего объекта").
+               is-ok = -1.
+               LEAVE PROC.
+            END.
+         END.
+         ELSE DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", "Нет объекта обрабатываемого транзакцией").
+            is-ok = -1.
+            LEAVE PROC.
+         END.
+      END.
+   
+      /* определяем код страны резиденства */
+      vSCountry = FGetSetting("КодРез",?,"RUS").
+      
+      /* По iCustCat определяем таблицу */
+      CASE vCustCat:
+         /* находим реквизит Субъект клиента */
+         WHEN "Ч" THEN DO:
+            FIND FIRST person WHERE person.person-id EQ INT64(vCustId) NO-LOCK NO-ERROR.
+            IF AVAILABLE person THEN vCCountry = person.country-id.
+         END.
+         WHEN "Ю" THEN DO:
+            FIND FIRST cust-corp WHERE cust-corp.cust-id EQ INT64(vCustId) NO-LOCK NO-ERROR.
+            IF AVAILABLE cust-corp THEN vCCountry = cust-corp.country-id.
+         END.
+         WHEN "Б" THEN DO:
+            FIND FIRST banks WHERE banks.bank-id EQ INT64(vCustId) NO-LOCK NO-ERROR.
+            IF AVAILABLE banks THEN vCCountry = banks.country-id.
+         END.
+      END CASE.
+   
+      IF vCCountry NE "" THEN
+      /* определяем резидентность клиента */
+         IF vCCountry EQ vSCountry THEN out_Result = "ДА".
+         ELSE out_Result = "НЕТ".
+   END.  /* of PROC block */
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "КОПИР_ДР"
+   &DESCRIPTION   = "Копирует все допреквизиты одного объекта в другой"
+   &PARAMETERS    = "КЛАСС,ОБЪЕКТ-ИСТОЧНИК,ОБЪЕКТ-ПРИЕМНИК"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "КОПИР_ДР('acctb', '40702810300020000435,', '40702810600020007469,')"
+}
+
+   DEFINE INPUT  PARAMETER iClassCode  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iSourceSurr AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iTargetSurr AS CHARACTER NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+
+   RUN CopySigns IN h_xclass (iClassCode,
+                              iSourceSurr,
+                              iClassCode,
+                              iTargetSurr)
+      NO-ERROR.
+
+   ASSIGN
+      out_Result = ""
+      is-ok      = 0
+   .
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "PUBLISH"
+   &DESCRIPTION   = "Публикует событие"
+   &PARAMETERS    = "СОБЫТИЕ, [ПАРАМЕТРЫ]"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "PUBLISH('NEW-ACCT-CREATED', '40702810300020000435')"
+}
+
+   DEFINE INPUT  PARAMETER iEventName  AS CHARACTER NO-UNDO.
+   DEFINE INPUT  PARAMETER iEventPars  AS CHARACTER NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+
+   IF iEventPars EQ ? THEN
+      PUBLISH iEventName.
+   ELSE
+      PUBLISH iEventName (INPUT iEventPars).
+
+   ASSIGN
+      out_Result = ""
+      is-ok      = 0
+   .
+END PROCEDURE.
+
+/*"'*/
+{pfuncdef
+   &NAME          = "КассЗаявка"
+   &DESCRIPTION   = "Возвращает признак наличия кассовой заявки. Дата по умолчанию - дата опердня."
+   &PARAMETERS    = "Счет[,Дата]"
+   &RESULT        = "Наличие кассовой заявки"
+   &SAMPLE        = "КассЗаявка(30302810000000000001,DATE('01/01/01'))"
+   }
+
+   DEFINE INPUT  PARAMETER iAcct       AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iRefDate    AS DATE                 NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   INITIAL 0  NO-UNDO.
+
+   DEFINE VARIABLE mContract AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE mContCode AS CHARACTER NO-UNDO.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iAcct}
+   out_Result = "Нет".
+
+   IF iRefDate EQ ? THEN
+      iRefDate = gend-date.
+
+   FOR EACH loan WHERE CAN-DO("loancsreq,loanr", loan.class-code)
+                   AND loan.contract  EQ "Расчет" 
+                   AND loan.open-date LE iRefDate NO-LOCK,
+       LAST loan-acct WHERE loan-acct.contract  EQ loan.contract
+                        AND loan-acct.cont-code EQ loan.cont-code
+                        AND loan-acct.acct-type EQ loan.contract
+                        AND loan-acct.since     LE iRefDate
+                        AND loan-acct.acct      EQ iAcct
+      NO-LOCK:
+      ASSIGN
+         mContract = loan.contract
+         mContCode = loan.cont-code
+      .
+      LEAVE.
+   END.
+
+   IF mContCode NE "" THEN
+   DO:
+      is-ok = 0.
+      FIND FIRST loan WHERE loan.parent-cont-code EQ mContCode
+                        AND loan.parent-contract  EQ mContract
+                        AND loan.open-date        LE iRefDate
+                        AND loan.close-date       GE iRefDate
+         NO-LOCK NO-ERROR.
+ 
+      IF AVAILABLE loan THEN
+         out_Result = "Есть".
+   END.
+ 
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "Del_op-entry"
+   &DESCRIPTION   = "Удаляет проводку"
+   &PARAMETERS    = "op,op-entry"
+   &RESULT        = "код возврата (1 - удачно, 0 - неудачно)"
+   &SAMPLE        = "Del_op-entry(@iOp, @iOp-Entry)"
+   }
+
+   DEFINE INPUT  PARAMETER iOp         AS INT64              NO-UNDO.
+   DEFINE INPUT  PARAMETER iOpEntry    AS INT64              NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS INT64              NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   INITIAL 0  NO-UNDO.
+
+   DEFINE VARIABLE mContract AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE mContCode AS CHARACTER NO-UNDO.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iOp iOpEntry}
+   out_Result = 0.
+
+   FIND FIRST op-entry WHERE op-entry.op EQ iOp 
+                         AND op-entry.op-entry EQ iOpEntry
+      EXCLUSIVE-LOCK NO-ERROR NO-WAIT.
+
+   IF NOT AVAILABLE op-entry THEN
+      RETURN.
+
+   DELETE op-entry.
+   out_Result = 1.
+   is-ok      = 0.
+ 
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "AddFilToAcct"
+   &DESCRIPTION   = "Добавить код филиала к номеру счета"
+   &PARAMETERS    = "acct[, codeFil]"
+   &RESULT        = "Номер счета с кодом филиала (если последний требуется)"
+   &SAMPLE        = "AddFilToAcct('20202810000050000002')"
+   }
+
+   DEFINE INPUT  PARAMETER iAcct       AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iFil        AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   INITIAL 0  NO-UNDO.
+
+   DEFINE VARIABLE vFil AS CHARACTER NO-UNDO.
+
+   vFil = ShFilial.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iAcct}
+
+   IF {assigned iFil} THEN
+      vFil = iFil.
+
+   out_Result = AddFilToAcct(iAcct, vFil).
+   is-ok      = 0.
+ 
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "SetSysConf"
+   &DESCRIPTION   = "Сохранить переменную во внутренней таблице. Если значение не указано, то это означает удаление переменной."
+   &PARAMETERS    = "Код [, значение]"
+   &RESULT        = "Предыдущее значение"
+   &SAMPLE        = "SetSysConf('_cblc2_2_opo_surr', @kau)"
+   }
+
+   DEFINE INPUT  PARAMETER iCode       AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iVal        AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   INITIAL 0  NO-UNDO.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iCode}
+
+   IF iVal EQ ? THEN
+      iVal = "".
+
+   out_Result = GetSysConf(iCode).
+
+   IF out_Result EQ ? THEN
+      out_Result = "".
+
+   RUN SetSysConf IN h_base (iCode, iVal).
+   is-ok      = 0.
+ 
+   RETURN.
+END PROCEDURE.
+
+
+
+{pfuncdef
+   &NAME          = "KAU-POS"
+   &DESCRIPTION   = "Остатки и обороты по субсчету acct, currency, kau"
+   &PARAMETERS    = "СЧЕТ, ВАЛЮТА,ДАТА НАЧАЛО,ДАТА ОКОНЧАНИЕ,СТАТУС,КОД АНАЛИТИЧЕСКОГО УЧЕТА"
+   &RESULT        = "@__ksh-bal - остаток в национальной валюте, @__ksh-val - остаток в валюте счета. "
+   &SAMPLE        = "KAU-POS('20207840900020000000','840,'25/05/1978','03/11/2009','Ф','321')"
+   }
+
+   DEFINE INPUT  PARAMETER iAcct       AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrency   AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate_1     AS DATE                 NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate_2     AS DATE                 NO-UNDO.
+   DEFINE INPUT  PARAMETER iStatus     AS CHARACTER            NO-UNDO.
+   DEFINE INPUT  PARAMETER iKau        AS CHARACTER            NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER            NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   INITIAL 0  NO-UNDO.
+
+   /* Проверка входных параметров. */
+
+   {pchkpar iAcct iCurrency iDate_1 iDate_2 iStatus iKau}
+
+   RUN kau-pos IN h_kau (iAcct,iCurrency,iDate_1,iDate_2,iStatus,iKau).
+
+   RUN AddAttr2TableEx("",
+                       0,
+                       -1,
+                       "",
+                       0,
+                       "__ksh-bal",
+                       STRING(ksh-bal)).
+   RUN AddAttr2TableEx("",
+                       0,
+                       -1,
+                       "",
+                       0,
+                       "__ksh-val",
+                       STRING(ksh-val)).
+   
+   out_Result = "".
+   is-ok      = 0.
+ 
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "PARSSTR"
+   &DESCRIPTION   = "Обработка парсерного выражения"
+   &PARAMETERS    = "q"
+   &RESULT        = "q"
+   &SAMPLE        = "q"
+   }
+   DEFINE INPUT  PARAMETER iParsStr    AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64   NO-UNDO.
+   DEFINE VARIABLE vFlErr     AS INT64    NO-UNDO.
+   
+       RUN ParsMain IN h_parsr (iParsStr,?,?,OUTPUT vFlErr,OUTPUT out_Result).
+
+       IF vFlErr < 0 THEN
+       DO:
+          RUN Fill-SysMes IN h_tmess ("","trans26","","%s=" + iParsStr + "%s=" + CAPS(SUBSTR(ENTRY(1,PROGRAM-NAME(1)," "),10))).
+          is-ok = -1.
+          RETURN .
+       END.
+       is-ok = 0.
+       RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "КР_НАИМ_КЛ"
+   &DESCRIPTION   = "Возвращает краткое наименование субъекта. ~
+Функция имеет 2 необязательных параметра. ~
+Если оба параметра переданы - определяется наименование клиента из параметров. ~
+Если параметры не переданы - в буфере транзакции ищется текущий обрабатываемый ~
+объект (независимо от класса) и определяется наименование клиента этого объекта ~
+(если для данного объекта клиент есть)"
+   &PARAMETERS    = "[ТИП СУБЪЕКТА, ИДЕНТИФИКАТОР СУБЪЕКТА]"
+   &RESULT        = "Краткое Наименование субъекта (клиента)"
+   &SAMPLE        = "КР_НАИМ_КЛ ('Ч', 123) ~~n~
+КР_НАИМ_КЛ()"
+   }
+   DEFINE INPUT  PARAMETER iCustCat    AS CHARACTER   NO-UNDO. /* Тип клиента. */
+   DEFINE INPUT  PARAMETER iCustId     AS CHARACTER   NO-UNDO. /* Идентификатор клиента. */
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64       NO-UNDO.
+
+   DEF VAR vName     AS CHAR   NO-UNDO.
+   DEF VAR vCustCat  AS CHAR   NO-UNDO.   /* категория клиента */
+   DEF VAR vCustId   AS CHAR   NO-UNDO.   /* идентиф. клиента */
+   DEF VAR vInstance AS HANDLE NO-UNDO.   /* handle на текущий обрабатываемый объект транзакции */
+   DEF VAR vBuffer   AS HANDLE NO-UNDO.   /* буффер текущего обрабатываемого объекта транзакции */
+
+   ASSIGN
+      vCustCat =  iCustCat
+      vCustId  =  iCustId.
+
+   PROC:
+   DO ON ERROR UNDO PROC, LEAVE PROC:
+      /* параметры функции не заданы */
+      IF    vCustCat EQ ?
+         OR vCustId  EQ ? THEN
+      DO:
+         /* Получить текущий обрабатываемый объект транзакции */
+         vInstance = GetBaseInstance(GetBaseOpkind(), GetBaseTemplate()).
+         /* если handle на объект получен */
+         IF vInstance NE ? THEN DO:
+            /* Найти и спозиционировать буфер */
+            vBuffer = vInstance:DEFAULT-BUFFER-HANDLE NO-ERROR.
+            /* Получить из буфера поля cust-cat и cust-id  */
+            ASSIGN
+               vCustCat = vBuffer:BUFFER-FIELD("cust-cat"):BUFFER-VALUE
+               vCustId  = vBuffer:BUFFER-FIELD("cust-id" ):BUFFER-VALUE
+            NO-ERROR.
+            IF ERROR-STATUS:ERROR THEN
+            DO:
+               RUN Fill-SysMes IN h_tmess ("", "", "-1", "Реквизиты 'Тип клиента' и 'N клиента' не найдены для текущего объекта").
+               is-ok = -1.
+               LEAVE PROC.
+            END.
+         END.
+         ELSE
+         DO:
+            RUN Fill-SysMes IN h_tmess ("", "", "-1", "Нет объекта, обрабатываемого транзакцией").
+            is-ok = -1.
+            LEAVE PROC.
+         END.
+      END.
+
+      RUN GetCustNameShort IN h_base (
+         vCustCat,
+         vCustId,
+         OUTPUT vName
+      ).
+      out_Result = TRIM (vName).
+   END.  /* of PROC block */
+   RETURN.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "НСчДР"
+   &DESCRIPTION   = "Находит счет (по подразделению, определяемому по коду пользователя) по указанному коду и значению доп.реквизита"
+   &PARAMETERS    = "[Маска_Счета,Валюта_счета,Код_доп_реквизита,Значение_доп_реквизита,Флаг_Поиск_Выше]"
+   &RESULT        = "Номер Счета"
+   &SAMPLE        = "1"
+}
+    DEFINE INPUT  PARAMETER incoming-AcctMask AS CHARACTER  NO-UNDO. 
+    DEFINE INPUT  PARAMETER incoming-Currency AS CHARACTER  NO-UNDO.
+    DEFINE INPUT  PARAMETER incoming-Code     AS CHARACTER  NO-UNDO.
+    DEFINE INPUT  PARAMETER incoming-Value    AS CHARACTER  NO-UNDO.
+    DEFINE INPUT  PARAMETER incoming-Highter  AS LOGICAL    NO-UNDO.
+    DEFINE INPUT  PARAMETER incoming-BranchId AS CHARACTER  NO-UNDO.
+    DEFINE OUTPUT PARAMETER out_Result        AS CHARACTER  NO-UNDO.
+    DEFINE OUTPUT PARAMETER is-ok             AS INT64      NO-UNDO.
+
+    DEFINE BUFFER designs   FOR signs.
+    DEFINE BUFFER tbal-acct FOR bal-acct.
+    DEFINE BUFFER xa2       FOR acct.
+
+    DEFINE VARIABLE vInd         AS INT64      NO-UNDO.
+    DEFINE VARIABLE vNatCurrChar AS CHARACTER  NO-UNDO.
+
+    vNatCurrChar = FGetSetting("КодНацВал", ?, "{&in-NC-Code}").
+
+    IF incoming-Currency EQ vNatCurrChar THEN incoming-Currency = "".
+       
+    /*Если не указан код подразделения, берем с пользователя*/
+    IF incoming-BranchId EQ "" THEN
+    incoming-BranchId = getThisUserXAttrValue("Отделение"). /* get user */
+
+    IF NOT CAN-FIND(FIRST branch WHERE branch.branch-id EQ incoming-BranchId)
+    THEN incoming-BranchId = dept.branch.
+
+    FIND FIRST branch WHERE branch.branch-id EQ incoming-BranchId NO-LOCK NO-ERROR.
+
+    if AVAIL branch then DO:
+       {additem.i incoming-BranchId branch.parent}
+    END.
+    /* *** */
+
+/** Начало **/
+
+    DO vInd = 1 TO NUM-ENTRIES(incoming-BranchId):
+
+       /* ищем в текущем подразделении */
+       FOR EACH designs
+          WHERE designs.FILE-NAME    EQ "acct"
+            AND designs.CODE         EQ incoming-code
+            AND designs.code-value   EQ incoming-value
+       NO-LOCK:
+
+          FIND FIRST xa2
+               WHERE xa2.acct       EQ ENTRY(1, designs.surrogate)
+                 AND xa2.currency   EQ ENTRY(2, designs.surrogate)
+                 AND xa2.currency   EQ incoming-currency
+                 AND xa2.branch-id  EQ ENTRY(vInd,incoming-BranchId)
+                 AND xa2.close-date EQ ?
+          NO-LOCK NO-ERROR.
+
+          IF AVAIL xa2 AND CAN-DO(DelFilFromAcct(incoming-AcctMask),xa2.number) THEN DO:
+             out_Result =  xa2.acct.
+             RETURN.
+          END.
+       END.
+
+       FOR EACH designs
+          WHERE designs.FILE-NAME    EQ "acct"
+            AND designs.CODE         EQ incoming-code
+            AND designs.xattr-value  EQ incoming-value
+       NO-LOCK:
+
+          FIND FIRST xa2
+               WHERE xa2.acct       EQ ENTRY(1, designs.surrogate)
+                 AND xa2.currency   EQ ENTRY(2, designs.surrogate)
+                 AND xa2.currency   EQ incoming-currency
+                 AND xa2.branch-id  EQ ENTRY(vInd,incoming-BranchId)
+                 AND xa2.close-date EQ ?
+          NO-LOCK NO-ERROR.
+
+          IF AVAIL xa2 AND CAN-DO(DelFilFromAcct(incoming-AcctMask),xa2.number) THEN DO:
+             out_Result =  xa2.acct.
+             RETURN.
+          END.
+       END.
+    END.
+    out_Result = "".
+END PROCEDURE.
+
+
+{pfuncdef
+   &NAME          = "GARBAGE_COLLECT"
+   &DESCRIPTION   = "Выполняет принудительную выгрузку неиспользуемых персистентных библиотек. ~
+Используется для корректной работы старых транзакций. После вызова функции включается ~
+стандартный механизм выгрузки библиотек внутри УТ, по умолчанию отключенный по соображениям ~
+производительности, т.е. не рекомендуется использовать данную функцию в групповых операциях"
+   &PARAMETERS    = "НЕТ"
+   &RESULT        = "НЕТ"
+   &SAMPLE        = "GARBAGE_COLLECT()"
+   }
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64       NO-UNDO.
+
+   RUN GarbageCollect.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "OUT_TRANS"
+   &DESCRIPTION   = "Отложенное исполнение парсерного выражения транзакции. 1-й параметр - парсерное выражение, 2-й параметр - необходимость отложенного выполнения в случае, если имеется активная ABL-транзакция. Если необходимо отложенное выполнение, то в конце блока необходимо запустить OUT_TRANS без параметров (OUT_TRANS('',?))"
+   &PARAMETERS    = "<ПАРСЕРНОЕ ВЫРАЖЕНИЕ>,YES/NO"
+   &RESULT        = "в случе отложенного выполнения инициализируется переменная @__out_trans с значением, равным прараметру 1"
+   &SAMPLE        = "OUT_TRANS('ПЕЧАТЬ(123456, 'pp-uni_1,pp-uni')',YES)"
+   }
+
+   DEFINE INPUT  PARAMETER iPexp       AS CHAR     NO-UNDO. /* парсерное выражение   */
+   DEFINE INPUT  PARAMETER iPutoff     AS LOGICAL  NO-UNDO. /* отложенный вызов      */
+   DEFINE OUTPUT PARAMETER oResult     AS CHAR     NO-UNDO.
+   DEFINE OUTPUT PARAMETER oOK         AS INT64    INIT -1   NO-UNDO.
+   DEFINE VAR              vFlErr      AS INT64              NO-UNDO.
+   DEFINE VAR              outRslt     AS CHAR               NO-UNDO.
+   DEFINE VAR              is-ok       AS INT                NO-UNDO.
+   DEFINE VAR              out-trans   AS CHAR               NO-UNDO. /* значение переменной @__out_trans */ 
+
+   /* формируем значение парсерного выражения с учетом значения переменной @__out_trans */
+   RUN GetVariable ("__out_trans", 
+                    0, 
+                    -1, 
+                    OUTPUT out-trans).
+   IF out-trans = {&RET-ERROR} THEN out-trans = "".  /* если переменная __out_trans еще не определена */
+   IF {assigned iPexp} THEN 
+   out-trans = IF out-trans = "" 
+               THEN iPexp 
+               ELSE out-trans + ";" + iPexp.
+   /* если не активна ABL-транзакция */
+   IF NOT TRANSACTION THEN 
+   DO:  
+      RUN ParsMain IN h_parsr (out-trans,
+                               ?,
+                               ?,
+                               OUTPUT vFlErr, 
+                               OUTPUT outRslt).    
+      IF vFlErr < 0 THEN 
+      DO:                                                    
+         oOk = -1.                                                              
+         RETURN.                                                                
+      END.                                                                      
+      /* обнуляем парсерное выражение после выполнения */                       
+      RUN AddAttr2TableEx IN h_trans ("", 
+                                      0, 
+                                      -1, 
+                                      "", 
+                                      0, 
+                                      "__out_trans", 
+                                      "").     
+   END.                                                                                                                                      
+   /* активна ABL транзакция */                                                                                                              
+   ELSE 
+   DO:                                                                                                                                  
+      /* если предполагается отложенный вызов */                                                                                                         
+      IF iPutoff THEN 
+      DO:                                                                  
+         /* помещаем парсерное выражение в переменную __out_trans */                       
+         RUN AddAttr2TableEx IN h_trans ("", 
+                                         0, 
+                                         -1, 
+                                         "", 
+                                         0, 
+                                         "__out_trans", 
+                                         out-trans).      
+      END.                                                                                                                                
+      /* иначе откат */                                                                                                                   
+      ELSE IF out-trans <> "" THEN
+      DO:                                                                                                                            
+         oResult = "Активна ABL-транзакция, значение параметра отложенного исполнения NO.".                                                          
+         oOk = -1.                                                                                                                        
+         RETURN.                                                                                
+      END.                                                                                 
+   END.
+   oResult = "".  
+   oOK     = 0.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "GOTO"
+   &DESCRIPTION   = "ПЕРЕХОД НА ШАБЛОН N."
+   }
+   DEFINE INPUT  PARAMETER iTempl AS INT64    NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result AS CHARACTER  NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok      AS INT64    NO-UNDO.
+
+   FIND FIRST op-kind-tmpl WHERE op-kind-tmpl.op-kind EQ mOpkind AND op-kind-tmpl.order eq iTempl NO-LOCK NO-ERROR.
+
+   if avail op-kind-tmpl then mQTemplate:reposition-to-rowid(rowid(op-kind-tmpl)).
+   else RUN Fill-SysMes("","",-1,"Шаблон " + string(iTempl) + " не найден").
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "TRACE"
+   &DESCRIPTION   = "Управляет трассировкой парсерных выражений"
+   &PARAMETERS    = "УРОВЕНЬ ТРАССИРОВКИ (0 - трассировка выключена, 1 - трассировка включена)"
+   &RESULT        = "1"
+   &SAMPLE        = "TRACE(1) - включить полную трассировку ~~nTRACE(0) - выключить трассировку"
+   }
+   DEFINE INPUT  PARAMETER iTraceLevel AS INT64              NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS CHARACTER   INIT "1" NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64              NO-UNDO.
+
+   RUN Set-TraceLvl IN h_parsr (iTraceLevel).
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "КУРС"
+   &DESCRIPTION   = "Находит по переданной валюте,дате[,пороговой сумме,типу курса[ и подразделению]] ~
+корректный на дату курс. Тип курса, если не задан, то = УЧЕТНЫЙ,если branch не указан, ~
+то курс возьмется из таблицы instr-rate, если указан, то из таблицы irate-time(для ВОК), ~
+если пороговая сумма в 3 параметре найдена в irate-time(3 параметр только для ВОК), ~
+то берется значение порогового курса,иначе значение основного курса"
+   &PARAMETERS    = "Валюта,дата[,пороговая сумма(только ВОК),тип курса],подразделение]]"
+   &RESULT        = "Величина курса"
+   &SAMPLE        = "Курс(@currency(15),дата(),1000,'Покупка',Подразделение()) ~~n~
+Курс('840',31/03/2010)"
+   }
+
+   DEFINE INPUT  PARAMETER iCurr       AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iDate       AS DATE        NO-UNDO.
+   DEFINE INPUT  PARAMETER iSumm       AS DECIMAL     NO-UNDO.
+   DEFINE INPUT  PARAMETER iCurrType   AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iBranch     AS CHARACTER   NO-UNDO.
+   DEFINE OUTPUT PARAMETER out_Result  AS DECIMAL     NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64       NO-UNDO.
+
+   FIND FIRST currency WHERE currency.currency EQ iCurr NO-LOCK NO-ERROR.                
+
+   IF AVAIL currency THEN
+   DO:
+
+      IF NOT {assigned iBranch} THEN
+      DO:
+
+          FIND LAST instr-rate WHERE instr-rate.instr-code EQ currency.currency 
+                                 AND instr-rate.instr-cat  EQ "currency" 
+                                 AND instr-rate.rate-instr GE 0 
+                                 AND instr-rate.rate-type  EQ (IF NOT {assigned iCurrType} THEN "Учетный"
+                                                                            ELSE iCurrType) 
+                                 AND instr-rate.since      LE iDate NO-LOCK NO-ERROR.       
+
+          IF AVAIL instr-rate THEN
+             ASSIGN
+                out_Result = instr-rate.rate-instr
+                is-ok = 1
+             .
+
+      END.
+      ELSE 
+      DO:
+
+          FOR LAST irate-time NO-LOCK WHERE irate-time.instr-code    EQ currency.currency
+                                        AND irate-time.instr-cat     EQ "currency"
+                                        AND irate-time.rate-instr    GE 0
+                                        AND irate-time.bound-summ    LE iSumm 
+                                        AND irate-time.branch-id     EQ iBranch
+                                        AND irate-time.rate-type     EQ iCurrType
+                                        AND irate-time.iratedatetime LE DATETIME(iDate,MTIME)
+          BY irate-time.iratedatetime BY irate-time.bound-summ:
+
+             ASSIGN
+                out_Result = irate-time.rate-instr
+                is-ok = 1
+             .
+          END.
+      END.
+   END.
+
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "BQPUBLISH"
+   &DESCRIPTION   = "Публикует событие в системе."
+   &PARAMETERS    = "Код события,Таблица источника,Суррогат источника,[[[,Параметры],Время окончания действия события]]]"
+   &RESULT        = "Идентификатор события"
+   &SAMPLE        = "BQPUBLISH(@event-class-code,@filename,@surrogate,'param1='value1';param2='value2'') ~~n~
+BQPUBLISH('sample','op-kind|kind1','param1-~'1~'')"
+   }
+
+   DEFINE INPUT  PARAMETER iEventClassCode  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iFilename        AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iSurrogate       AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParams          AS CHARACTER   NO-UNDO.
+
+   DEFINE OUTPUT PARAMETER out_Result  AS LOGICAL     NO-UNDO.
+   DEFINE OUTPUT PARAMETER is-ok       AS INT64       NO-UNDO.
+
+   IF NOT {assigned iEventClassCode} THEN
+      (NEW sysmessexception("Не задан класс события")):Show(-1).
+
+   IF NOT {assigned iFilename} THEN
+      (NEW sysmessexception("Не задана таблица источника события")):Show(-1).
+
+   IF NOT {assigned iSurrogate} THEN
+      (NEW sysmessexception("Не задан суррогат источника события")):Show(-1).
+
+   DO ON ERROR UNDO, LEAVE
+      ON STOP  UNDO, LEAVE:
+
+      ASSIGN
+         out_Result = bqevnt:Publish ( iEventClassCode,
+                                       iFilename,
+                                       iSurrogate,
+                                       iParams )
+         is-ok = 1
+      .
+      /* ловим все ошибки, отображаем на экране через Fill-SysMess */
+      CATCH e AS sysmessexception:
+         e:Show(-1).
+         ASSIGN is-ok = -1.
+      END.
+   END.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "NEW"
+   &DESCRIPTION   = "Создает объект класса"
+   &PARAMETERS    = "КЛАСС,[ПАРАМЕТРЫ КОНСТРУКТОРА]"
+   &RESULT        = "Ссылка на объект"
+   &SAMPLE        = "@obj = NEW('myclass','param1')"
+}
+   DEFINE INPUT  PARAMETER iClassName  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam1     AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam2     AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam3     AS CHARACTER   NO-UNDO.
+   
+   DEF OUTPUT PARAM oResult AS CHARACTER  NO-UNDO.
+   DEF OUTPUT PARAM iS-ok      AS INT64 INIT -1 NO-UNDO.
+
+   {pchkpar iClassName}
+
+   DEFINE VARIABLE vObject AS PROGRESS.Lang.OBJECT   NO-UNDO.
+   
+   DO ON ERROR UNDO, LEAVE:
+      IF NOT {assigned iParam1} THEN
+         vObject = DYNAMIC-NEW iClassName ().
+      ELSE
+         IF NOT {assigned iParam2} THEN
+            vObject = DYNAMIC-NEW iClassName (iParam1).
+         ELSE
+            IF NOT {assigned iParam3} THEN
+               vObject = DYNAMIC-NEW iClassName (iParam1,iParam2).
+            ELSE
+               vObject = DYNAMIC-NEW iClassName (iParam1,iParam2,iParam3).
+
+      oResult = classhelper:ToStrRef(vObject,?).
+
+      iS-ok = IF VALID-OBJECT(vObject) THEN 0 ELSE -1.
+   END.
+END PROCEDURE.
+
+{pfuncdef
+   &NAME          = "INVOKE"
+   &DESCRIPTION   = "Вызывает метод класса"
+   &PARAMETERS    = "ССЫЛКА,МЕТОД,[ПАРАМЕТРЫ МЕТОДА]"
+   &RESULT        = "РЕЗУЛЬТАТ ВЫЗОВА МЕТОДА"
+   &SAMPLE        = "@COW = INVOKE(@obj,'Translate','ENGLISH','RUSSIAN','КОРОВА')'   
+}
+   DEFINE INPUT  PARAMETER iObjectRef  AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iMethodName AS CHARACTER   NO-UNDO.
+
+   DEFINE INPUT  PARAMETER iParam1     AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam2     AS CHARACTER   NO-UNDO.
+   DEFINE INPUT  PARAMETER iParam3     AS CHARACTER   NO-UNDO.
+
+   DEF OUTPUT PARAM oResult AS CHARACTER  NO-UNDO.
+   DEF OUTPUT PARAM iS-ok      AS INT64 INIT -1 NO-UNDO.
+
+   {pchkpar iObjectRef iMethodName}
+   
+   DEFINE VARIABLE vObject AS Progress.Lang.Object   NO-UNDO.
+   vObject = classhelper:ToObjRef(iObjectRef).
+
+   IF NOT VALID-OBJECT(vObject) THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1","Переданный параметр в функцию INVOKE  не является корректной ссылкой на объект.").
+      RETURN .
+   END.
+
+    DO ON ERROR UNDO, LEAVE:
+      IF NOT {assigned iParam1} THEN
+         oResult = DYNAMIC-INVOKE(vObject,iMethodName).
+      ELSE
+         IF NOT {assigned iParam2} THEN
+            oResult = DYNAMIC-INVOKE(vObject,iMethodName,iParam1).
+         ELSE
+            IF NOT {assigned iParam3} THEN
+               oResult = DYNAMIC-INVOKE(vObject,iMethodName,iParam1,iParam2).
+            ELSE
+               oResult = DYNAMIC-INVOKE(vObject,iMethodName,iParam1,iParam2,iParam3).
+
+      iS-ok = 0.
+   END.
+   
+   IF iS-ok <> 0 THEN
+   DO:
+      RUN Fill-ProgressErr  IN h_tmess ("") .
+      RUN Fill-SysMes IN h_tmess ("","","-1",
+                 "Ошибка вызова метода " + iMethodName + " в функции INVOKE.").
+      iS-ok = -1.
+   END.
+END PROCEDURE.
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTDATE='20/04/2015 12:06:02.890+04:00' */
+/* $LINTUSER='ariz' */
+/* $LINTMODE='1' */
+/* $LINTFILE='pp-pbase.p' */
+/*prosignFy0WoGxEIufeS9FJ1vPURg*/

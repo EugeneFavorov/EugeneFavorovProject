@@ -1,0 +1,916 @@
+/*Кравцов и Глухов*/
+{globals.i} 
+{sh-defs.i}
+
+{intrface.get xclass}
+{intrface.get loan}
+{intrface.get corr}
+{otch1.i NEW}
+{t-otch.i NEW}
+{tmprecid.def}
+{clnt.fun}
+
+DEF temp-table tt-aj-perc
+	FIELD PlanDate   AS DATE
+	FIELD ProbegDate AS DATE
+	INDEX PlanDate ProbegDate PlanDate.
+
+DEFINE VARIABLE cessdate AS DATE NO-UNDO.
+
+{getdate.i}
+cessdate = end-date. /* дата продажи */
+/*обезличиваем*/
+/*cessdate = date("14.10.2016").*/
+
+/*===========================================================================*/
+/*===== Параметры по договору ===============================================*/
+/*===========================================================================*/
+FUNCTION LN_GetParams RETURNS DECIMAL
+   (iContract AS CHARACTER,
+   iContCode AS CHARACTER,
+   iParams   AS CHARACTER,
+   iDate     AS DATE):
+
+   DEFINE VARIABLE vParSumm AS DECIMAL NO-UNDO.
+   DEFINE VARIABLE vSumma   AS DECIMAL NO-UNDO.
+   DEFINE VARIABLE vCode    AS INT64 NO-UNDO.
+   DEFINE VARIABLE vDb      AS DECIMAL NO-UNDO.
+   DEFINE VARIABLE vCr      AS DECIMAL NO-UNDO.
+   DEFINE VARIABLE vCounter AS INT64 NO-UNDO.
+
+   DO vCounter = 1 TO NUM-ENTRIES(iParams):
+
+      vCode = INT64(ENTRY(vCounter,iParams)).
+
+      RUN RE_PARAM IN h_Loan (vCode,
+         iDate,
+         iContract,
+         iContCode,
+         OUTPUT vParSumm,
+         OUTPUT vDb,
+         OUTPUT vCr).
+      vSumma = vSumma + vParSumm.
+   END.
+
+   RETURN vSumma.
+
+END FUNCTION.
+/*===========================================================================*/
+/*===== Дней просросчки основного долга (ДниПросрСсуды) =====================*/
+/*===========================================================================*/
+FUNCTION LN_GetPrsDolgDays RETURNS INT64
+   (iContract AS CHARACTER,
+   iContCode AS CHARACTER,
+   iDate     AS DATE):
+
+   DEFINE VARIABLE vDb     AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vCr     AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vParam  AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vParam1 AS DECIMAL  NO-UNDO.
+
+   DEFINE BUFFER loan-int FOR loan-int.
+
+   RELEASE loan-int.
+
+   FOR EACH loan-int WHERE
+      loan-int.contract  = iContract
+      AND loan-int.cont-code = iContCode
+      AND loan-int.mdate    <= iDate
+      AND (CAN-DO("7,13",STRING(loan-int.id-d)) OR
+      CAN-DO("7,13",STRING(loan-int.id-k)))
+      NO-LOCK BY loan-int.mdate DESCENDING:
+
+      IF LN_GetParams (iContract,
+         iContCode,
+         "7,13",
+         loan-int.mdate - 1) = 0
+         AND 
+         LN_GetParams (iContract,
+         iContCode,
+         "7,13",
+         iDAte) NE 0
+         THEN RETURN (iDate - loan-int.mdate).
+   END.
+
+   RETURN 0.
+
+END FUNCTION.
+
+/*===========================================================================*/
+/*===== Дней просрочки %% (ДниПросрПроц) ====================================*/
+/*===========================================================================*/
+FUNCTION LN_GetPrsProcDays RETURNS INT64
+   (iContract AS CHARACTER,
+   iContCode AS CHARACTER,
+   iDate     AS DATE):
+
+   DEFINE VARIABLE vDb     AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vCr     AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vParam  AS DECIMAL  NO-UNDO.
+   DEFINE VARIABLE vParam1 AS DECIMAL  NO-UNDO.
+
+   DEFINE BUFFER loan-int FOR loan-int.
+
+   RELEASE loan-int.
+
+   FOR EACH loan-int WHERE
+      loan-int.contract  = iContract
+      AND loan-int.cont-code = iContCode
+      AND loan-int.mdate    <= iDate
+      AND (CAN-DO("10,16",STRING(loan-int.id-d)) OR
+      CAN-DO("10,16",STRING(loan-int.id-k)))
+      NO-LOCK BY loan-int.mdate DESCENDING:
+
+      IF LN_GetParams (iContract,
+         iContCode,
+         "10,16",
+         loan-int.mdate - 1) = 0
+         AND
+         LN_GetParams (iContract,
+         iContCode,
+         "10,16",
+         iDate) NE 0
+
+         THEN RETURN (iDate - loan-int.mdate).
+   END.
+
+   RETURN 0.
+
+END FUNCTION.
+/*===========================================================================*/
+
+DEFINE VARIABLE mGar AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mGarVid AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mGarDias AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mDogType AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mObType AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mSurr AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mI AS INT64 NO-UNDO.
+DEFINE VARIABLE mJ AS INT64 NO-UNDO.
+DEFINE VARIABLE mNum AS INT64 NO-UNDO.
+
+
+DEFINE VARIABLE mDateLeft  AS DATE NO-UNDO.
+DEFINE VARIABLE mDateRight AS DATE NO-UNDO.
+DEFINE VARIABLE mDateMonth AS DATE NO-UNDO.
+DEFINE VARIABLE mSumprAdj  AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumprAdj1 AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE ost455 AS DECIMAL NO-UNDO.
+DEFINE VARIABLE stavka AS DECIMAL NO-UNDO.
+DEFINE VARIABLE daysInYear AS INT64 NO-UNDO.
+
+DEFINE BUFFER term-obl FOR term-obl.
+DEFINE BUFFER term-obl1 FOR term-obl.
+DEFINE BUFFER op FOR op.
+DEFINE BUFFER op-entry FOR op-entry.
+
+ASSIGN
+   mGar = "КредОб,КредОб,КредЦБум,КредГар"
+   mGarVid = "Автомобиль;!Автомобиль,*"
+   mGarDias = "Автомобиль,Имущество,ЦБ,Поручительство"
+   .
+
+DEFINE BUFFER loan FOR loan.
+DEFINE BUFFER loan1 FOR loan.
+DEFINE BUFFER loan-cond FOR loan-cond.
+DEFINE BUFFER loan-cond1 FOR loan-cond.
+DEFINE BUFFER loan-acct FOR loan-acct.
+DEFINE BUFFER loan-var FOR loan-var.
+DEFINE BUFFER loan-int FOR loan-int.
+DEFINE BUFFER comm-rate1 FOR comm-rate.
+DEFINE BUFFER term-obl2 FOR term-obl.
+
+DEFINE VARIABLE hSAXWriter AS HANDLE. /* NO-UNDO.*/
+DEFINE VARIABLE lOK AS LOGICAL NO-UNDO.
+DEFINE VARIABLE ij AS INTEGER NO-UNDO.
+DEFINE VARIABLE strr AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mAdress1              AS CHARACTER NO-UNDO.
+
+DEFINE VARIABLE mCountry1             AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mCountryName1         AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mIndex1               AS INT64     NO-UNDO.
+DEFINE VARIABLE mOKATO1               AS INT64     NO-UNDO.
+DEFINE VARIABLE mRegion1              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mPunkt11              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mPunkt12              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mStreet1              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mHome1                AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mFlat1                AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mKorpus1              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mStroen1              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mOblast1              AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mPhone                AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mPhoneAll             AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mFam                  AS CHARACTER NO-UNDO.
+
+DEFINE VARIABLE strtmp AS CHARACTER NO-UNDO.
+DEFINE VARIABLE namecl AS CHARACTER NO-UNDO.
+DEFINE VARIABLE namecl1 AS CHARACTER NO-UNDO.
+DEFINE VARIABLE namecl2 AS CHARACTER NO-UNDO.
+DEFINE VARIABLE shortname AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mDateVyd AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mKemVyd AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mKodPodr AS CHARACTER NO-UNDO.
+DEFINE VARIABLE iczw AS INTEGER NO-UNDO.
+
+
+
+DEFINE VARIABLE vin AS CHARACTER NO-UNDO.        /* VIN */                
+DEFINE VARIABLE	mark AS CHARACTER NO-UNDO.       /* Марка Автомобиля */   
+DEFINE VARIABLE colour AS CHARACTER NO-UNDO.     /* Цвет Автомобиля */    
+DEFINE VARIABLE	yearAuto AS CHARACTER NO-UNDO.   /* Год Выпуска */        
+DEFINE VARIABLE	engine AS CHARACTER NO-UNDO.     /* Двигатель№ */         
+DEFINE VARIABLE	model AS CHARACTER NO-UNDO.      /* Модель автомобиля */  
+DEFINE VARIABLE shassis AS CHARACTER NO-UNDO.    /* Шасси № */            
+DEFINE VARIABLE mbody AS CHARACTER NO-UNDO.     /* кузов № */            
+DEFINE VARIABLE	ptsSer AS CHARACTER NO-UNDO.     /* ПТС Серия*/           
+DEFINE VARIABLE	ptsNum AS CHARACTER NO-UNDO.     /* ПТС Номер */          
+DEFINE VARIABLE	ptsDate AS CHARACTER NO-UNDO.    /* ПТС дата выдачи */    
+DEFINE VARIABLE	ptsWho AS CHARACTER NO-UNDO.     /* ПТС кем выдан */      
+
+
+
+DEFINE VARIABLE mPrcPrem      AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumPrem      AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumPremAll   AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumOD        AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumPrc       AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumODAll     AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE mSumPrcAll    AS DECIMAL  NO-UNDO.
+DEFINE VARIABLE rko11_price   AS DECIMAL  NO-UNDO.
+
+
+mPrcPrem = 7.8.
+
+CREATE SAX-WRITER hSAXWriter.
+hSAXWriter:FORMATTED = TRUE.
+hSAXWriter:ENCODING = "windows-1251".
+lOK = hSAXWriter:SET-OUTPUT-DESTINATION("file",
+   "alex" + STRING(YEAR(TODAY)) +  STRING(MONTH(TODAY),"99") + STRING(DAY(TODAY),"99") + ".xml").
+lOK = hSAXWriter:START-DOCUMENT( ).
+lOK = hSAXWriter:START-ELEMENT("XXI_DATA_PACK").
+/* lOK = hSAXWriter:DECLARE-NAMESPACE ("http://www.alexbank.ru"). */
+/* lOK = hSAXWriter:DECLARE-NAMESPACE ("type", "item"). */
+
+FOR EACH tmprecid,
+   FIRST loan
+   WHERE
+   RECID(loan) EQ tmprecid.id
+   NO-LOCK BY loan.cont-code:
+        
+        
+   lOK = hSAXWriter:START-ELEMENT("CDA"). 
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT("external_id", STRING(RECID(loan))). 
+
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT("identifier",loan.doc-ref).
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT("currency", 'RUR').
+    
+   lOK = hSAXWriter:START-ELEMENT("CDA_MDA"). 
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT("identifier",loan.cont-type).
+   lOK = hSAXWriter:END-ELEMENT("CDA_MDA").
+    
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT("purchase_type", '2').
+   /* клиент */
+   lOK = hSAXWriter:START-ELEMENT("CDA_CUS"). 
+
+   FIND FIRST PERSON WHERE PERSON.PERSON-ID = loan.cust-id NO-LOCK NO-ERROR.
+   RUN savecust.
+   lOK = hSAXWriter:END-ELEMENT("CDA_CUS"). /* конец клиента */
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_COEFF"). /* Различные коэффициенты связанные с договором */
+
+   rko11_price = DEC(GetXattrValueEx("loan",
+      loan.contract + "," + loan.cont-code,
+      "rko11_price",
+      "0")).
+
+   strtmp = GetXattrValueEx("loan",
+      loan.contract + "," + loan.cont-code,
+      "ПСК",
+      "").
+   lOK = hSAXWriter:WRITE-FRAGMENT('<item id="discount">' + STRING(mPrcPrem) + '</item>\n'). /*  */
+   lOK = hSAXWriter:WRITE-FRAGMENT(' 	<item id="psk">' + strtmp + '</item>\n'). /* пск */
+
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_COEFF"). /* Различные коэффициенты связанные с договором */
+    
+   lOK = hSAXWriter:START-ELEMENT("CDA_SUM"). /* Различные суммы используемые на уровне всего договора */
+    
+   FIND FIRST loan-cond
+      WHERE loan-cond.contract EQ loan.contract
+      AND loan-cond.cont-code EQ loan.cont-code
+      NO-LOCK NO-ERROR.
+	
+   FIND LAST loan-cond1
+      WHERE loan-cond1.contract EQ loan.contract
+      AND loan-cond1.cont-code EQ loan.cont-code
+      NO-LOCK NO-ERROR.
+	      
+   FIND FIRST term-obl
+      WHERE term-obl.contract EQ loan.contract
+      AND term-obl.cont-code EQ loan.cont-code
+      AND term-obl.idnt = 2
+      AND term-obl.end-date EQ loan-cond.since
+      NO-LOCK NO-ERROR.
+
+
+
+   ASSIGN
+      mSumOD        = LN_GetParams(loan.contract,loan.cont-code,"0",cessdate)
+      mSumPrc       = LN_GetParams(loan.contract,loan.cont-code,"33",cessdate)
+      mSumODAll     = mSumODAll + mSumOD
+      mSumPrcAll    = mSumPrcAll + mSumPrc
+      mSumPrem      = ROUND(mPrcPrem / 100 * mSumOD ,2) + ROUND(mPrcPrem / 100 * mSumPrc,2)
+      mSumPremAll   = mSumPremAll + mSumPrem.
+
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="agr">' + TRIM(STRING(term-obl.amt-rub, ">>>>>>>>>>>9.99")) + '</item>\n'). /* сумма кредита */
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="premium">' + TRIM(STRING(0, ">>>>>>>>>>>9.99")) + '</item>\n'). /* премия */    
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="monthly">' +
+      REPLACE(GetXAttrValueEx("loan-cond",
+      loan-cond1.contract + "," + loan-cond1.cont-code + "," + STRING(loan-cond1.since),
+      "АннуитПлат",
+      "0"
+      ), ",", "")
+      + '</item>\n'). /* Сумма ежемесячного платежа */
+   lOK = hSAXWriter:END-ELEMENT("CDA_SUM"). /* Различные суммы используемые на уровне всего договора */
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_DATE"). /* Различные даты используемые на уровне всего договора */
+
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="accept">' + ISO-DATE(loan.open-date) + '</item>\n'). /* Дата заключения договора */
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="cession_buy">' + ISO-DATE(cessdate)  + '</item>\n'). /* Дата цессии */
+   lOK = hSAXWriter:WRITE-FRAGMENT('	<item id="end">' + ISO-DATE(loan.end-date)      + '</item>\n'). /* Дата окончания договора */
+    
+   lOK = hSAXWriter:END-ELEMENT("CDA_DATE"). /* Различные даты используемые на уровне всего договора */
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_PART"). /* Многочастевые данные */
+   lOK = hSAXWriter:WRITE-FRAGMENT(' 	<item part = "1">\n'). /* Данные об одной части */
+   lOK = hSAXWriter:WRITE-DATA-ELEMENT('dtend',ISO-DATE(loan.end-date)). /* дата окончания части */
+
+   IF LN_GetPrsProcDays(loan.contract,loan.cont-code,cessdate) NE 0 THEN
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("days_of_delay_percent",string(LN_GetPrsProcDays(loan.contract,loan.cont-code,cessdate))).
+   IF LN_GetPrsDolgDays(loan.contract,loan.cont-code,cessdate) NE 0 THEN
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("days_of_delay",string(LN_GetPrsDolgDays(loan.contract,loan.cont-code,cessdate))).
+
+   FOR EACH comm-rate1
+      WHERE comm-rate1.kau EQ loan.contract + "," + loan.cont-code
+      AND comm-rate1.commission EQ '%Кред'
+      AND comm-rate1.since LE cessdate
+      NO-LOCK
+      BY comm-rate1.since DESCENDING:
+      LEAVE.
+   END.
+   IF AVAILABLE comm-rate1 THEN 
+   DO:
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("interest_rate",TRIM(string(comm-rate1.rate-comm,">>>>>>>>>>>9.99"))).       
+   END.
+    
+   lOK = hSAXWriter:START-ELEMENT("CDA_PENALTY"). /* пени */
+   RELEASE comm-rate1.
+   FOR EACH comm-rate1
+      WHERE comm-rate1.kau EQ loan.contract + "," + loan.cont-code
+      AND comm-rate1.commission EQ 'Пеня-К'
+      AND comm-rate1.since LE cessdate
+      NO-LOCK
+      BY comm-rate1.since DESCENDING:
+      LEAVE.
+   END.
+    
+   IF AVAILABLE comm-rate1 THEN 
+   DO:
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("DEBT",TRIM(string(comm-rate1.rate-comm,">>>>>>>>>>>9.99"))).       
+   END.
+    
+   RELEASE comm-rate1.
+   FOR EACH comm-rate1
+      WHERE comm-rate1.kau EQ loan.contract + "," + loan.cont-code
+      AND comm-rate1.commission EQ 'Пеня%К'
+      AND comm-rate1.since LE cessdate
+      NO-LOCK
+      BY comm-rate1.since DESCENDING:
+      LEAVE.
+   END.
+   IF AVAILABLE comm-rate1 THEN 
+   DO:
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("PERCENT",TRIM(string(comm-rate1.rate-comm,">>>>>>>>>>>9.99"))).       
+   END.
+    
+   lOK = hSAXWriter:END-ELEMENT("CDA_PENALTY"). /* пени */
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_SUM"). /* Различные суммы используемые на уровне части */
+   RUN write_cda_sum("debt","0").
+   RUN write_cda_sum("overdue","7").
+   RUN write_cda_sum("penny_main","9").
+   RUN write_cda_sum("current_procent","33").
+   RUN write_cda_sum("overdue_procent","10").
+   RUN write_cda_sum("penny_procent","12").
+   RUN write_cda_sum("current_procent_on_overdue","210").
+   RUN write_cda_sum("overdue_procent_on_overdue","48").
+
+   lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="commission">' + TRIM(string(0)) + '</item>\n').  
+    
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_SUM"). /* Различные суммы используемые на уровне части */
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_SCHEDULE"). /* ГРАФИКИ. */
+   lOK = hSAXWriter:START-ELEMENT("schedule_debt"). /* График гашения основного долга. */
+   FOR EACH term-obl OF loan 
+      WHERE term-obl.idnt = 3
+      AND term-obl.end-date GE cessdate
+      AND term-obl.amt-rub <> 0	
+    
+      NO-LOCK BY term-obl.end-date:
+      lOK = hSAXWriter:START-ELEMENT("item").
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT('pay_date',ISO-DATE(term-obl.end-date)).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("pay_sum",TRIM(string(term-obl.amt-rub,">>>>>>>>>>>9.99"))). 
+      lOK = hSAXWriter:END-ELEMENT("item").
+   END.
+   lOK = hSAXWriter:END-ELEMENT("schedule_debt"). /* График гашения основного долга. */
+
+
+   /*гашение процентов с разбивкой*/
+
+   lOK = hSAXWriter:START-ELEMENT("schedule_adj_percent").
+   RUN crt_adj_percent.
+   lOK = hSAXWriter:END-ELEMENT("schedule_adj_percent").
+
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_SCHEDULE"). /* ГРАФИКИ. */
+
+   lOK = hSAXWriter:WRITE-FRAGMENT('	</item>\n'). /* Данные об одной части, конец */
+
+
+   
+
+
+
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_PART"). /* Многочастевые данные */
+
+    
+   lOK = hSAXWriter:START-ELEMENT("CDA_GUARANTEE"). /* Обеспечение договора. Может быть несколько записей */
+    
+   iczw = 881.
+   FOR EACH term-obl 
+      WHERE term-obl.contract EQ loan.contract
+      AND term-obl.cont-code EQ loan.cont-code
+      AND term-obl.idnt EQ 5
+      AND term-obl.sop-date EQ ?
+      NO-LOCK
+      BY term-obl.nn:
+      mSurr = term-obl.contract + "," + term-obl.cont-code + "," + "5" + "," + STRING(term-obl.end-date, "99/99/99") + "," + STRING(term-obl.nn).
+      mDogType = GetXAttrValueEx ("term-obl", 
+         mSurr, 
+         "ВидДогОб", 
+         "").
+      DO mI = 1 TO NUM-ENTRIES(mGar):
+         IF ENTRY(mI, mGar) EQ mDogType THEN
+            ASSIGN
+               mNum = mI
+               mI = 5.
+      END.
+      IF mNum EQ 1 OR mNum EQ 2 THEN
+      DO:
+         mNum = (IF GetXAttrValueEx ("term-obl", 
+            mSurr, 
+            "ВидОб", 
+            "") EQ "Автомобиль" THEN 1 ELSE 2).
+      END.
+      mObType = ENTRY(mNum, mGarDias).
+
+      FIND LAST loan-acct
+         WHERE loan-acct.contract EQ loan.contract
+         AND loan-acct.cont-code EQ loan.cont-code
+         AND loan-acct.acct-type EQ IF term-obl.nn EQ 0 THEN ENTRY(mNum, mGar) ELSE ENTRY(mNum, mGar) + TRIM(STRING(term-obl.nn))
+         NO-LOCK NO-ERROR.
+
+      FIND LAST loan-cond
+         WHERE loan-cond.contract EQ loan.contract
+         AND loan-cond.cont-code EQ loan.cont-code
+         NO-LOCK NO-ERROR.
+
+      FOR EACH term-obl1
+         WHERE term-obl1.contract EQ loan.contract
+         AND term-obl1.cont-code EQ loan.cont-code
+         AND term-obl1.idnt = 2
+         NO-LOCK
+         BY term-obl1.end-date:
+         LEAVE.
+      END.
+        
+      lOK = hSAXWriter:WRITE-FRAGMENT(' 	<item ICZW = "' + string(iczw) + '">\n'). /* Данные об одном обеспечении */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("external_type",'0').
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("note",'Автомобиль').
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("sum",TRIM(string(term-obl.amt-rub,">>>>>>>>>>>9.99"))).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("market_sum",TRIM(string(term-obl.amt-rub,">>>>>>>>>>>9.99"))).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("currency",'RUR').
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("dtbeg",ISO-DATE(term-obl.fop-date)).
+
+      strtmp = GetXAttrValueEx ("term-obl", 
+         mSurr, 
+         "НомДогОб", 
+         "").
+
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("acc_doc_num",strtmp).
+      RUN getpts IN THIS-PROCEDURE.
+      lOK = hSAXWriter:START-ELEMENT("CZO_ATTRIBUTES"). /* всякие ПТС */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100032">' + mark + " " + model + '</item>~n'). /* */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100035">' + vin + '</item>~n'). /* */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100034">' + yearauto + '</item>~n'). /* */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100038">' + colour + '</item>~n'). /* */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100108">' +  nameCl + '</item>~n'). /* */
+
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100037">' + mbody + '</item>~n'). /* */
+      /*обезличиваем*/
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "10019">' + ptsser + " " + ptsnum + " " + ptsdate + '</item>~n'). 
+/*      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "10019">' + "99999 3353534535 21.12.17"  + '</item>~n'). */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "10018">' + TRIM(string(rko11_price,">>>>>>>>>>>9.99")) + '</item>~n'). /* */
+
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "10017">' + shassis + '</item>~n'). /* */
+      lOK = hSAXWriter:WRITE-FRAGMENT('<item id = "100036">' + engine + '</item>~n'). /* */
+      lOK = hSAXWriter:END-ELEMENT("CZO_ATTRIBUTES").
+
+/*		
+      lOK = hSAXWriter:START-ELEMENT("CZO_CUS").
+      /*Обезличиваем===============================================================*/
+      FIND FIRST person WHERE person.person-id  EQ 712961 NO-LOCK NO-ERROR.
+      RUN savecust.
+      /*===============================================================*/		
+      lOK = hSAXWriter:END-ELEMENT("CZO_CUS").
+*/
+      lOK = hSAXWriter:WRITE-FRAGMENT('	</item>\n'). /* */
+
+   END.
+    
+    
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_GUARANTEE"). /* Обеспечение договора. Может быть несколько записей */
+
+
+   lOK = hSAXWriter:START-ELEMENT("CDA_SCHEDULE"). /* ГРАФИКИ. */
+   lOK = hSAXWriter:START-ELEMENT("schedule_percent"). /* График гашения процентов. */
+
+
+   FOR EACH tt-aj-perc NO-LOCK:
+      lOK = hSAXWriter:START-ELEMENT("item").
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT('pay_date',ISO-DATE(tt-aj-perc.plandate)). /* дата окончания части */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT('endIntervalDate', ISO-DATE(tt-aj-perc.probegdate)).
+      lOK = hSAXWriter:END-ELEMENT("item").
+   END.
+
+   lOK = hSAXWriter:END-ELEMENT("schedule_percent"). /* График гашения процентов. */
+
+   lOK = hSAXWriter:END-ELEMENT("CDA_SCHEDULE"). /* ГРАФИКИ. */
+
+   lOK = hSAXWriter:END-ELEMENT("CDA"). 
+    
+END.
+	  
+lOK = hSAXWriter:END-ELEMENT("XXI_DATA_PACK").  
+lOK = hSAXWriter:END-DOCUMENT( ).  
+
+RUN dbgprint.p("Итоговые суммы по Алексу",SUBSTITUTE("&1;&2;&3",mSumODAll,mSumPrcAll,mSumPremAll)).
+
+{intrface.del}
+/*=======================================================================================*/
+PROCEDURE SaveCust:
+
+   IF AVAILABLE PERSON THEN 
+   DO:
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("custype", '1'). /* Всегда Ч */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("external_id", STRING(person.person-id)). /* Всегда Ч */
+      /* ФИО клиента */
+      nameCl = PERSON.NAME-LAST + " " + PERSON.FIRST-NAMES.
+      strtmp = ''.
+      namecl1 = ''.
+      namecl2 = ''.
+      IF LENGTH(PERSON.FIRST-NAMES) > 0 THEN 
+      DO:
+         strtmp = SUBSTRING(PERSON.FIRST-NAMES,1,1) + '. '.
+         IF NUM-ENTRIES(PERSON.FIRST-NAMES,' ') > 1 THEN 
+         DO:
+            namecl1 = ENTRY(1,PERSON.FIRST-NAMES,' ').
+            namecl2 = ENTRY(2,PERSON.FIRST-NAMES,' ').
+            strtmp = strtmp + SUBSTRING(ENTRY(2,PERSON.FIRST-NAMES,' '),1,1) + '.'.            
+         END.
+      END.
+/*
+      /*Обезличиваем================================================================  */
+      ASSIGN
+         mFam = 'Семецкий'
+         nameCl  = 'Семецкий Юрий Михайлович'
+         namecl1 = 'Юрий'
+         namecl2 = 'Михайлович'
+         shortname =  'Семецкий Ю. М.'.
+
+      /*================================================================  */
+*/
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("name", nameCl).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("status", '2').
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("short_name", shortname).
+      IF person.country-id = 'RUS' THEN strtmp = '1'.
+      ELSE strtmp = '2'.
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("resident", strtmp).
+      strtmp = ''.
+      IF person.inn <> ? THEN strtmp = TRIM(person.inn).  
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("inn", strtmp).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("iotdnum", "0").
+      /* адрес */
+      lOK = hSAXWriter:START-ELEMENT("CUS_ADDRESS").     
+        
+      ASSIGN
+         mAdress1  = GetChckAttrByClnt(loan.cust-cat,person.person-id,"АдресРег")
+         mCountry1 = GetEntries(1,mAdress1,",","")
+         mIndex1   = INT64(GetEntries(2,mAdress1,",",""))
+         mOKATO1   = INT64(GetEntries(3,mAdress1,",",""))
+         mOblast1  = GetCodeName("КодРег",STRING(mOKATO1,"99999"))
+         mRegion1  = GetEntries(4,mAdress1,",","")
+         mPunkt11  = GetEntries(5,mAdress1,",","")
+         mPunkt12  = GetEntries(6,mAdress1,",","")
+         mStreet1  = GetEntries(7,mAdress1,",","")
+         mHome1    = GetEntries(8,mAdress1,",","")
+         mFlat1    = GetEntries(10,mAdress1,",","")
+         mKorpus1  = GetEntries(9,mAdress1,",","").
+        
+      FIND FIRST country WHERE country.country-alt-id = INT64(mCountry1) NO-LOCK NO-ERROR.
+      IF AVAILABLE country THEN mCountry1 = substring(country.country-id,1,2).
+      /*
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("item", '0'). /* Адрес регистрации */   
+      */
+      /*lOK = hSAXWriter:START-ELEMENT("item", '0'). /* Адрес регистрации */ */ 
+
+      lOK = hSAXWriter:WRITE-FRAGMENT('	 <item type = "0">\n'). /* Адрес регистрации */
+                  
+      /* IF mKorpus1 <> '' THEN
+          lOK = hSAXWriter:WRITE-DATA-ELEMENT("house_st", mKorpus1). */
+      IF mFlat1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("flat", mFlat1).
+      IF mRegion1 <> '' THEN 
+      DO:
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("area_name", mRegion1).
+         IF LENGTH(mPunkt11 + mPunkt12) > 0 THEN
+            lOK = hSAXWriter:WRITE-DATA-ELEMENT("place_name", TRIM((mPunkt11 + ' ' + mPunkt12))).
+      END.
+      ELSE 
+      DO:
+         IF LENGTH(mPunkt11 + mPunkt12) > 0 THEN
+            lOK = hSAXWriter:WRITE-DATA-ELEMENT("city", TRIM((mPunkt11 + ' ' + mPunkt12))).   
+      END.
+      IF mIndex1 <> ? AND mIndex1 <> 0 THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("zipcode", STRING(mIndex1)).
+      IF mHome1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("house", mHome1).
+      IF mOblast1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("reg_name", mOblast1).        
+      IF mKorpus1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("house_bl", mKorpus1).   
+      IF mStreet1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("infr_name", mStreet1).           
+      IF mCountry1 <> '' THEN
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("country", mCountry1).    
+        
+      /* lOK = hSAXWriter:WRITE-("item").*/
+      lOK = hSAXWriter:WRITE-FRAGMENT('	 </item>\n'). /* Адрес регистрации */
+      lOK = hSAXWriter:END-ELEMENT("CUS_ADDRESS"). /* конец адреса */
+        
+        
+      lOK = hSAXWriter:START-ELEMENT("CUS_PHONE"). /* телефоны */
+
+      DO mJ = 1 TO 2:
+         mPhoneAll = REPLACE(person.phone[mJ]," ",",").
+/*
+         /*Обезличиваем=====================================================*/
+         mPhoneAll = REPLACE(mPhoneAll,"1","2").
+         mPhoneAll = REPLACE(mPhoneAll,"3","4").
+         mPhoneAll = REPLACE(mPhoneAll,"5","6").
+         mPhoneAll = REPLACE(mPhoneAll,"7","8").
+         mPhoneAll = REPLACE(mPhoneAll,"9","1").
+*/
+         DO mI = 1 TO NUM-ENTRIES(mPhoneAll):
+            mPhone = ENTRY(mI,mPhoneAll).
+            IF mPhone <> ? AND TRIM(mPhone) <> '' AND TRIM(mPhone) <> ',' THEN 
+            DO:
+               lOK = hSAXWriter:START-ELEMENT("item").     
+               lOK = hSAXWriter:WRITE-DATA-ELEMENT("phone_type", STRING(2 + mJ)).
+               lOK = hSAXWriter:WRITE-DATA-ELEMENT("phone_number", TRIM(mPhone)).
+               lOK = hSAXWriter:END-ELEMENT("item").
+            END.
+         END.
+      END.
+
+      lOK = hSAXWriter:END-ELEMENT("CUS_PHONE"). /* конец телефонов */
+        
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("l_name", mFam). /* фамилия */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("f_name", namecl1). /* имя */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("m_name", namecl2). /* отчество */
+      IF person.gender THEN strtmp = 'M'. ELSE strtmp = 'F'.
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("gender", strtmp).
+      strtmp = ''.
+      IF person.birthday <> ? THEN 
+      DO:
+         strtmp = ISO-DATE(person.birthday).
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("birth_date", strtmp).
+      END.
+      strtmp = GetChckAttrByClnt(loan.cust-cat,person.person-id,"МестоРожд").
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("birth_place", strtmp).
+
+
+      lOK = hSAXWriter:START-ELEMENT("CUS_DOC"). /* документ */
+      lOK = hSAXWriter:WRITE-FRAGMENT('	<item main = "1">\n'). /* основной документ */
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("doc_agency",TRIM(person.issue)).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("external_doc_type",IF TRIM(person.document-id) EQ "Паспорт" THEN "21" ELSE TRIM(person.document-id)).
+      IF NUM-ENTRIES(person.document,' ') > 1 THEN 
+      DO:
+         IF NUM-ENTRIES(person.document,' ') > 2 THEN 
+         DO:
+            namecl1 = ENTRY(1,person.document,' ') + ' ' + ENTRY(2,person.document,' ').
+            namecl2 = ENTRY(3,person.document,' ').
+         END.
+         ELSE 
+         DO:
+            namecl1 = ENTRY(1,person.document,' ').
+            namecl2 = ENTRY(2,person.document,' ').
+         END.
+      END.   
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("doc_ser",namecl1).
+/*
+      /*Обезличиваем=====================================================*/
+      namecl1 = "5599".
+      namecl2 = "123456".
+*/
+      mDateVyd  = GetChckAttrByClnt(loan.cust-cat,person.person-id,"ДатаВыдачи").
+      mKemVyd   = GetChckAttrByClnt(loan.cust-cat,person.person-id,"КемВыданДок").
+      mKodPodr  = GetChckAttrByClnt(loan.cust-cat,person.person-id,"КодПодр").
+        
+      strtmp = SUBSTRING(mDateVyd,7,4) + '-' + SUBSTRING(mDateVyd,4,2) + '-' + SUBSTRING(mDateVyd,1,2).
+        
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("doc_date",strtmp).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("doc_subdiv",mKodPodr).
+
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("doc_num",namecl2).
+
+      lOK = hSAXWriter:WRITE-FRAGMENT('	 </item>\n'). /* Адрес регистрации */
+      lOK = hSAXWriter:END-ELEMENT("CUS_DOC"). /* документ */
+
+   END. /* IF AVAIL PERSON THEN DO: */
+
+END PROCEDURE.
+
+
+/*=======================================================================================*/
+PROCEDURE getpts.
+def var vTermSurr AS char no-undo.
+vTermSurr = loan.contract + "," + loan.cont-code + ',5,' + STRING(term-obl.end-date,"99/99/99") + ',' + STRING(term-obl.nn).
+   vin = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCVIN",
+      "").
+   mark = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCbrand",
+      "").
+   colour = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCcolor",
+      "").
+   yearAuto = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCyear",
+      "").		
+   engine = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCmotor",
+      "").
+   model = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCmodel",
+      "").
+   shassis = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCchassis",
+      "").
+   mbody = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCBODY",
+      "").
+
+   ptsSer = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCSER",
+      "").
+   ptsNum = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCNUMB",
+      "").
+   ptsDate = GetXAttrValueEx("term-obl",
+      vTermSurr,
+      "TCDATE",
+      "").
+
+END PROCEDURE.
+
+
+/*=======================================================================================*/
+PROCEDURE crt_adj_percent.
+
+   mDateLeft = loan.open-date.
+   {empty tt-aj-perc}
+   FOR EACH loan-int OF loan WHERE loan-int.id-d = 4
+      AND loan-int.id-k = 5 
+      AND loan-int.mdate < cessdate
+      AND loan-int.amt-rub <> 0
+      NO-LOCK BY loan-int.mdate:
+      mDateLeft = MAX(mDateLeft,loan-int.mdate).
+   END.
+
+   FOR EACH loan-int OF loan WHERE loan-int.id-d = 377
+      AND loan-int.id-k = 173 
+      AND loan-int.mdate < cessdate
+      AND loan-int.amt-rub <> 0
+      NO-LOCK BY loan-int.mdate:
+
+      mDateLeft = MAX(mDateLeft,loan-int.mdate).
+
+   END.
+
+   ost455 = 0.
+   FIND LAST loan-acct OF LOAN WHERE
+      loan-acct.acct-type = 'Кредит' NO-LOCK NO-ERROR.
+   IF AVAILABLE loan-acct THEN 
+   DO:
+      RUN acct-pos IN h_base (loan-acct.acct, loan-acct.currency, cessdate - 1,cessdate - 1, ?).
+      IF loan-acct.currency = '' THEN
+         ost455 = abs(sh-bal).
+      ELSE ost455 = abs(sh-val).
+   /* ost455 = 895793.30. */
+   /*message ost455 view-as alert-box.*/
+   END.
+   stavka = 0.
+   FOR EACH comm-rate
+      WHERE comm-rate.kau EQ loan.contract + "," + loan.cont-code
+      AND comm-rate.commission = '%Кред'
+      NO-LOCK BY comm-rate.since DESCENDING:
+      stavka = comm-rate.rate-comm.
+      LEAVE.
+   END.
+
+   /*mDateLeft = cessdate.*/
+
+   FOR EACH term-obl OF loan WHERE term-obl.idnt = 3 
+      AND term-obl.end-date > cessdate
+      AND term-obl.amt-rub <> 0
+      NO-LOCK BY term-obl.end-date:
+
+      IF day(date_correct(2,0,31,YEAR(mDateLeft))) > 28 THEN daysInYear = 36600.
+      ELSE daysInYear = 36500.
+
+      mDateMonth = date_correct(month(mDateLeft),0,31,year(mDateLeft)).
+      mDateRight  = term-obl.end-date.
+      mSumprAdj = 0.
+      IF mDateMonth GT mDateLeft AND mDateMonth LT mDateRight THEN
+      DO:
+         mSumprAdj = ost455 * (mDateMonth - mDateLeft) * stavka / daysInYear.
+         lOK = hSAXWriter:START-ELEMENT("item").
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT('pay_date',ISO-DATE(mDateMonth)).
+         lOK = hSAXWriter:WRITE-DATA-ELEMENT("pay_sum",TRIM(string(mSumprAdj,">>>>>>>>>>>9.99"))). 
+         lOK = hSAXWriter:END-ELEMENT("item").
+         mDateLeft = mDateMonth.
+         CREATE tt-aj-perc.
+         ASSIGN
+            tt-aj-perc.plandate   = mDateRight
+            tt-aj-perc.probegdate = mDateMonth.
+      END.
+      FIND FIRST term-obl2 OF loan WHERE term-obl2.idnt = 1  AND term-obl2.end-date EQ term-obl.end-date NO-LOCK NO-ERROR.
+      mSumprAdj1 = mSumprAdj.
+      mSumprAdj = term-obl2.amt-rub - mSumprAdj1.
+      mDateMonth = mDateRight.
+      lOK = hSAXWriter:START-ELEMENT("item").
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT('pay_date',ISO-DATE(mDateMonth)).
+      lOK = hSAXWriter:WRITE-DATA-ELEMENT("pay_sum",TRIM(string(mSumprAdj,">>>>>>>>>>>9.99"))). 
+      lOK = hSAXWriter:END-ELEMENT("item").
+      CREATE tt-aj-perc.
+     
+      ASSIGN
+         tt-aj-perc.plandate   = mDateRight
+         tt-aj-perc.probegdate = term-obl2.end-date
+         ost455 = ost455 - term-obl.amt-rub
+         mDateLeft = mDateMonth.
+         
+    
+   END.
+END PROCEDURE.
+
+
+/*=======================================================================================*/
+PROCEDURE write_cda_sum.
+   DEFINE INPUT PARAMETER vDebt AS CHARACTER NO-UNDO. 
+   DEFINE INPUT PARAMETER vPar AS CHARACTER NO-UNDO. 
+
+   DEFINE VARIABLE vSum AS DECIMAL NO-UNDO. 
+   vSum = LN_GetParams(loan.contract,
+      loan.cont-code,
+      vPar,
+      cessdate).
+   IF vSum NE 0 THEN
+      lOK = hSAXWriter:WRITE-FRAGMENT('	 <item id="' + vDebt + '">' + TRIM(string(vSum ,">>>>>>>>>>>9.99")) + '</item>\n').       
+
+END PROCEDURE.

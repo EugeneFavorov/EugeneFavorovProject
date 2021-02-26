@@ -1,0 +1,699 @@
+/*
+               Банковская интегрированная система БИСквитa
+    Copyright: (C) 1992-2002 ТОО "Банковские информационные системы"
+     Filename: ACCTTMPL.LIB
+      Comment: Библиотека процедур авт. открытия счетов от договора
+   Parameters:
+         Uses:
+      Used by:
+     Modified: 02.07.2002 18:33 KSV      (0007589) Добавлена декларация вр. таблицы tAttr, которая
+                                         содержит доп.реквизиты шаблона транзакции, которые должны
+                                         быть привязаны к открываемому счету.
+                                         В процедуру Get-Xattr-Templ добавлено заполнение таблицы
+                                         tAttr.
+                                         В процедуру Convert-Param добавлено опредление значений
+                                         доп.реквизитов, содержащихся в таблице tAttr.
+     Modified: 18.07.2002 17:19 KSV      Исправлена ошибка в процедуре Get-XAttr-Templ, ссылка на
+                                         буфер XATTR изменена на XATTRID.
+     Modified: 18.10.2002 kraw (0011385) - сохранение наименования для внутреннего счета
+     Modified: 17.03.2003 15:25 kolal    13858
+     Modified: 31.03.2003 18:37 ilvi     по заявке 11822
+     Modified: 30.05.2003 17:47 ilvi     (12677) Добавлена процедура UpdateSysConf. Сохраняет номера транша
+                                          счета той же категории с 1 транша для класса Лиц.счета на траншах
+     Modified: 18.07.2005 12:44 MDY      37923 - acct-сr.i -> pp-acct.p
+     Modified: 10.08.2005 15:03 KSV      (0037923) Исправлена ошибка в
+                                         процедуре Create-Acct
+     Modified: 14/10/2005 (0051803) ZIAL - Необходимо поиск настроечных
+               параметров перевести на единый инструмент
+     Modified: 21/12/2005 (0053078) ZIAL - КиД Использование парсерных функций
+               к транзакции sozschet и credacct
+*/
+
+
+{intrface.get "acct"}
+{intrface.get brnch}
+
+{wclass.i}
+{shttacct.def}
+{def-wf.i}
+{nameaclb.i}
+{dpsproc.def}
+{wordwrap.def}
+{client.i}
+/*Возможные параметры для создания счета*/
+DEFINE VAR tv-op-kind          AS CHARACTER NO-UNDO.
+DEFINE VAR tv-op-template      AS INT64   NO-UNDO.
+
+DEFINE VAR tv-Bal-Acct         AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Acct-cat         AS CHARACTER
+                               INITIAL "b"  NO-UNDO.
+DEFINE VAR tv-Acct-Name        AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Acct-Mask        AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Contract         AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Acct             AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Currency         AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Details          AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Cust-cat         AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Cust-id-ch       AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Cust-id          AS INT64   NO-UNDO INITIAL ?.
+DEFINE VAR tv-Acct-type        AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Acct-code        AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Class-code       AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Create-Find      AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Cr-Class-Code    AS CHARACTER NO-UNDO.
+DEFINE VAR tv-kau-id           AS CHARACTER NO-UNDO INITIAL "*".
+DEFINE VAR tv-otdel            AS CHARACTER NO-UNDO.
+DEFINE VAR tv-Acct-UserID      AS CHARACTER NO-UNDO.
+/****************************************/
+DEFINE VAR DeclaredProc        AS CHARACTER NO-UNDO.
+DEFINE VAR mess                AS CHARACTER NO-UNDO.
+DEFINE VAR vAgrCounter         AS CHARACTER NO-UNDO.
+DEFINE VAR vProdCode           AS CHARACTER NO-UNDO.
+
+DeclaredProc = THIS-PROCEDURE:INTERNAL-ENTRIES.
+
+{fbalacct.lib}
+{garacct.lib}
+
+/* Таблица доп.реквизитов, которые должны привязываться к открываемому счету */
+DEFINE TEMP-TABLE tAttr NO-UNDO
+  FIELD fAttrName AS CHAR
+  FIELD fAttrVal AS CHAR
+  INDEX iAttrName fAttrName
+.
+
+
+DEFINE VAR cur-n    AS CHARACTER NO-UNDO.
+cur-n = FGetSetting("КодНацВал",?,"{&in-NC-Code}").
+IF AVAIL loan THEN DO:
+        RUN AddCustomField("ContractCreateLoan",loan.contract).
+        RUN AddCustomField("ContCodeCreateLoan",loan.cont-code).
+END.
+
+PROCEDURE Get-Xattr-Templ:
+   DEFINE INPUT PARAMETER in-rid-templ     AS RECID NO-UNDO.
+
+   /* Список особо обрабатываемых доп.реквизитов шаблона */
+   &SCOPED-DEFINE ExclAttrs   "bal-acct,acct-cat,l-acct,open_mask,contract,l-currency,l-cust-cat,acct-type,flag-create,l-cust-id,kau-id"
+
+   DEFINE VARIABLE vS      AS CHARACTER  NO-UNDO.
+
+   DEFINE BUFFER buf-optemplate FOR op-template.
+
+   FIND buf-optemplate WHERE RECID(buf-optemplate) EQ in-rid-templ NO-LOCK NO-ERROR.
+
+   ASSIGN
+      tv-op-kind       = buf-optemplate.op-kind
+      tv-op-template   = buf-optemplate.op-template
+      tv-Bal-Acct      = Get_Param("bal-acct",in-rid-templ)
+      tv-Acct-cat      = Get_Param("acct-cat",in-rid-templ)
+      tv-Acct          = Get_Param("l-acct",in-rid-templ)
+      tv-Acct-Mask     = Get_Param("open_mask",in-rid-templ)
+      tv-Contract      = Get_Param("contract",in-rid-templ)
+      tv-Currency      = Get_Param("l-currency",in-rid-templ)
+      tv-Cust-cat      = Get_Param("l-cust-cat",in-rid-templ)
+      tv-Cust-id-ch    = Get_Param("l-cust-id",in-rid-templ)
+      tv-Acct-type     = Get_Param('acct-type',in-rid-templ)
+      tv-Create-Find   = Get_Param("flag-create",in-rid-templ)
+      tv-Details       = buf-optemplate.details
+      tv-Cr-Class-Code = buf-optemplate.cr-class-code
+      tv-kau-id        = Get_Param("kau-id",in-rid-templ)
+      tv-otdel         = GetXAttrValue("op-template",
+                                       buf-optemplate.op-kind + ","
+                                     + STRING(buf-optemplate.op-template),
+                                       "branch-id"
+                                      )
+      tv-Acct-UserID   = GetXAttrValue("op-template",
+                                       buf-optemplate.op-kind + ","
+                                     + STRING(buf-optemplate.op-template),
+                                       "l-acct-userid"
+                                      )
+   .
+
+   IF tv-kau-id = "" OR
+      tv-kau-id = ?
+   THEN
+      tv-kau-id = "*".
+
+   RUN XAttrAll IN h_xclass (buf-optemplate.class-code,OUTPUT TABLE xattrid).
+
+   FOR EACH tAttr:
+     DELETE tAttr.
+   END. /* End of FOR */
+
+   FOR EACH xattrid WHERE LOOKUP(xattrid.xattr-code,{&ExclAttrs}) = 0:
+     vS = GetXAttrValueEx("op-template",buf-optemplate.op-kind + "," + STRING(buf-optemplate.op-template),xattrid.xattr-code,?).
+     IF vS = ? THEN NEXT.
+     CREATE tAttr.
+     ASSIGN
+       tAttr.fAttrName = xattrid.xattr-code
+       tAttr.fAttrVal  = vS.
+   END. /* End of FOR */
+
+   RUN XAttrAll IN h_xclass (buf-optemplate.cr-class-code,OUTPUT TABLE xattrid).
+
+   FOR EACH tAttr:
+     FIND FIRST xattrid WHERE xattrid.xattr-code = tAttr.fAttrName NO-ERROR.
+     IF NOT AVAIL xattrid THEN DELETE tAttr.
+   END. /* End of FOR */
+END PROCEDURE.
+
+PROCEDURE Convert-Param:
+
+   DEFINE VARIABLE vS AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vClient AS CHARACTER  NO-UNDO.
+   DEFINE VARIABLE vClName AS CHARACTER  NO-UNDO.
+
+   ASSIGN
+      vClient = GetXAttrValueEx("loan",loan.contract + "," + loan.cont-code,"issuer",?)
+      vClName = "?"
+      .
+
+   IF tv-Currency EQ ? OR tv-Currency EQ "" THEN
+      tv-Currency = loan.currency.
+   ELSE
+   DO:
+      IF tv-Currency EQ cur-n THEN
+         tv-Currency = "".
+      ELSE DO:
+         RUN Call-Proc(INPUT tv-Currency,OUTPUT tv-Currency).
+           IF tv-Currency EQ cur-n THEN
+           tv-Currency = "".
+      END.
+   END.
+
+   IF tv-Cust-cat = "В" THEN
+      tv-Cust-id = ?.
+   ELSE
+
+   IF tv-Cust-cat   <> ?  AND
+      tv-Cust-cat   <> "" AND
+      tv-Cust-id-ch <> ?  AND
+      tv-Cust-id-ch <> "" THEN
+   DO:
+      RUN Call-Proc(INPUT tv-cust-cat,  OUTPUT tv-cust-cat).
+      RUN Call-Proc(INPUT tv-cust-id-ch,OUTPUT tv-cust-id-ch).
+      tv-Cust-id =  INT64(tv-cust-id-ch).
+   END.
+   ELSE
+   DO:
+      IF {assigned vClient} AND NUM-ENTRIES(vClient) = 2 THEN
+      DO:
+         ASSIGN
+            tv-cust-cat = ENTRY(1,vClient)
+            tv-Cust-id  = INT64(ENTRY(2,vClient))
+            .
+         RUN RE_CLIENT(tv-cust-cat,tv-cust-id,INPUT-OUTPUT vClName).
+      END.
+
+      ASSIGN
+         tv-Cust-cat = loan.cust-cat WHEN vClName = "?"
+         tv-Cust-id  = loan.cust-id  WHEN vClName = "?"
+         .
+   END.
+   IF tv-Details NE "" AND tv-Details NE ? THEN
+       RUN prsstr.p("nameaclb",INPUT-OUTPUT tv-Details).
+
+   ASSIGN
+      tv-Acct-code = GetCodeEx(IF    loan.contract EQ "Кредит"
+                                  OR loan.contract EQ "Депоз"
+                               THEN "ТипСчДог"
+                               ELSE "loan-acct",
+                               tv-Acct-type,
+                               "*"
+                              )
+      tv-Acct-name = (IF tv-Acct-code = "*"
+                      THEN ""
+                      ELSE GetCodeName(IF    loan.contract EQ "Кредит"
+                                          OR loan.contract EQ "Депоз"
+                                       THEN "ТипСчДог"
+                                       ELSE "loan-acct",
+                                       tv-Acct-type
+                                      )
+                     ).
+
+   /* БС уже определен (например, в транзакции) 0260426 */
+   IF LENGTH(GetSysConf("БалСчетПоDT")) EQ 5 THEN
+   DO:
+      tv-bal-acct = GetSysConf("БалСчетПоDT").
+      RUN DeleteOldDataProtocol IN h_base ("БалСчетПоDT").
+   END.
+   ELSE IF tv-bal-acct <> ? THEN
+      RUN Call-Proc(INPUT tv-Bal-Acct,
+                    OUTPUT tv-Bal-Acct
+                   ).
+   IF tv-acct     <> ? THEN
+   DO:
+      IF tv-Acct MATCHES "*<*>*" THEN do:
+         set_loan(loan.contract, loan.cont-code).
+         RUN prsstr.p(?, INPUT-OUTPUT tv-Acct).
+         RUN verFil ( INPUT loan.filial-id, INPUT-OUTPUT tv-Acct).
+      end.
+
+      RUN Call-Proc(INPUT tv-Acct,
+                    OUTPUT tv-Acct
+                   ).
+   END. 
+
+   IF tv-Acct = "" OR
+      tv-Acct = ? THEN
+      tv-Acct = "*".
+   IF tv-Acct-UserID <> ? THEN
+   DO:
+      IF tv-Acct-UserID MATCHES "*<*>*" THEN do:
+         set_loan(loan.contract, loan.cont-code).
+         RUN prsstr.p(?, INPUT-OUTPUT tv-Acct-UserID).
+      end.
+
+      RUN Call-Proc(INPUT tv-Acct-UserID,
+                    OUTPUT tv-Acct-UserID
+                   ).
+   END. 
+   IF NOT CAN-FIND(_user WHERE _user._userid = tv-Acct-UserID) THEN tv-Acct-UserID = ?.
+
+   FOR EACH tAttr:
+     RUN Call-Proc(tAttr.fAttrVal,OUTPUT vS).
+     tAttr.fAttrVal = vS.
+   END. /* End of FOR */
+
+   IF {assigned tv-Acct-Mask} THEN
+      RUN Call-Proc(tv-Acct-Mask,
+                    OUTPUT tv-Acct-Mask).
+END PROCEDURE.
+
+FUNCTION GetNumAcct RETURNS INT64:
+   DEFINE BUFFER buf-tt-editacct FOR tt-editacct.
+   FIND LAST buf-tt-editacct WHERE buf-tt-editacct.num NE 0 NO-LOCK NO-ERROR.
+   IF AVAIL buf-tt-editacct THEN RETURN (buf-tt-editacct.num + 1).
+                            ELSE RETURN 1.
+
+END.
+
+PROCEDURE Create-Acct:
+
+   DEFINE OUTPUT PARAMETER oMess AS CHAR NO-UNDO.
+
+   DEFINE VARIABLE myAcct   AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE mAcctRes AS CHARACTER NO-UNDO.
+   DEFINE VARIABLE vNum     AS INT64     NO-UNDO.
+   DEFINE VARIABLE vYear    AS CHAR      NO-UNDO.
+
+   /* DEFINE BUFFER acct FOR acct. */
+   DEFINE BUFFER mbloan FOR loan.
+
+   IF tv-Create-Find <> "Создавать" THEN
+      RETURN.
+
+   FIND FIRST bal-acct WHERE
+              bal-acct.bal-acct = INT64(tv-Bal-Acct)
+   NO-LOCK NO-ERROR.
+
+   IF NOT AVAILABLE bal-acct THEN
+      RETURN.
+   IF NOT CAN-DO(GetXclassAllparentsEx(tv-Cr-Class-Code),"acct" +
+    bal-acct.acct-cat)
+   THEN DO :
+     oMess = "Ошибка при открытии счета. Класс счета не соответствует
+     категории".
+      RETURN.
+   END.
+
+   /* Если бал.счет не стоит на субаналитике,
+   ** но в шаблоне счета указан корректный КАУ,
+   ** то ставим на субаналитику лицевой счет.
+   */
+   IF tv-kau-id <> "*" AND
+      tv-kau-id <> bal-acct.kau-id THEN
+   DO:
+      IF GetCode("ШаблКау", tv-kau-id) = ? THEN
+      DO:
+         oMess = "Шаблон КАУ с кодом " + tv-kau-id +
+                " не найден в классификаторе 'ШаблКАУ'!".
+         RETURN.
+      END.
+   END.
+
+      /* Добавляем маски тэгов для генерации номеров счетов */
+   IF INDEX(tv-Acct-Mask, "n") > 0 THEN
+   DO:
+         /* Номер договора берется из ДР "AgrCounter" на договоре */
+      vAgrCounter = GetXAttrValueEx ("loan",
+                                     loan.contract + "," + loan.cont-code,
+                                     "AgrCounter",
+                                     ?).
+         /* Если ДР "AgrCounter" не заполнен, и это транш,
+         ** то берем ДР с охватывающего договора */
+      IF     vAgrCounter EQ ?
+         AND NUM-ENTRIES(loan.cont-code, " ") EQ 2 THEN
+         vAgrCounter = GetXAttrValueEx ("loan",
+                                        loan.contract + "," + ENTRY(1, loan.cont-code, " "),
+                                        "AgrCounter",
+                                        ?).
+      IF vAgrCounter EQ ? THEN
+      DO:
+         oMess = "Ошибка при открытии счета к договору " + 
+                  loan.cont-code + "~n" +
+                 "В шаблоне счета есть литеры <n>, " +
+                 "но допреквизит <AgrCounter> не заполнен".
+         RETURN.
+      END.
+
+      vNum = INT64(vAgrCounter) NO-ERROR.
+      IF ERROR-STATUS:ERROR THEN DO:
+         oMess = "Ошибка при открытии счета к договору " + 
+                  loan.cont-code + "~n" +
+                 "В шаблоне счета есть литеры <n>, " +
+                 "но допреквизит <AgrCounter> заполнен не числовым значением <" + 
+                  vAgrCounter  + ">".
+         RETURN .
+      END.
+
+         /* Подстановка номера в шаблон */
+      RUN PatternSubst ("n",
+                        STRING(vAgrCounter),
+                        INPUT-OUTPUT tv-Acct-Mask).
+   END.
+
+         /* подстановка даты  */
+   IF INDEX(tv-Acct-Mask, "g") GT 0 THEN
+   DO:
+      /* если транш */
+      IF     NUM-ENTRIES(loan.cont-code, " ")             EQ 2 
+         AND GetXAttrInit(loan.class-code, "МаскСчетГод") EQ "Да" THEN
+      DO: 
+         FIND FIRST mbloan WHERE
+                    mbloan.contract  EQ loan.contract
+                AND mbloan.cont-code EQ ENTRY(1, loan.cont-code, " ")
+         NO-LOCK NO-ERROR.
+         IF AVAILABLE mbloan THEN
+         DO:
+
+            vNum = YEAR(DATE(GetXAttrValueEx ("loan",
+                                     mbloan.contract + "," + mbloan.cont-code,
+                                    "ДатаСогл",
+                                     ?))) NO-ERROR.
+
+            IF ERROR-STATUS:ERROR
+               OR vNum EQ ? THEN DO:
+               oMess = "Ошибка при открытии счета к договору " + 
+                        loan.cont-code + "~n" +
+                       "В шаблоне счета есть литеры <g>, но невозможно определить год по " +
+                       "допреквизиту <ДатаСогл> соглашения № " + mbloan.cont-code.
+               RETURN .
+            END.
+            vYear = STRING(vNum).
+            RUN PatternSubst ("g",
+                              vYear,
+                              INPUT-OUTPUT tv-Acct-Mask).
+         END.
+         ELSE
+         DO:
+            oMess = "Ошибка при открытии счета к договору " + 
+                     loan.cont-code + "~n" +
+                    "В шаблоне счета есть литеры <g>, но невозможно найти " +
+                    "дату соглашения - не найден " +
+                    "охв. договор к траншу № " + loan.cont-code.
+            RETURN .
+         END.
+      END.
+      ELSE RUN PatternSubst ("g",
+                             STRING(YEAR(loan.open-date)),
+                             INPUT-OUTPUT tv-Acct-Mask).
+   END.
+
+         /* подстановка кода продукта  */
+   IF INDEX(tv-Acct-Mask, "p") GT 0 THEN
+   DO:
+      vProdCode = GetXAttrValueEx ("loan",
+                                    loan.contract + "," + loan.cont-code,
+                                    "ПродКод",
+                                    "").
+      IF NOT {assigned vProdCode} THEN
+      DO:
+         oMess = "Ошибка при открытии счета к договору " + 
+                  loan.cont-code + "~n" +
+                 "В шаблоне счета есть литеры <p>, " +
+                 "но допреквизит <ПродКод> не заполнен".
+         RETURN.
+      END.
+
+      vNum = INT64(vProdCode) NO-ERROR.
+      IF ERROR-STATUS:ERROR THEN DO:
+         oMess = "Ошибка при открытии счета к договору " + 
+                  loan.cont-code + "~n" +
+                 "В шаблоне счета есть литеры <p>, " +
+                 "но допреквизит <ПродКод> заполнен не числовым значением <" + 
+                  vProdCode  + ">".
+         RETURN .
+      END.
+
+      RUN PatternSubst ("p",
+                        vProdCode,
+                        INPUT-OUTPUT tv-Acct-Mask).
+
+   END.
+
+   mAcctRes = GetSysConf("crAcctRes").
+   IF {assigned mAcctRes} AND 
+      NUM-ENTRIES(mAcctRes) EQ 2 AND 
+      TRIM(ENTRY(1,mAcctRes)) EQ tv-Acct-type THEN 
+   tv-Acct-Mask = DelFilFromAcct(ENTRY(2,mAcctRes)).
+
+   RELEASE acct NO-ERROR.
+
+   RUN Cm_acct_cr IN h_acct (
+          tv-Cr-Class-Code,      /* iClass                  */
+          INT64(tv-Bal-Acct),    /* iBal                    */
+          tv-Currency,           /* iCurr                   */
+          tv-Cust-cat,           /* iCustCat                */
+          tv-Cust-id,            /* iCustID                 */
+          in-op-date,            /* iOpenDate               */
+          OUTPUT myAcct,         /* oAcct                   */
+          BUFFER acct,           /* BUFFER iacct FOR acct . */
+          tv-Acct-Mask,          /* iAcctMask               */
+          tv-Details,            /* iDetails                */
+          tv-kau-id,             /* iKauId                  */
+          tv-Contract,           /* iContract               */
+          IF tv-Acct-UserID EQ ? THEN USERID ('bisquit') ELSE tv-Acct-UserID,    /* iUserId                 */
+          mOtdel,                /* iBranchId               */
+          YES                    /* iCopyBalXattr           */
+   ) NO-ERROR.
+
+   IF ERROR-STATUS:ERROR THEN DO:
+      oMess = RETURN-VALUE.
+      RETURN .
+   END.
+
+   /* Commented by KSV: Ищем буфер созданного счета, т.к. вызывающая процедура
+   ** ожидает его */
+   FIND FIRST acct WHERE
+      acct.Acct      = myAcct AND
+      acct.Currency  = tv-currency NO-LOCK NO-ERROR.
+
+   /* Инициализация доп.реквизитов со счета 2-го порядка и из классификатора
+   ** МаскиНаслед */
+   RUN BalToAcct_XattrExtRole IN h_acct (RECID(acct),"*",NO,YES,RECID(loan),tv-Acct-type ).
+   IF RETURN-VALUE EQ "ERROR" THEN
+   DO:
+      oMess = "Ошибка при инициализация доп.реквизитов со счета 2-го порядка " +
+             "и из классификатора  [МаскиНаслед]  ".
+      RETURN.
+   END.
+END.
+
+PROCEDURE Search-Acct:
+
+   &SCOPED-DEFINE comm_acct_where           ~
+      AND acct.currency   = tv-Currency     ~
+      AND acct.close-date = ?               ~
+      AND acct.open-date <= in-op-date      ~
+      AND (acct.branch-id = mOtdel OR       ~
+           INDEX(tv-Acct-Mask, "ф", 10) = 0 ~
+          )                                 ~
+      AND (tv-Contract    = ""    OR        ~
+           acct.contract  = tv-Contract     ~
+          )                                 ~
+      AND CAN-DO(tv-Acct, acct.number)
+
+   &SCOPED-DEFINE kau-id_where              ~
+      AND (   tv-kau-id = "*"               ~
+           OR (AVAILABLE bal-acct AND       ~
+               bal-acct.kau-id = tv-kau-id  ~
+              )  ~                          ~
+           OR acct.kau-id = tv-kau-id       ~
+          )
+
+   DEF BUFFER bal-acct FOR bal-acct.
+
+   IF tv-Create-Find <> "Искать" THEN
+      RETURN.
+
+   /*Если заполнено tv-acct*/
+   FIND FIRST acct WHERE
+      acct.acct EQ tv-acct
+      and acct.currency EQ tv-Currency
+      and acct.acct-cat EQ tv-acct-cat
+   NO-LOCK NO-ERROR.
+   IF AVAIL acct THEN
+      RETURN.
+
+   IF tv-Bal-Acct <> ?  THEN
+      FIND FIRST bal-acct WHERE
+                 bal-acct.bal-acct = INT64(tv-Bal-acct)
+      NO-LOCK NO-ERROR.
+
+   IF tv-Bal-Acct <> ?  AND
+      tv-Cust-Cat <> ?  AND
+      tv-Cust-Cat <> "" THEN
+   DO: /* Внутрибанковские счета ищем без проверки кода клиента */
+      IF tv-Cust-cat = "В" THEN
+         FIND FIRST acct WHERE
+                    acct.bal-acct = INT64(tv-Bal-acct)
+                AND acct.cust-cat = tv-Cust-cat
+                AND acct.acct-cat = tv-Acct-cat
+                    {&comm_acct_where}
+                    {&kau-id_where}
+         NO-LOCK NO-ERROR.
+      ELSE
+         FIND FIRST acct WHERE
+                    acct.cust-cat = tv-Cust-cat
+                AND acct.cust-id  = tv-Cust-id
+                AND acct.acct-cat = tv-Acct-cat
+                AND acct.bal-acct = INT64(tv-Bal-acct)
+                    {&comm_acct_where}
+                    {&kau-id_where}
+         NO-LOCK NO-ERROR.
+      IF AVAILABLE acct THEN
+         RETURN.
+   END.
+   IF tv-Acct = "*"  THEN
+      RETURN.
+
+   IF tv-Bal-Acct <> ?   THEN
+   DO:
+      FIND FIRST acct WHERE
+                 acct.bal-acct = INT64(tv-Bal-acct)
+                 {&comm_acct_where}
+                 {&kau-id_where}
+      NO-LOCK NO-ERROR.
+      IF AVAILABLE acct THEN
+         RETURN.
+   END.
+   IF tv-Contract <> ?   AND
+      tv-Contract <> ""  THEN
+   FOR
+      EACH acct WHERE
+           acct.contract = tv-Contract
+           {&comm_acct_where}
+         USE-INDEX acct-cont
+         NO-LOCK,
+
+      FIRST bal-acct WHERE
+            bal-acct.bal-acct = acct.bal-acct
+            {&kau-id_where}
+         NO-LOCK:
+      RETURN.
+   END.
+   /* Без проверки kau-id - иначе долго! */
+   FIND FIRST acct WHERE YES
+              {&comm_acct_where}
+   NO-LOCK NO-ERROR.
+END PROCEDURE.
+
+PROCEDURE CALL-Proc:
+   DEFINE INPUT  PARAMETER in-str  AS CHARACTER NO-UNDO.
+   DEFINE OUTPUT PARAMETER out-str AS CHARACTER NO-UNDO.
+
+   DEFINE VAR l-sk                 AS INT64   NO-UNDO.
+   DEFINE VAR r-sk                 AS INT64   NO-UNDO.
+   DEFINE VAR name-proc            AS CHARACTER NO-UNDO.
+   DEFINE VAR param-proc           AS CHARACTER NO-UNDO.
+
+   ASSIGN
+      l-sk = INDEX(in-str,"(")
+      r-sk = R-INDEX(in-str,")")
+   .
+   IF     NOT in-str MATCHES "*<*"
+      AND (l-sk NE 0 AND r-sk NE 0)
+   THEN DO:
+      ASSIGN
+         name-proc  = TRIM(SUBSTRING(in-str,1,l-sk - 1))
+         param-proc = TRIM(SUBSTRING(in-str,l-sk + 1,r-sk - l-sk - 1))
+      .
+      IF CAN-DO(DeclaredProc,name-proc) THEN DO:
+         RUN VALUE(name-proc) (INPUT param-proc,OUTPUT out-str).
+      END.
+      ELSE DO:
+         MESSAGE "Не могу найти процедуру '" name-proc "' объявленную в " SKIP
+                 "транзакции:" tv-op-kind
+                 "шаблона №"   tv-op-template
+         VIEW-AS ALERT-BOX ERROR BUTTONS OK.
+      END.
+   END.
+   ELSE out-str = in-str.
+END PROCEDURE.
+
+/* tv-otdel определяется в Get-Xattr-Templ из ДР branch-id класса acct-templ-umc
+** В ДР указывается либо код подразделения, либо парсерная ф-я,
+** например, так - <ПодСтрока(ИнвНом(),2,4)>
+*/
+PROCEDURE GetOtdel:
+   IF tv-otdel BEGINS "<"
+   THEN DO:
+      chpar1 = loan.doc-ref. /* Для правильной работы ф-ии ИнвНом */
+      RUN prsstr.p ("pp-prsfn", INPUT-OUTPUT tv-otdel).
+   END.
+
+   RUN CheckBranch IN h_brnch (tv-otdel).
+   IF RETURN-VALUE NE "" THEN
+      RETURN "-1".
+
+/* Возвращает есть ли такой филиал. */
+   IF NOT AvailBranch(tv-otdel) THEN
+      RETURN "-1".
+
+   RETURN.
+END PROCEDURE.
+
+   /* Замена в строке шаблона vMask шаблонных символов vChar на номер vNumb.
+   ** Замена производится справа-налево. Длинный номер усекается по правой части,
+   ** короткий - дополняется нулями слева. Символы могут следовать вразброс. */
+PROCEDURE PatternSubst.
+   DEF INPUT        PARAM vChar AS CHAR NO-UNDO. /* Символ шаблона для замены */
+   DEF INPUT        PARAM vNumb AS CHAR NO-UNDO. /* Номер для подстановки в шаблон */
+   DEF INPUT-OUTPUT PARAM vMask AS CHAR NO-UNDO. /* Строка шаблона */
+
+   DEF VAR vPos0 AS INT64 NO-UNDO. /* Позиция в шаблоне */
+   DEF VAR vPos1 AS INT64 NO-UNDO. /* Позиция в номере  */
+      /* Определение стартовых позиций и дополнение лидирующими нулями номера */
+   ASSIGN
+      vPos0 = LENGTH(vMask)
+      vNumb = FILL('0', vPos0) + vNumb
+      vPos1 = LENGTH(vNumb)
+   .
+      /* Цикличная замена (проход с конца шаблона) в шаблоне символов  */
+   DO WHILE TRUE:
+      vPos0 = R-INDEX(vMask, vChar , vPos0).
+      IF vPos0 <= 0 THEN LEAVE.
+      ASSIGN
+         SUBSTR(vMask, vPos0) = SUBSTR(vNumb, vPos1 , 1)
+         vPos1 = vPos1 - 1
+         vPos0 = vPos0 - 1
+      .
+   END.
+END PROCEDURE.
+
+PROCEDURE verFil :
+   DEF INPUT        PARAM ifil   AS CHAR NO-UNDO.
+   DEF INPUT-OUTPUT PARAM ioacct AS CHAR NO-UNDO.
+   /* Если БД мультифилиальная */
+   IF shMode AND INDEX(ioAcct,"@") = 0 THEN
+      ioacct = string(ioacct ,"x(25)") + "@" + ifil.
+END PROCEDURE.
+/* $LINTENV ='dpl' */
+/* $LINTVSS ='$/ws3-dpl/common' */
+/* $LINTDATE='29/01/2016 09:46:59.920+03:00' */
+/* $LINTUSER='guiv' */
+/* $LINTMODE='1' */
+/* $LINTFILE='accttmpl.lib' */
+/*prosignlwkcUo2G0CPVHBLHl8oRZA*/

@@ -1,0 +1,438 @@
+/* è´†‚•¶≠Æ• ØÆ‡„Á•≠®• */
+&IF "{&OFFSET}" EQ "NO" &THEN
+      &SCOP OFFSET_VAL 0
+&ELSE
+      &SCOP OFFSET_VAL 1000
+&ENDIF
+
+&IF DEFINED(SET_DATA) &THEN
+   DEF VAR kpppl AS CHAR NO-UNDO.
+   DEF VAR kpppo AS CHAR NO-UNDO.
+
+   DEFINE VARIABLE vIsLongPolBankName AS LOGICAL NO-UNDO.
+   DEFINE VARIABLE vIsLongPlaBankName AS LOGICAL NO-UNDO.
+
+   DEFINE VARIABLE vIsLongPolName AS LOGICAL NO-UNDO.
+   DEFINE VARIABLE vIsLongPlaName AS LOGICAL NO-UNDO.
+   
+   FIND FIRST doc-type
+      WHERE doc-type.doc-type EQ op.doc-type 
+      NO-LOCK NO-ERROR .
+      
+   IF AVAIL op THEN
+      detail[1] = op.details.
+   ELSE
+      detail[1] = detail[1] + " " +
+                  detail[2] + " " +
+                  detail[3] + " " +
+                  detail[4] + " " +
+                  detail[5].
+
+
+   DO i = 1 TO 6:
+      PlatName[i] = plName[i].
+   END.
+
+   IF FGetSetting("à·™´àçç","","Ñ†") EQ "Ñ†" AND plName[1] BEGINS "àçç " THEN
+   DO:
+      i = 4.
+      
+      DO WHILE LOOKUP(SUBSTRING(platName[1],i,1)," ,0,1,2,3,4,5,6,7,8,9") > 0 :
+         i = i + 1.
+      END.
+
+      ASSIGN
+         innpl       = trim(substring(plName[1],5,i - 5))
+         platName[1] = substring(platName[1],i)
+      . 
+   END. /* IF plName[1] BEGINS "àçç " */
+
+&IF {&FORM-DOC} NE 60 &THEN
+   IF platName[1] BEGINS "äèè " THEN
+   DO:
+      i = 4.
+
+      DO WHILE LOOKUP(SUBSTRING(platName[1],i,1)," ,0,1,2,3,4,5,6,7,8,9") > 0 :
+         i = i + 1.
+      END.
+
+      ASSIGN
+         kpppl       = trim(substring(platName[1],5,i - 5))
+         platName[1] = substring(platName[1],i)
+      . 
+   END. /* IF platName[1] BEGINS "äèè " */
+&ENDIF
+   vIsLongPolName = NO.
+   vIsLongPlaName = NO.
+
+   platName[1] = platName[1] + " " +
+                 platName[2] + " " +
+                 platName[3] + " " +
+                 platName[4] + " " +
+                 platName[5] + " " +
+                 platName[6] /*+ " " +
+                 platName[7] + " " +
+                 platName[8] + " " +
+                 platName[9]*/.
+
+   DO i = 1 TO 6:
+    PolName[i] = poName[i].
+   END.
+
+   IF FGetSetting("à·™´àçç","","Ñ†") EQ "Ñ†" AND poName[1] BEGINS "àçç " THEN
+   DO:
+
+      i = 4.
+
+      DO WHILE lookup(substring(polName[1],i,1)," ,0,1,2,3,4,5,6,7,8,9") > 0 :
+         i = i + 1.
+      END.
+
+      ASSIGN
+         innpo      = trim(substring(polName[1],5,i - 5))
+         polName[1] = substring(polName[1],i)
+      .
+   END. /* IF poName[1] BEGINS "àçç " */
+
+&IF {&FORM-DOC} NE 60 &THEN
+   IF polName[1] BEGINS "äèè " THEN
+   DO:
+      i = 4.
+
+      DO WHILE LOOKUP(SUBSTRING(polName[1],i,1)," ,0,1,2,3,4,5,6,7,8,9") > 0 :
+         i = i + 1.
+      END.
+
+      ASSIGN
+         kpppo      = trim(substring(polName[1],5,i - 5))
+         polName[1] = substring(polName[1],i)
+      . 
+   END. /* IF polName[1] BEGINS "äèè " */
+&ENDIF
+
+   polName[1] = polName[1] + " " +
+                polName[2] + " " +
+                polName[3] + " " +
+                polName[4] + " " +
+                polName[5] + " " +
+                polName[6] /*+ " " +
+                polName[7] + " " +
+                polName[8] + " " +
+                polName[9]*/.
+/*
+
+   IF {&ELIT_POL} THEN
+   DO:
+      {wordwrap.i &s=PolName &n=5 &l=47}
+   END.
+   ELSE
+   DO:
+      {wordwrap.i &s=PolName &n=5 &l=35}
+   END.
+*/
+
+   PlatName[1] = TRIM(PlatName[1]).
+   {wordwrap.i &s=PlatName &n=6 &l=35}
+
+   IF LENGTH(PlatName[6]) GT 0 THEN
+   DO:
+      vIsLongPlaName = YES.
+
+      platName[1] = platName[1] + " " +
+                    platName[2] + " " +
+                    platName[3] + " " +
+                    platName[4] + " " +
+                    platName[5] + " " +
+                    platName[6] /*+ " " +
+                    platName[7] + " " +
+                    platName[8] + " " +
+                    platName[9]*/.
+      {wordwrap.i &s=PlatName &n=6 &l=65}
+   END.
+
+   PolName[1] = TRIM(PolName[1]).
+   {wordwrap.i &s=PolName &n=6 &l=35}
+
+   IF LENGTH(PolName[6]) GT 0 THEN
+   DO:
+      vIsLongPolName = YES.
+
+      polName[1] = polName[1] + " " +
+                   polName[2] + " " +
+                   polName[3] + " " +
+                   polName[4] + " " +
+                   polName[5] + " " +
+                   polName[6] /*+ " " +
+                   polName[7] + " " +
+                   polName[8] + " " +
+                   polName[9]*/.
+      {wordwrap.i &s=PolName &n=6 &l=65}
+   END.
+   {wordwrap.i &s=Detail &n=5 &l=71}
+
+   plrkc[1] = plrkc[1] + " " + plrkc[2] + " " + plrkc[3] + " " + plrkc[4].
+   porkc[1] = porkc[1] + " " + porkc[2] + " " + porkc[3] + " " + porkc[4].
+
+   vIsLongPolBankName = NO.
+   vIsLongPlaBankName = NO.
+
+   {wordwrap.i &s=PlRkc &n=4 &l=35}
+   {wordwrap.i &s=PoRkc &n=4 &l=35}
+
+   IF LENGTH(TRIM(PlRkc[3])) GT 0 THEN
+   DO:
+      vIsLongPlaBankName = YES.
+      plrkc[1] = TRIM(plrkc[1]) + " " 
+               + TRIM(plrkc[2]) + " "
+               + TRIM(plrkc[3]) + " "
+               + TRIM(plrkc[4]).
+      {wordwrap.i &s=PlRkc &n=4 &l=65}
+   END.
+   ELSE
+      PlRkc[2]     = substring(PlRkc[2],   1,35).
+
+   IF LENGTH(TRIM(PoRkc[3])) GT 0 THEN
+   DO:
+      vIsLongPolBankName = YES.
+      porkc[1] = TRIM(porkc[1]) + " " 
+               + TRIM(porkc[2]) + " "
+               + TRIM(porkc[3]) + " "
+               + TRIM(porkc[4]).
+      {wordwrap.i &s=PoRkc &n=4 &l=65}
+   END.
+   ELSE
+      PoRkc[2]     = substring(PoRkc[2],   1,35).
+
+   ASSIGN
+      amtstr[1]    = amtstr[1] + " " +
+                     amtstr[2] + " " +
+                     amtstr[3].
+   .
+
+   {wordwrap.i &s=AmtStr &n=3 &l=63}
+
+&ENDIF
+&IF DEFINED(PRINT) &THEN
+&IF {&FORM-DOC} EQ 60 &THEN
+   
+   RUN PUT_PCL_STR(187, 20 + {&OFFSET_VAL},
+                   (IF op.ins-date EQ ? THEN ""
+                                        ELSE string(op.ins-date, "99.99.9999")
+                   ),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(850,  200 +  {&OFFSET_VAL}, trim(op.doc-num),INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1141, 197 +  {&OFFSET_VAL}, trim(theDate),   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  310 +  {&OFFSET_VAL}, amtstr[1],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  360 +  {&OFFSET_VAL}, amtstr[2],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  410 +  {&OFFSET_VAL}, amtstr[3],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1700, 197 +  {&OFFSET_VAL}, trim(paytype),   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 485 +  {&OFFSET_VAL}, trim(rub),       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(245,  485 +  {&OFFSET_VAL}, innpl,           INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  533 +  {&OFFSET_VAL}, platname[1],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  583 +  {&OFFSET_VAL}, platname[2],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  633 +  {&OFFSET_VAL}, platname[3],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  683 +  {&OFFSET_VAL}, platname[4],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  733 +  {&OFFSET_VAL}, platname[5],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 665 +  {&OFFSET_VAL}, SUBSTRING(pllacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+   IF vIsLongPlaBankName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  840 +  {&OFFSET_VAL}, plrkc[1],        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  890 +  {&OFFSET_VAL}, plrkc[2],        INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaBankName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1505, 843 +  {&OFFSET_VAL}, plmfo,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 900 +  {&OFFSET_VAL}, SUBSTRING(plCAcct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolBankName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1017 + {&OFFSET_VAL}, porkc[1],        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1067 + {&OFFSET_VAL}, porkc[2],        INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolBankName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 1018 + {&OFFSET_VAL}, pomfo,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 1073 + {&OFFSET_VAL}, SUBSTRING(pocacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 1193 + {&OFFSET_VAL}, SUBSTRING(poacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(245,  1193 + {&OFFSET_VAL}, innpo,           INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1240 + {&OFFSET_VAL}, polname[1],      INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1290 + {&OFFSET_VAL}, polname[2],      INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1340 + {&OFFSET_VAL}, polname[3],      INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1390 + {&OFFSET_VAL}, polname[4],      INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1440 + {&OFFSET_VAL}, polname[5],      INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1505, 1375 + {&OFFSET_VAL},
+                   (IF avail(doc-type) THEN doc-type.digital
+                                       ELSE "er"),              INPUT-OUTPUT buf-str).
+
+   IF INT64(op.order-pay) GT 0 THEN
+      RUN PUT_PCL_STR(1975, 1433 + {&OFFSET_VAL}, STRING(INT64(op.order-pay)),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1590 + {&OFFSET_VAL}, detail[1],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1640 + {&OFFSET_VAL}, detail[2],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1690 + {&OFFSET_VAL}, detail[3],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1740 + {&OFFSET_VAL}, detail[4],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1790 + {&OFFSET_VAL}, detail[5],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1975, 1483 + {&OFFSET_VAL}, mPPDate,         INPUT-OUTPUT buf-str).
+&ELSE
+/*ì™†ß†≠®• 1256*/   
+   RUN PUT_PCL_STR(187, 20 + {&OFFSET_VAL},
+                   (IF op.ins-date EQ ? THEN ""
+                                        ELSE string(op.ins-date, "99.99.9999")
+                   ),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(818,  20 +   {&OFFSET_VAL}, mSpisPl,         INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(850,  200 +  {&OFFSET_VAL}, trim(op.doc-num),INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1141, 197 +  {&OFFSET_VAL}, trim(theDate),   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  310 +  {&OFFSET_VAL}, amtstr[1],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  360 +  {&OFFSET_VAL}, amtstr[2],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(380,  410 +  {&OFFSET_VAL}, amtstr[3],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1700, 197 +  {&OFFSET_VAL}, trim(paytype),   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 485 +  {&OFFSET_VAL}, trim(rub),       INPUT-OUTPUT buf-str).
+/* RUN PUT_PCL_STR(245,  485 +  {&OFFSET_VAL}, innpl,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(825,  485 +  {&OFFSET_VAL}, kpppl,           INPUT-OUTPUT buf-str). */
+   RUN PUT_PCL_STR(245,  485 +  {&OFFSET_VAL}, PlINN,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(825,  485 +  {&OFFSET_VAL}, PlKPP,           INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  555 +  {&OFFSET_VAL}, platname[1],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  605 +  {&OFFSET_VAL}, platname[2],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  655 +  {&OFFSET_VAL}, platname[3],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  705 +  {&OFFSET_VAL}, platname[4],     INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  755 +  {&OFFSET_VAL}, platname[5],     INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 665 +  {&OFFSET_VAL}, SUBSTRING(pllacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+   IF vIsLongPlaBankName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  840 +  {&OFFSET_VAL}, plrkc[1],        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  890 +  {&OFFSET_VAL}, plrkc[2],        INPUT-OUTPUT buf-str).
+
+   IF vIsLongPlaBankName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1505, 843 +  {&OFFSET_VAL}, plmfo,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 900 +  {&OFFSET_VAL}, SUBSTRING(plCAcct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolBankName THEN
+      RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1017 + {&OFFSET_VAL}, porkc[1],        INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1067 + {&OFFSET_VAL}, porkc[2],        INPUT-OUTPUT buf-str).
+
+   IF vIsLongPolBankName THEN
+      RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1505, 1018 + {&OFFSET_VAL}, pomfo,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 1073 + {&OFFSET_VAL}, SUBSTRING(pocacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505, 1193 + {&OFFSET_VAL}, SUBSTRING(poacct,1,25),
+                                                                INPUT-OUTPUT buf-str).
+/* RUN PUT_PCL_STR(245,  1193 + {&OFFSET_VAL}, innpo,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(825,  1193 + {&OFFSET_VAL}, kpppo,           INPUT-OUTPUT buf-str). */
+   RUN PUT_PCL_STR(245,  1193 + {&OFFSET_VAL}, PoINN,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(825,  1193 + {&OFFSET_VAL}, PoKPP,           INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1975, 1547 + {&OFFSET_VAL}, mPPDate,         INPUT-OUTPUT buf-str).
+   IF {&ELIT_POL} THEN
+   DO:
+      RUN PRINT_ELITE(                                             INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(140,  1260 + {&OFFSET_VAL}, polname[1],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(140,  1310 + {&OFFSET_VAL}, polname[2],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(140,  1360 + {&OFFSET_VAL}, polname[3],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(140,  1410 + {&OFFSET_VAL}, polname[4],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(140,  1460 + {&OFFSET_VAL}, polname[5],      INPUT-OUTPUT buf-str).
+      RUN PRINT_PITCH(                                             INPUT-OUTPUT buf-str).
+   END.
+   ELSE
+   DO:
+
+      IF vIsLongPolName THEN
+         RUN PRINT_COMPRESSED(                                   INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(130,  1260 + {&OFFSET_VAL}, polname[1],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(130,  1310 + {&OFFSET_VAL}, polname[2],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(130,  1360 + {&OFFSET_VAL}, polname[3],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(130,  1410 + {&OFFSET_VAL}, polname[4],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(130,  1460 + {&OFFSET_VAL}, polname[5],      INPUT-OUTPUT buf-str).
+
+      IF vIsLongPolName THEN
+         RUN PRINT_PITCH(                                        INPUT-OUTPUT buf-str).
+   END.
+   RUN PUT_PCL_STR(1505, 1375 + {&OFFSET_VAL},
+                   (IF avail(doc-type) THEN doc-type.digital
+                                       ELSE "er"),              INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(1505,  1497 +  {&OFFSET_VAL}, mUIN1,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505,  1547 +  {&OFFSET_VAL}, mUIN2,           INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1505,  1597 +  {&OFFSET_VAL}, mUIN3,           INPUT-OUTPUT buf-str).
+  
+   IF INT64(op.order-pay) GT 0 THEN
+      RUN PUT_PCL_STR(1975, 1433 + {&OFFSET_VAL}, STRING(INT64(op.order-pay)),
+                                                                INPUT-OUTPUT buf-str).
+
+   RUN PUT_PCL_STR(130,  1725 + {&OFFSET_VAL}, detail[1],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1775 + {&OFFSET_VAL}, detail[2],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1825 + {&OFFSET_VAL}, detail[3],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1875 + {&OFFSET_VAL}, detail[4],       INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(130,  1925 + {&OFFSET_VAL}, detail[5],       INPUT-OUTPUT buf-str).
+
+   /*çÆ¢Î• ØÆ´Ô*/
+   RUN PUT_PCL_STR(2185, 197  + {&OFFSET_VAL}, mPokST,          INPUT-OUTPUT buf-str).
+   RUN PRINT_ELITE(                                             INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(150,  1665 + {&OFFSET_VAL}, mKBK,            INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(690,  1665 + {&OFFSET_VAL}, mOKATO,          INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1030, 1665 + {&OFFSET_VAL}, mPokOp,          INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1157, 1665 + {&OFFSET_VAL}, mPokNP,          INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1440, 1665 + {&OFFSET_VAL}, mPokND,          INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(1855, 1665 + {&OFFSET_VAL}, mPokDD,          INPUT-OUTPUT buf-str).
+   RUN PUT_PCL_STR(2170, 1665 + {&OFFSET_VAL}, mPokTP,          INPUT-OUTPUT buf-str).
+   RUN PRINT_PITCH(                                             INPUT-OUTPUT buf-str).
+   
+&ENDIF
+/*-------------------------------------- ò‚†¨Ø, §´Ô ëèÅà ---------------------------------------*/
+   IF mIsUni3 THEN
+   DO:
+      RUN PUT_PCL_STR(1365, 2350 + {&OFFSET_VAL}, BankName[1],     INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2400 + {&OFFSET_VAL}, BankName[2],     INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2450 + {&OFFSET_VAL}, BankName[3],     INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2500 + {&OFFSET_VAL}, BankAcct[1],     INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2550 + {&OFFSET_VAL}, "",              INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1665, 2600 + {&OFFSET_VAL}, STring(OP.op-date, "99.99.9999"),
+                                                                   INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2650 + {&OFFSET_VAL}, "",              INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2700 + {&OFFSET_VAL}, BankMFO[1],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1365, 2750 + {&OFFSET_VAL}, BankMFO[2],      INPUT-OUTPUT buf-str).
+      RUN PUT_PCL_STR(1665, 2800 + {&OFFSET_VAL}, "èêéÇÖÑÖçé",      INPUT-OUTPUT buf-str).
+FIND FIRST _user WHERE _user._userid = USERID("bisquit") no-lock no-error.
+        IF AVAIL _user THEN Inspector[1] = _user._user-name.
+      RUN PUT_PCL_STR(1365, 2850 + {&OFFSET_VAL}, Inspector[1],    INPUT-OUTPUT buf-str).
+   END.
+/*----------------------------------------------------------------------------------------------*/   
+   {pp-uni.not &STREAM             = " stream macro-file unformatted "
+               &LPRINT_BANK-CLIENT = YES
+               &START_X            = 1360
+               &START_Y            = 2125}
+&ENDIF
+   
+   
+   

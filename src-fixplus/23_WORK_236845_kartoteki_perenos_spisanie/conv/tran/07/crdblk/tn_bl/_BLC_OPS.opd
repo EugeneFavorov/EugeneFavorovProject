@@ -1,0 +1,306 @@
+[OpKindList 4.1d] // Экспорт данных произвел I0400SGI 22/03/2016 14:12:58 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+_BLC_OPS:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.CrdBlk.TN_BL._BLC_OPS
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Создание документов
+   /// </tr_name-opkind>
+
+   /// <tr_details>
+   /// Создание документов (для транзакции ON_CBLC - постановка балансовых документов на картотеку блокированных счетов)
+   /// </tr_details>
+
+   /// <tr_parent>
+   /// TN_BL
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_NoBlockMsg>
+   /// Да
+   /// </tr_NoBlockMsg>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_УровеньОтладк>
+   /// 2
+   /// </tr_СС_УровеньОтладк>
+
+   10:
+   DO TEMPLATE CLASS op ACTION Поиск ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @op47423 = "";
+         @mMask=НАСТРОЙКА(СтандТр,СчКом,"--пусто--")
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@iOp))
+
+      20:
+      DO TEMPLATE CLASS op-entry ACTION Поиск ROLE op-entry:
+         // РЕКВИЗИТ: op-entry (формула) #1
+         @op-entry = SEARCH(@iOp-entry)
+
+
+      END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+
+      DO AFTER:
+         @acct_47423="";
+         @op-entry-acct-db=@acct-db(20);
+         @op-entry-acct-cr=@acct-cr(20);
+         @op-entry-amt-rub=@amt-rub(20);
+         @op-entry-amt-cur=@amt-cur(20);
+         @macctbal=@acct-db(20);
+         @macctcor=@acct-cr(20);
+         @mcurr=@currency(20);
+         IF DEFINED(НДС,10) THEN
+         @mNDS=@amt-rub(20) - @НДС(10);
+         ELSE 
+         @mNDS=@amt-rub(20);
+         ENDIF; 
+         IF CAN-DO(@mMask,@acct-cr(20)) THEN
+         ТРАНЗАКЦИЯ(_CBL_COM);
+         ELSE 1;
+         ENDIF;
+         1
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS opo ACTION Создание ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF @iRegimAuto == 'yes' THEN 1 ELSE 0 ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (константа) #2
+      @details = [Постановка документов на картотеку блокированных счетов]
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = СЧЕТЧИК(НАСТРОЙКА(СтандТр,СчетНумДок,CNTDOCNUM))
+
+      // РЕКВИЗИТ: doc-type (константа) #4
+      @doc-type = [ВБО]
+      // РЕКВИЗИТ: op-status (константа) #5
+      @op-status = [√]
+      // РЕКВИЗИТ: op-bal (формула) #6
+      @op-bal = @op(10)
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: op-date (формула) #8
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #10
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: class-code (константа) #11
+      @class-code = [opo]
+      // РЕКВИЗИТ: op-transaction (формула) #12
+      @op-transaction = @op-transaction(10)
+
+      // РЕКВИЗИТ: ИсхСтатус (формула) #13
+      @ИсхСтатус = @op-status(10)
+
+      40:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = НАСТРОЙКА(ВбСчетКорА,'',99999810000000000001)
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = @iblacct
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur = @amt-cur(20)
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @amt-rub(20)
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: op-cod (константа) #7
+         @op-cod = [000000]
+
+      END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+
+      DO AFTER:
+         ПЕЧАТЬ(@op(30),'memorn')
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   50:
+   DO TEMPLATE CLASS opo ACTION ВизСоздание ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF @iRegimAuto == 'yes' THEN 0 ELSE 1 ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (константа) #2
+      @details = [Постановка документов на картотеку блокированных счетов]
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = СЧЕТЧИК(НАСТРОЙКА(СтандТр,СчетНумДок,CNTDOCNUM))
+
+      // РЕКВИЗИТ: doc-type (константа) #4
+      @doc-type = [ВБО]
+      // РЕКВИЗИТ: op-status (константа) #5
+      @op-status = [√]
+      // РЕКВИЗИТ: op-bal (формула) #6
+      @op-bal = @op(10)
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: op-date (формула) #8
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #10
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: class-code (константа) #11
+      @class-code = [opo]
+      // РЕКВИЗИТ: op-transaction (формула) #12
+      @op-transaction = @op-transaction(10)
+
+      // РЕКВИЗИТ: ИсхСтатус (формула) #13
+      @ИсхСтатус = @op-status(10)
+
+      60:
+      DO TEMPLATE CLASS op-entry ACTION ВизСоздание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = НАСТРОЙКА(ВбСчетКорА,'',99999810000000000001)
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = @iblacct
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur = @amt-cur(20)
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @amt-rub(20)
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: op-cod (константа) #7
+         @op-cod = [000000]
+
+      END TEMPLATE. // ШАБЛОН:   60  - КОНЕЦ
+
+
+      DO AFTER:
+         ПЕЧАТЬ(@op(50),'memorn')
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+   70:
+   DO TEMPLATE CLASS op ACTION Модификация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_details>
+      /// Аннулирование документа
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         0
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@Op(10))
+
+      // РЕКВИЗИТ: op-status (константа) #2
+      @op-status = [А]
+      // РЕКВИЗИТ: op-date (формула) #3
+      @op-date = ?
+
+      // РЕКВИЗИТ: acctbal (формула) #4
+      @acctbal = @macctbal
+
+      // РЕКВИЗИТ: acctcorr (формула) #5
+      @acctcorr = IF (@acct_47423 == "") THEN @macctcor ELSE @acct_47423 ENDIF
+
+      100:
+      DO TEMPLATE CLASS op-entry ACTION Модификация ROLE op-entry:
+         // РЕКВИЗИТ: op-entry (формула) #1
+         @op-entry = SEARCH(@iOp-Entry)
+
+         // РЕКВИЗИТ: op-status (формула) #2
+         @op-status = @op-status(70)
+
+         // РЕКВИЗИТ: op-date (формула) #3
+         @op-date = @op-date(70)
+
+         // РЕКВИЗИТ: acct-db (формула) #4
+         @acct-db = @macctbal
+
+         // РЕКВИЗИТ: acct-cr (формула) #5
+         @acct-cr = IF (@acct_47423 == "") THEN @macctcor ELSE @acct_47423 ENDIF
+
+
+      END TEMPLATE. // ШАБЛОН:   100  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   70  - КОНЕЦ
+
+   DO AFTER:
+      IF (@acct_47423 == "") THEN 
+         @acct_47423 = @macctcor;
+      ELSE 
+         @acct_47423 = @acct_47423;
+      ENDIF
+      ТРАНЗАКЦИЯ(_ANLBOTS);
+   END AFTER.
+
+END TRANSACTION. // ТРАНЗАКЦИЯ _BLC_OPS - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

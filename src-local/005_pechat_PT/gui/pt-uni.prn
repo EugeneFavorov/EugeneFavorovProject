@@ -1,0 +1,65 @@
+
+/* +++ pt-uni.prn was humbly modified by (c)blodd converter v.1.09 on 5/30/2016 7:28am +++ */
+
+DISPLAY
+   &IF DEFINED(pt-el) NE 0 &THEN /* для электронного платежного поручения */
+      {{&pt-el} &pt-print=YES}
+   &ENDIF
+   op.ins-date when PlMFO eq bank-mfo-9 @ op.ins-date
+   NameOrder
+   NumberForm
+	op.doc-num
+	AmtStr
+   Cond-Pay[1]
+   Cond-Pay[2]
+   Cond-Pay[3]
+   Num-Day
+	Detail PayType
+        PlCAcct
+	PlLAcct
+	PlMFO
+	PlName
+	PlRKC
+	PoAcct
+	PoBankName
+	PoCAcct
+	PoMFO
+	PoName
+	PoRKC
+   mUIN1
+   mUIN2
+   mUIN3
+   TRIM(Rub) @ Rub
+	doc-type.digital WHEN AVAIL doc-type @ op.doc-type
+	op.doc-type WHEN NOT AVAIL doc-type @ op.doc-type
+	op.due-date when can-find(first signs where signs.file-name eq 'op' and
+	                               signs.surr eq string(op.op) and
+	                               signs.code eq 'УслОпл'      and
+	                              (signs.xattr-val begins '2'  or
+	                               signs.xattr-val begins 'С акцеп')) @ op.due-date
+   SUBSTRING(op.order-pay,2,1) WHEN SUBSTRING(op.order-pay,1,1) EQ "0" @ op.order-pay
+        op.order-pay WHEN SUBSTRING(op.order-pay,1,1) NE "0" @ op.order-pay
+	theDate
+   mSpisPl
+   mDataMarkDBank
+   mSposobPoluch
+WITH FRAME plattreb.
+DOWN WITH FRAME plattreb.
+DISP
+   mDataCartIn    
+   mPrnStr-PT-UFEBS[1]
+   mPrnStr-PT-UFEBS[2]
+   mPrnStr-PT-UFEBS[3]
+   mPrnStr-PT-UFEBS[4]
+   mPrnStr-PT-UFEBS[5]
+   mPrnStr-PT-UFEBS[6]
+   mPrnStr-PT-UFEBS[7]
+WITH FRAME plattreb-end.
+DOWN WITH FRAME plattreb-end.
+/* $LINTUSER='BIS' */
+/* $LINTENV ='common' */
+/* $LINTVSS ='$/ws3-dpl/common/bq/' */
+/* $LINTDATE='20/11/2014 16:43:50.779+04:00' */
+/* $LINTFILE='pt-uni.prn' */
+/*prosignV9RTVZvMwY18rQzyAdXozw*/
+/* --- pt-uni.prn was humbly modified by (c)blodd converter v.1.09 on 5/30/2016 7:28am --- */

@@ -1,0 +1,266 @@
+[OpKindList 4.1d] // ªα―®ΰβ ¤ ­­λε ―ΰ®¨§Ά¥« I0400SGI 22/03/2016 14:12:59 „ "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+_PRCKAUS:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.CrdBlk.TN_BL._PRCKAUS
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// ΅ΰ ΅®βª  αγ΅ ­ «¨β¨ª¨
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// TN_BL
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_ProgressBar>
+   /// ¥β
+   /// </tr_ProgressBar>
+
+   /// <tr_‘‘_‚λΆ®¤ ªΰ ­>
+   /// ¥β
+   /// </tr_‘‘_‚λΆ®¤ ªΰ ­>
+
+   20:
+   DO TEMPLATE CLASS kau ACTION ®¨αª ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      // …‚‡’: acct (δ®ΰ¬γ« ) #1
+      @acct = SEARCH(@icrtacct)
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #2
+      @currency = SEARCH(@iCurrency)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #3
+      @kau = SEARCH(@kau1)
+
+
+      DO AFTER:
+         @oKau = @kau(20);
+         @oCurr-bal = @Curr-bal(20);
+         @oBalance = @balance(20);
+      END AFTER.
+
+   END TEMPLATE. // €‹:   20  - …–
+
+   30:
+   DO TEMPLATE CLASS kau ACTION ®¨αª α ®θ. ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      // …‚‡’: acct (δ®ΰ¬γ« ) #1
+      @acct = SEARCH(@iblacct)
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #2
+      @currency = SEARCH(@iCurrency)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #3
+      @kau = SEARCH(@kau(20))
+
+
+   END TEMPLATE. // €‹:   30  - …–
+
+   40:
+   DO TEMPLATE CLASS kau ACTION ‘®§¤ ­¨¥ ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF DEFINED(__notfound,30) 
+            THEN 
+                (IF @oplata == 'yes' 
+                    THEN 0; 
+                    ELSE 1; 
+                 ENDIF); 
+            ELSE 0; 
+         ENDIF;
+      END BEFORE.
+
+      // …‚‡’: acct (δ®ΰ¬γ« ) #1
+      @acct = @iblacct
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #2
+      @currency = @iCurrency
+
+      // …‚‡’: balance (δ®ΰ¬γ« ) #3
+      @balance = @balance(20)
+
+      // …‚‡’: curr-bal (δ®ΰ¬γ« ) #4
+      @curr-bal = @curr-bal(20)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #5
+      @kau = @kau(20)
+
+      // …‚‡’: kau-id (δ®ΰ¬γ« ) #6
+      @kau-id = @iKau-id
+
+      // …‚‡’: numop (δ®ΰ¬γ« ) #7
+      @numop = @numop(40) + 1
+
+      // …‚‡’: zero-bal (ª®­αβ ­β ) #8
+      @zero-bal = [NO]
+      // …‚‡’: sort (δ®ΰ¬γ« ) #9
+      @sort = @sort(20)
+
+
+      DO AFTER:
+         //@oKau = @Kau(40);
+         //@oCurr-bal = @Curr-bal(40);
+         //@oBalance = @balance(40);
+      END AFTER.
+
+   END TEMPLATE. // €‹:   40  - …–
+
+   50:
+   DO TEMPLATE CLASS kau ACTION ®¤¨δ¨ª ζ¨ο ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF DEFINED(__notfound,30) 
+            THEN 0;  
+            ELSE
+                (IF @oplata == 'yes' 
+                    THEN 0; 
+                    ELSE 1; 
+                 ENDIF);  
+         ENDIF;
+      END BEFORE.
+
+      // …‚‡’: acct (δ®ΰ¬γ« ) #1
+      @acct = SEARCH(@iblacct)
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #2
+      @currency = SEARCH(@iCurrency)
+
+      // …‚‡’: balance (δ®ΰ¬γ« ) #3
+      @balance = @balance(20)
+
+      // …‚‡’: curr-bal (δ®ΰ¬γ« ) #4
+      @curr-bal = @curr-bal(20)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #5
+      @kau = SEARCH(@kau(20))
+
+      // …‚‡’: kau-id (δ®ΰ¬γ« ) #6
+      @kau-id = @iKau-id
+
+      // …‚‡’: numop (δ®ΰ¬γ« ) #7
+      @numop = @numop(50) + 1
+
+      // …‚‡’: zero-bal (ª®­αβ ­β ) #8
+      @zero-bal = [NO]
+
+      DO AFTER:
+         //@oKau = @kau(50);
+         //@oCurr-bal = @Curr-bal(50);
+         //@oBalance = @balance(50);
+      END AFTER.
+
+   END TEMPLATE. // €‹:   50  - …–
+
+   60:
+   DO TEMPLATE CLASS kau ACTION ®¤¨δ¨ª ζ¨ο ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         if @before == 1
+            then 0;
+            else
+         (if @partial == YES
+            then 0;
+            else 1;
+         endif);
+         endif;
+      END BEFORE.
+
+      // …‚‡’: balance (ª®­αβ ­β ) #1
+      @balance = [0]
+      // …‚‡’: curr-bal (ª®­αβ ­β ) #2
+      @curr-bal = [0]
+      // …‚‡’: numop (δ®ΰ¬γ« ) #3
+      @numop = @numop(20) + 1
+
+      // …‚‡’: zero-bal (ª®­αβ ­β ) #4
+      @zero-bal = [YES]
+      // …‚‡’: acct (δ®ΰ¬γ« ) #5
+      @acct = SEARCH(@icrtacct)
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #6
+      @currency = SEARCH(@iCurrency)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #7
+      @kau = SEARCH(@kau1)
+
+
+   END TEMPLATE. // €‹:   60  - …–
+
+   70:
+   DO TEMPLATE CLASS kau ACTION ®¤¨δ¨ª ζ¨ο ROLE ‚Ά®¤ ¤ ­­λε:
+      /// <tm_AttrOptimized>
+      /// ¥β
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         if @before == 1
+           then 0;
+           else
+         (if @partial == YES
+            then 1;
+            else 0;
+         endif);
+         endif;
+      END BEFORE.
+
+      // …‚‡’: balance (δ®ΰ¬γ« ) #1
+      @balance = dec(@obalance) - dec(@summspis_bal)
+
+      // …‚‡’: curr-bal (δ®ΰ¬γ« ) #2
+      @curr-bal = dec(@oCurr-bal) - dec(@summspis_val)
+
+      // …‚‡’: numop (δ®ΰ¬γ« ) #3
+      @numop = @numop(20) + 1
+
+      // …‚‡’: zero-bal (δ®ΰ¬γ« ) #4
+      @zero-bal =
+      DO:
+         if dec(@balance(70)) == dec(0)
+                  then YES;
+                  else NO;
+                  endif;
+      END.
+
+      // …‚‡’: acct (δ®ΰ¬γ« ) #5
+      @acct = SEARCH(@icrtacct)
+
+      // …‚‡’: currency (δ®ΰ¬γ« ) #6
+      @currency = SEARCH(@iCurrency)
+
+      // …‚‡’: kau (δ®ΰ¬γ« ) #7
+      @kau = SEARCH(@kau1)
+
+
+   END TEMPLATE. // €‹:   70  - …–
+
+END TRANSACTION. // ’€‡€– _PRCKAUS - …– 
+// ***************************************************************************
+
+
+
+

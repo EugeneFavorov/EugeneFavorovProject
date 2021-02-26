@@ -1,0 +1,10 @@
+DEFINE VARIABLE mFilial AS CHARACTER NO-UNDO.
+
+/* Создаем врем таблицу с проводками по */
+DEFINE TEMP-TABLE ttSafeType
+	FIELD bal-acct AS CHARACTER
+	FIELD dbcr AS CHARACTER
+	FIELD op-entry-id AS RECID
+	FIELD dbcr-sort AS CHARACTER
+	.
+

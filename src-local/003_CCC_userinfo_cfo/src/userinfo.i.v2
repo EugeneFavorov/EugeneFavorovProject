@@ -1,0 +1,132 @@
+DEFINE VARIABLE mHandle     AS INT64     NO-UNDO.
+DEFINE VARIABLE mUser       AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mIPAddress  AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mIPAddrOff  AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mIString    AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mCnt        AS INT64     NO-UNDO.
+DEFINE VARIABLE mIP         AS CHARACTER EXTENT 4 NO-UNDO.
+DEFINE VARIABLE mCFO        AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mOffice     AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mUserFilial AS CHARACTER NO-UNDO.
+DEFINE VARIABLE mOk         AS LOGICAL   NO-UNDO.
+
+RUN dbgprint.p ("userinfo.i","Begin").
+
+/**/
+mUser = USERID('bisquit').
+FIND FIRST _user WHERE 
+   _user._userid EQ mUser 
+NO-LOCK NO-ERROR.
+IF AVAIL(_user) THEN
+   ASSIGN 
+      mUser       = mUser + "/" + TRIM(_user._user-name)
+      mUserFilial = GetXattrValue("_user",_user._userid,"filial-id").
+ELSE RETURN.
+
+RUN STORED-PROC qbis.send-sql-statement mHandle = PROC-HANDLE
+     ("Select IGP.Set_User_Info('" + mUser + "') from dual").
+FOR EACH qbis.proc-text-buffer WHERE PROC-HANDLE = mHandle:
+   /*RUN dbgprint.p ("userinfo.i",TRIM(proc-text)).*/
+END.
+IF ERROR-STATUS:ERROR
+THEN RUN dbgprint.p ("userinfo.i","Ошибка заполнения User_Info.").
+ELSE CLOSE STORED-PROCEDURE qbis.send-sql-statement WHERE PROC-HANDLE = mHandle.
+/**/
+mIPAddress = "...".
+FILE-INFO:FILE-NAME = "remhost.txt".
+IF FILE-INFO:FILE-TYPE NE ? THEN
+DO:
+   INPUT FROM VALUE("./remhost.txt").
+   REPEAT:
+      IMPORT UNFORMATTED mIString.
+      IF  mIString NE "" 
+         AND (INDEX(mIString,"192.168") GT 0 OR INDEX(mIString,"10.100") GT 0) 
+      THEN 
+      DO:
+         IF INDEX(mIString,"192.168") GT 0 THEN
+            mIPAddress = SUBSTRING(mIString,INDEX(mIString,"192.168")).
+         IF INDEX(mIString,"10.100") GT 0 THEN
+            mIPAddress = SUBSTRING(mIString,INDEX(mIString,"10.100")).
+      END.
+   END.
+   INPUT CLOSE.   
+END.
+DO mCnt = 1 TO NUM-ENTRIES(mIPAddress,"."):
+   mIP[mCnt] = ENTRY(mCnt,mIPAddress,".").
+   mIP[mCnt] = TRIM(STRING(INT64(mIP[mCnt]),">>9")).   
+END.
+RUN dbgprint.p ("userinfo.i","IP-address = " + mIPAddress).
+mIPAddress = mIP[1] + "." + mIP[2] + "." + mIP[3] + "." + mIP[4].
+mIPAddrOff = mIP[1] + "." + mIP[2] + "." + mIP[3] + ".1" .
+IF mIPAddress EQ "0.0.0.0" THEN
+DO:
+   /*RUN dbgprint.p ("userinfo.i","Не удалось определить IP-address.").*/
+END.
+ELSE
+DO:
+   RUN STORED-PROCEDURE send-sql-statement mHandle = PROC-HANDLE NO-ERROR
+          ("SELECT IGP.GET_IP_CFO(null,'" + mIPAddress + "') FROM dual").
+   IF ERROR-STATUS:ERROR
+   THEN
+   DO: 
+      ASSIGN
+         mCFO  = "-1".
+      RUN dbgprint.p ("userinfo.i","Не удалось определить код ЦФО.").
+   END.
+   ELSE 
+   DO:
+      CLOSE STORED-PROCEDURE send-sql-statement WHERE PROC-HANDLE = mHandle.
+      FOR EACH proc-text-buffer WHERE PROC-HANDLE = mHandle:
+         ASSIGN
+            mCFO  = TRIM(proc-text).
+      END.
+
+      IF AVAIL(_user)  THEN
+      DO:
+         IF mCFO NE "" THEN
+            UpdateSigns("_user",STRING(_user._userid),"cfo-user",mCFO,?).
+
+         FOR EACH signs WHERE 
+                signs.file-name   EQ "branch"
+            AND signs.code        EQ "ip-mask"    
+            AND signs.xattr-value EQ mIPAddrOff
+            NO-LOCK:
+            mOffice = signs.surrogate.
+            LEAVE.
+         END.
+
+         IF    mIPAddress EQ "192.168.134.66"
+            OR mIPAddress EQ "192.168.134.69"
+            OR mIPAddress EQ "192.168.134.70"
+            OR mIPAddress EQ "192.168.134.221"
+         THEN mOffice = "0518".
+
+         IF NOT {assigned mOffice}
+         AND mIPAddrOff BEGINS "192.168" THEN mOffice = "0500". 
+         
+         IF {assigned mOffice} 
+         AND mUserFilial EQ "0500" THEN
+         DO:
+            IF  mIPAddress NE "192.168.140.31"  /*Половинкина*/ 
+            AND mIPAddress NE "192.168.137.61"  /*Витвицкая*/
+            THEN
+            DO:
+               mOk = UpdateSigns("_user",STRING(_user._userid),"Отделение",mOffice,?).
+               mOk = UpdateSigns("_user",STRING(_user._userid),"office",   mOffice,?).
+               IF mOffice EQ "0517"
+               THEN
+                  mOk = UpdateSigns("_user",STRING(_user._userid),"Принтеры", "0120*",?).
+               ELSE
+               DO:
+                  IF mOffice EQ "0518"
+                  THEN 
+                     mOk = UpdateSigns("_user",STRING(_user._userid),"Принтеры", "0100*",?).
+                  ELSE
+                     mOk = UpdateSigns("_user",STRING(_user._userid),"Принтеры", "01" + SUBSTRING(mOffice,3,2) + "*",?).
+               END.
+            END.
+         END.
+      END.
+      RUN dbgprint.p ("userinfo.i","ip-address = " + mIPAddress + "; mOffice = " + mOffice + "; CFO = " + mCFO + "; Printers = " + "01" + SUBSTRING(mOffice,3,2) + "*").
+   END.
+END.

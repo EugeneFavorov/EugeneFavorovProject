@@ -1,0 +1,290 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 11/04/2016 17:06:20 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+sbk_kau:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.07PB.u07PB.sbk_kau
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// PB: Обработка субаналитик при переносе и оплате
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// u07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core20=Продолжить,core21=Продолжить,core23=Продолжить,core55=Отменить
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   DO BEFORE:
+      // При вызове транзакции д.б. определены переменные:
+      // @iSrcCrt   - счет картотеки-источника
+      // @iRsvCrt   - счет картотеки-приемника
+      // --@iCrtCurr  - валюта картотек - всегда рубли
+      // @iKau      - КАУ источника: <op>,<op-entry>
+      // @oplata    - 'yes' - оплата, 'no' - перенос на картотеку @iRsvCrt
+      // @partial   - частичная оплата (yes/no)
+      // @iSumma    - сумма к оплате
+      // @iCrtType  - тип картотеки-приемника: К1, К2, КБС
+      
+      @__mess = "Тр-я sbk_kau : "
+              + @iSrcCrt  + " / " + @iRsvCrt + " / "
+              + @iKau + " / " + @oplata + " / " + @iCrtType;
+      ТРАНЗАКЦИЯ(sbLogIt);
+      
+      @__kau-id  = _if(@iCrtType == "К1", "Карт-ка1",
+                   _if(@iCrtType == "К2", "Карт-ка2", "КартБлСч"));
+   END BEFORE.
+
+   20:
+   DO TEMPLATE CLASS kau ACTION Поиск ROLE Ввод данных:
+      /// <tm_details>
+      /// КАУ на картотеке-источнике
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = SEARCH(@iSrcCrt)
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH("")
+
+      // РЕКВИЗИТ: kau (формула) #3
+      @kau = SEARCH(@iKau)
+
+
+      DO AFTER:
+         @oCurr-bal = @Curr-bal;
+         @oBalance  = @balance;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS kau ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// КАУ на картотеке-приемнике
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         // На картотеке-приемнике могло остаться нулевое КАУ после предыдущего
+         // встречного перемещения с картотеки на картотеку
+         
+         _if(@oplata,0,1)
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = SEARCH(@iRsvCrt)
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH("")
+
+      // РЕКВИЗИТ: kau (формула) #3
+      @kau = SEARCH(@iKau)
+
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   40:
+   DO TEMPLATE CLASS kau ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Создание КАУ-приемника
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         _if(@oplata,0,_if(DEFINED(__notfound,30),1,0));
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = @iRsvCrt
+
+      // РЕКВИЗИТ: currency (константа) #2
+      @currency = []
+      // РЕКВИЗИТ: balance (формула) #3
+      @balance = @oBalance
+
+      // РЕКВИЗИТ: curr-bal (формула) #4
+      @curr-bal = @oCurr-bal
+
+      // РЕКВИЗИТ: kau (формула) #5
+      @kau = @iKau
+
+      // РЕКВИЗИТ: kau-id (формула) #6
+      @kau-id = @__kau-id
+
+      // РЕКВИЗИТ: numop (константа) #7
+      @numop = [1]
+      // РЕКВИЗИТ: zero-bal (константа) #8
+      @zero-bal = [NO]
+      // РЕКВИЗИТ: sort (формула) #9
+      @sort =
+      DO:
+         @sort(20)
+                                    
+                  // ENTRY(1, @sort(20)) + "," +
+                  // ENTRY(2, @sort(20)) + "," +
+                  // FORMAT(@oBalance,
+                  //        ">>>>>>>>>>>>9.99",DECIMAL) + ","
+      END.
+
+
+   END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+   50:
+   DO TEMPLATE CLASS kau ACTION Модификация ROLE Ввод данных:
+      /// <tm_details>
+      /// Правка КАУ-приемника
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         _if(@oplata,0,_if(DEFINED(__notfound,30),0,1));
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = SEARCH(@iRsvCrt)
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH("")
+
+      // РЕКВИЗИТ: kau (формула) #3
+      @kau = SEARCH(@iKau)
+
+      // РЕКВИЗИТ: balance (формула) #4
+      @balance = @oBalance
+
+      // РЕКВИЗИТ: curr-bal (формула) #5
+      @curr-bal = @oCurr-bal
+
+      // РЕКВИЗИТ: numop (формула) #6
+      @numop = @numop(50) + 1
+
+      // РЕКВИЗИТ: kau-id (формула) #7
+      @kau-id = @__kau-id
+
+      // РЕКВИЗИТ: zero-bal (константа) #8
+      @zero-bal = [NO]
+
+   END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+   60:
+   DO TEMPLATE CLASS kau ACTION Модификация ROLE Ввод данных:
+      /// <tm_details>
+      /// Правка КАУ-источника при переносе
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         _if(@oplata,0,1)
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = SEARCH(@iSrcCrt)
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH("")
+
+      // РЕКВИЗИТ: kau (формула) #3
+      @kau = SEARCH(@iKau)
+
+      // РЕКВИЗИТ: balance (константа) #4
+      @balance = [0]
+      // РЕКВИЗИТ: curr-bal (константа) #5
+      @curr-bal = [0]
+      // РЕКВИЗИТ: numop (формула) #6
+      @numop = @numop(20) + 1
+
+      // РЕКВИЗИТ: zero-bal (константа) #7
+      @zero-bal = [YES]
+
+   END TEMPLATE. // ШАБЛОН:   60  - КОНЕЦ
+
+   70:
+   DO TEMPLATE CLASS kau ACTION Модификация ROLE Ввод данных:
+      /// <tm_details>
+      /// Правка КАУ-источника при оплате
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         IF @oplata THEN
+           @newBalance = @oBalance - @iSumma;
+           1;
+         ELSE 0 ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct = SEARCH(@iSrcCrt)
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH("")
+
+      // РЕКВИЗИТ: kau (формула) #3
+      @kau = SEARCH(@iKau)
+
+      // РЕКВИЗИТ: balance (формула) #4
+      @balance = @newBalance
+
+      // РЕКВИЗИТ: curr-bal (константа) #5
+      @curr-bal = [0]
+      // РЕКВИЗИТ: numop (формула) #6
+      @numop = @numop(20) + 1
+
+      // РЕКВИЗИТ: zero-bal (формула) #7
+      @zero-bal = _if(@newBalance == 0, yes, no)
+
+
+   END TEMPLATE. // ШАБЛОН:   70  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ sbk_kau - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

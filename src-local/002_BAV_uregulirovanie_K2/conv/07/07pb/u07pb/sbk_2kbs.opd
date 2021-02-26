@@ -1,0 +1,229 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 11/04/2016 17:06:20 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+sbk_2kbs:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// 07.07PB.u07PB.sbk_2kbs
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// PB: Перемещение К2 <--> КБС
+   /// </tr_name-opkind>
+
+   /// <tr_details>
+   /// Создание документов при переносе c Карт2 на КартБлСч или с КартБлСч на Карт2
+   /// </tr_details>
+
+   /// <tr_parent>
+   /// u07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core20=Продолжить,core21=Продолжить,core23=Продолжить,core55=Отменить,core59=yes
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   // Библиотека функций для работы с картотеками.
+   LIBRARY pcrd.
+
+   DO BEFORE:
+      // При вызове транзакции д.б. определены переменные:
+      // @iSrcCrt   - счет картотеки-источника
+      // --@iCrtCurr  - валюта картотеки (м.б. <> @iCurrency) - всегда рубли
+      // --@iRsvCrt   - счет картотеки-приемника - сами узнаем
+      // @iCrtType  - тип картотеки-приемника: К1, К2, КБС
+      // @iAcct     - р/с
+      // @iCurrency - валюта р/с
+      // @iKau      - КАУ: <op>,<op-entry>
+      // @iDetails  - Назначение платежа исходного документа
+      // @iUser     - пользователь, создающий проводки
+      // @iLog      - лог
+      
+      @__mess = "Запуск 'sbk_2kbs - SB: Перемещение К2 <--> КБС' :"
+              + CHR(10) + "- @iSrcCrt  = " + @iSrcCrt
+              + CHR(10) + "- @iCrtType = " + @iCrtType
+              + CHR(10) + "- @iAcct    = " + @iAcct
+              + CHR(10) + "- @iCurrency= " + @iCurrency
+              + CHR(10) + "- @iLog     = " + @iLog;
+      ТРАНЗАКЦИЯ(sbLogIt);
+      
+      // Узнаем счет картотеки-приемника. Если нет картотеки, то она создается.
+      ТРАНЗАКЦИЯ(sbk_acct);
+      @iRsvCrt  = @oAcctK;
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS opo ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Док.на картотеке-источнике
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(ENTRY(1, @iKau))
+
+      20:
+      DO TEMPLATE CLASS op-entry ACTION Поиск с ош. ROLE op-entry:
+         // РЕКВИЗИТ: op-entry (формула) #1
+         @op-entry = SEARCH(ENTRY(2, @iKau))
+
+
+      END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+
+      DO AFTER:
+         IF DEFINED("__notfound") THEN
+           @__mess = "???  Не найден документ " + @iKau;
+           ТРАНЗАКЦИЯ(sbLogIt);
+           @__do   = 0;
+         
+         ELSE (
+           @__do   = 1;
+           @oplata = 'no';
+           ТРАНЗАКЦИЯ(sbk_kau);  // Изменение kau
+         
+           IF (@op-bal == ?) || (@op-bal == "") THEN
+             @__mess = "???  Отсутствует исходный документ";
+             ТРАНЗАКЦИЯ(sbLogIt);
+             @__op-bal = 0;
+           ELSE
+             @__op-bal = @op-bal;
+           ENDIF
+         ) ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   100:
+   DO TEMPLATE CLASS opo ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Док.на карт.-приемнике
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (формула) #2
+      @details =
+      DO:
+         "Перенос в Картотеку "
+                  + _if(@iCrtType == "К1", "1. ",
+                    _if(@iCrtType == "К2", "2. ", "блокированных счетов. "))
+                  + @iDetails
+      END.
+
+      // РЕКВИЗИТ: doc-type (константа) #3
+      @doc-type = [ВБК]
+      // РЕКВИЗИТ: op-status (константа) #4
+      @op-status = [√]
+      // РЕКВИЗИТ: op-bal (формула) #5
+      @op-bal = @__op-bal
+
+      // РЕКВИЗИТ: doc-date (формула) #6
+      @doc-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-num (формула) #7
+      @doc-num = @doc-num(10)
+
+      // РЕКВИЗИТ: op-date (формула) #8
+      @op-date = ДАТА()
+
+      // РЕКВИЗИТ: ins-date (формула) #9
+      @ins-date = ДАТА()
+
+      // РЕКВИЗИТ: due-date (формула) #10
+      @due-date = ДАТА()
+
+      // РЕКВИЗИТ: ИсхСтатус (формула) #11
+      @ИсхСтатус =
+      DO:
+         IF DEFINED(ИсхСтатус,10)
+                                    THEN @ИсхСтатус(10)
+                                    ELSE ""
+                                    ENDIF
+      END.
+
+      // РЕКВИЗИТ: order-pay (формула) #12
+      @order-pay = @order-pay(10)
+
+      // РЕКВИЗИТ: user-id (формула) #13
+      @user-id = @iUser
+
+      110:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = @iSrcCrt
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = @iRsvCrt
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur = @oCurr-bal
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub = @oBalance
+
+         // РЕКВИЗИТ: currency (константа) #6
+         @currency = []
+         // РЕКВИЗИТ: kau-db (формула) #7
+         @kau-db = @iKau
+
+         // РЕКВИЗИТ: kau-cr (формула) #8
+         @kau-cr = @iKau
+
+         // РЕКВИЗИТ: op-cod (константа) #9
+         @op-cod = [000000]
+
+         DO AFTER:
+            @__mess = "      Создана проводка "
+                    + SUBSTR(@acct-db,1,20) + " -> "
+                    + SUBSTR(@acct-cr,1,20) + "(" + @amt-rub + ")";
+            ТРАНЗАКЦИЯ("sbLogIt");
+         END AFTER.
+
+      END TEMPLATE. // ШАБЛОН:   110  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   100  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ sbk_2kbs - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

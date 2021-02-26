@@ -1,0 +1,17 @@
+
+       op.doc-num
+       op.doc-type
+       op-entry.amt-cur  VALIDATE(op-entry.amt-cur NE 0 AND op-entry.amt-cur NE ?,
+                                  "Сумма не может быть равна нулю")
+       op-entry.currency WHEN op-template.currency EQ ?
+       op-entry.symbol
+       op-entry.acct-db WHEN op-templ.acct-db EQ ? OR op-templ.acct-db EQ ""
+                        VALIDATE(CAN-FIND(acct WHERE acct.acct EQ input op-entry.acct-db
+                                                 AND acct.currency EQ input op-entry.currency),
+                                 "Счет не найден дб")
+       op-entry.acct-cr WHEN op-templ.acct-cr EQ ? OR op-templ.acct-cr EQ ""
+                        VALIDATE(CAN-FIND(acct WHERE acct.acct EQ input op-entry.acct-cr
+                                                 AND acct.currency EQ input op-entry.currency),
+                                    "Счет не найден кр")
+       op.details
+ 

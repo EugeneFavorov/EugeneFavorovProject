@@ -1,0 +1,96 @@
+[OpKindList 4.1d] // Экспорт данных произвел I0400SGI 22/03/2016 14:12:59 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+_BL_SL1S:
+DO TRANSACTION:
+   /// <tr_package>
+   /// 07.CrdBlk.TN_BL._BL_SL1S
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Выбор документов картотеки с учетом суммы на счете
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// TN_BL
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   // Библиотека функций парсера для лицевых и счетов 2-го порядка.
+   LIBRARY pacct.
+
+   // Библиотека функций для работы с картотеками.
+   LIBRARY pcrd.
+
+   20:
+   DO TEMPLATE CLASS FilterKau ACTION Создание ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         //IF DEFINED(iAmt) THEN
+         //@Ost = - @iAmt;
+         //ELSE
+         //(
+         //IF @iCurrency == "" THEN
+         //@Ost = - DEC(ОСТАТОК_РУБ(@iAcct,@iCurrency,Дата(),П));
+         //ELSE @Ost = - DEC(ОСТАТОК_ВАЛ(@iAcct,@iCurrency,Дата(),П));
+         //ENDIF
+         //)
+         //ENDIF;
+         //@mGlobalOst=@Ost;
+      END BEFORE.
+
+      // РЕКВИЗИТ: where (формула) #1
+      @where =
+      DO:
+         "FOR EACH kau WHERE kau.acct     EQ '" + @iCrtAcct + "'
+         AND kau.currency EQ " + "'" + @iCurrency +  "'" +
+         " AND kau.zero-bal eq no BY kau.sort"
+      END.
+
+      // РЕКВИЗИТ: buffers (константа) #2
+      @buffers = [kau]
+      // РЕКВИЗИТ: acct (формула) #3
+      @acct = @iCrtAcct
+
+      // РЕКВИЗИТ: currency (формула) #4
+      @currency = @iCurrency
+
+      // РЕКВИЗИТ: persist (константа) #5
+      @persist = [ДА]
+      // РЕКВИЗИТ: regim (формула) #6
+      @regim = @iRegimAuto
+
+
+      DO AFTER:
+         IF @num-results > 0 
+            THEN ГР_ТРАНЗАКЦИЯ(_BLC2_1S,@FilterTable(20));
+            ELSE message("Нет ни одного документа для списания.",1);
+                 0; 
+         ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ _BL_SL1S - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

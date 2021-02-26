@@ -1,0 +1,29 @@
+ELSE 
+IF LASTKEY = KEYCODE("INS")
+THEN DO:
+    DEFINE VARIABLE cSotr       AS CHARACTER    NO-UNDO.
+    RUN pb_sotr.p (3).
+    cSotr = pick-value.
+
+    IF (cSotr <> ?)
+    THEN DO:
+        FOR FIRST person
+            WHERE (person.person-id = INT64(cSotr))
+            NO-LOCK:
+
+            RUN codelay.p ("Города_КМ","", "ЗАДАЙТЕ ГОРОД КМ", 5). 
+            IF (pick-value <> ?)
+            THEN DO:
+                CREATE code.
+                ASSIGN
+                    code.class  = "Привлеченцы"
+                    code.parent = "Привлеченцы"
+                    code.code   = cSotr
+                    code.name   = person.name-last + " " + person.first-names
+                    code.val    = pick-value
+                    .
+            END.
+        END.
+    END.
+    {keeprep.cqr {&*}}
+END.

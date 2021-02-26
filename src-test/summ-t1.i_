@@ -1,0 +1,594 @@
+{pick-var.i}
+
+&IF DEFINED(SUMM_PROC_HIST) EQ 0 &THEN
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+IF term-obl.sop-date NE ? THEN
+   summ-t = 0.
+ELSE
+&ENDIF
+&ENDIF
+DO:
+   DEFINE VAR xxx   AS DEC NO-UNDO.
+   DEFINE VAR xtmp  AS DEC NO-UNDO.
+   DEFINE VAR xxx1  AS DEC NO-UNDO.
+   DEFINE VAR xxxB  AS DEC NO-UNDO.
+   DEFINE VAR xxPr  AS DEC NO-UNDO.
+   DEFINE VAR xxBPr AS DEC NO-UNDO.
+   DEFINE VAR yyy   AS DEC NO-UNDO.
+   DEFINE VAR yyyB  AS DEC NO-UNDO.
+   DEFINE VAR yyPr  AS DEC NO-UNDO.
+   DEFINE VAR yyBPr AS DEC NO-UNDO.
+   DEFINE VAR OpSum46  AS DEC NO-UNDO.
+   DEFINE VAR OpSum362 AS DEC NO-UNDO.
+   DEFINE VAR OpSum100 AS DEC NO-UNDO.
+   DEFINE VAR OpSum309 AS DEC NO-UNDO.
+
+   DEFINE BUFFER bloan-int FOR loan-int.
+
+   ASSIGN
+      e1     = 0
+      e2     = 0
+      e3     = 0
+      xxx    = 0
+      xtmp   = 0
+      xxx1    = 0
+      xxxB    = 0
+      xxPr    = 0
+      xxBPr   = 0
+      yyy     = 0
+      yyyB      = 0
+      yyPr      = 0
+      yyBPr     = 0
+      OpSum46   = 0
+      OpSum362  = 0
+      OpSum100  = 0
+      OpSum309  = 0
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+      summ-t = 0
+&ENDIF
+   .
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-k  EQ 6
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      IF CAN-DO({&iskldbparam}, STRING(loan-int.id-d)) THEN
+         NEXT.
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 46-ю операцию - оплата требований */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 5
+      AND   loan-int.id-k  EQ 35
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 37-ю операцию - прощение %% */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 5
+      AND   loan-int.id-k  EQ 4
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 362-ю операцию - Оплата просроченых процентов 302-П */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 5
+      AND   loan-int.id-k  EQ 10
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 475-ю операцию - Спис. просроч. %% за счет резерва */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 351
+      AND   loan-int.id-k  EQ 10
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 4007-ю операцию - Погашение выкупленных процентов
+      ** эта операция актуальна только для сделок покупки в модуле рефинансирование */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 5
+      AND   loan-int.id-k  EQ 5402
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 481-ю операцию - Начисление %% будущих периодов */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ ?
+      AND   loan-int.id-k  EQ 352
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+      /* Учитываем 47-ю операцию - Перенос прос.в/б % на %%,невоз.к вз */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 23
+      AND   loan-int.id-k  EQ 48
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ ?
+      AND   loan-int.id-k  EQ 16
+      AND   loan-int.mdate LE mPayDate 
+   NO-LOCK:
+      e1 = e1 + loan-int.amt.
+   END.
+   
+      /* Вычитаем сумму параметров, которые не должны влиять на сумму
+      ** погашения процентов ( проср %% на проср о.д. и т.д. ) */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND  ((     loan-int.id-d  EQ 6
+            AND   loan-int.mdate LE mPayDate
+            )
+         OR (     loan-int.id-d  EQ 32
+            AND   loan-int.mdate LE mPayDate
+            )
+         OR (     loan-int.id-d  EQ 24
+            AND   loan-int.mdate LE mPayDate
+            ))
+   NO-LOCK:
+      FIND FIRST chowhe WHERE
+                 chowhe.id-k EQ loan-int.id-k
+         AND     chowhe.id-d EQ loan-int.id-d
+      NO-LOCK NO-ERROR.
+      IF AVAIL chowhe
+         AND GetXAttrValueEx("chowhe", STRING(chowhe.id-op), "УчОплПроц", "Да") EQ "Нет" THEN
+         e1 = e1 - loan-int.amt.
+      ELSE
+         NEXT.
+   END.
+   /*187945 для этих классов обработку не включаем             Если <РаздУчет =Нет>*/
+   IF FGetSetting("РаздУчет",?,"Нет") = 'Нет' AND
+      NOT CAN-DO(FGetSetting("ОверКлассТранз","ИсклКлассКомпл",""),loan.class-code) THEN
+   DO:
+      /*Бежим по всем нужным операциям по договору до даты пересчета договора.*/
+      /*перебираем все 67,385,46,362,98,99*/
+      /*перебираем все 104,323,304,86,309,100*/
+      FOR EACH loan-int WHERE                        /*67*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code 
+         AND   loan-int.id-d  EQ 32
+         AND   loan-int.id-k  EQ  8
+         AND   loan-int.mdate LE mPayDate)
+          OR                                         /*385*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code 
+         AND   loan-int.id-d  EQ 10
+         AND   loan-int.id-k  EQ  8
+         AND   loan-int.mdate LE mPayDate)
+          OR                                        /*46*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ  5
+         AND   loan-int.id-k  EQ 35
+         AND   loan-int.mdate LE mPayDate)
+          OR                                        /*99*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 10
+         AND   loan-int.id-k  EQ 34
+         AND   loan-int.mdate LE mPayDate)
+          OR                                        /*362*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ  5
+         AND   loan-int.id-k  EQ 10
+         AND   loan-int.mdate LE mPayDate)
+          OR                                        /*98*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 10
+         AND   loan-int.id-k  EQ 33
+         AND   loan-int.mdate LE mPayDate)
+          OR                                    /*104*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 24
+         AND   loan-int.id-k  EQ  8
+         AND   loan-int.mdate LE mPayDate)
+          OR                                    /*323*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 48
+         AND   loan-int.id-k  EQ  8
+         AND   loan-int.mdate LE mPayDate)
+          OR                                    /*304*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 48
+         AND   loan-int.id-k  EQ 29
+         AND   loan-int.mdate LE mPayDate)
+
+          OR                                   /*86*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 31
+         AND   loan-int.id-k  EQ  8
+         AND   loan-int.mdate LE mPayDate)
+          OR                                   /*309*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 30
+         AND   loan-int.id-k  EQ 48
+         AND   loan-int.mdate LE mPayDate)
+          OR                                   /*100*/
+              (loan-int.contract  EQ loan.contract 
+         AND   loan-int.cont-code EQ loan.cont-code
+         AND   loan-int.id-d  EQ 30
+         AND   loan-int.id-k  EQ 29
+         AND   loan-int.mdate LE mPayDate)
+      NO-LOCK BY loan-int.mdate BY loan-int.avt DESC:
+         /*Если встречается операция 67 (32- 8)
+           увеличиваем переменную ХХХ.*/
+         IF     loan-int.id-d  EQ 32
+            AND loan-int.id-k  EQ  8
+         THEN 
+            ASSIGN
+               xxx = xxx + loan-int.amt
+               OpSum46 = 0
+               OpSum362 = 0
+            .
+         /*46*/
+         IF     loan-int.id-d  EQ  5
+            AND loan-int.id-k  EQ 35
+         THEN  
+           ASSIGN
+              OpSum46  = loan-int.amt-rub
+           .
+         /*Если ХХХ больше нуля, то рассчитываем сумму
+           ее  погашения = yyy =мин(46,ХХХ)*/
+         IF xxx GT 0 THEN
+            ASSIGN
+               yyy = yyy + MIN(OpSum46,xxx)
+               /*Новое31/08/14: После операции 46  ХХХ уменьшаем 
+               на сумму погашения: ХХХ = ХХХпред - YYY* */
+               xxx = xxx - MIN(OpSum46,xxx)
+               OpSum46 = 0
+            . 
+
+         /*
+         Если встречается операция 385 (10 8)
+         увеличиваем на ее сумму переменную ХХPr.
+         ??? тут надо обнулить xxx
+         */
+         IF     loan-int.id-d  EQ 10
+            AND loan-int.id-k  EQ  8
+         THEN 
+            xxPr = xxPr + loan-int.amt.
+         /*
+         Если встречается операция 98(10-33) или 99(10-34),то
+         ХХPr увеличиваем на сумму ХХХ-yyy, и 
+         ХХХ=0 - производим перенос 8 параметра на просрочку
+         */
+         IF    (loan-int.id-d  EQ 10
+            AND loan-int.id-k  EQ 33)
+             OR
+               (loan-int.id-d  EQ 10
+            AND loan-int.id-k  EQ 34)
+         THEN 
+            ASSIGN
+               xxPr = xxPr + xxx
+               xxx  = 0
+            .
+         /*
+         Если ХХPr больше нуля, 
+         то рассчитываем сумму  ее  погашения
+          = yyPr =мин(362,ХХ ХХPr)
+         */            
+         IF     loan-int.id-d  EQ  5
+            AND loan-int.id-k  EQ 10
+         THEN  
+           ASSIGN
+              OpSum362  = loan-int.amt-rub
+           .
+         IF xxPr GT 0 AND OpSum362 GT 0 THEN
+            ASSIGN
+               yyPr = yyPr + MIN(OpSum362,xxPr)
+               /*Новое31/08/14: После операции 362  ХХPr уменьшаем 
+               на сумму погашения: ХХPr = ХХPr пред -YYPr */
+               xxPr = xxPr - MIN(OpSum362,xxPr)
+               OpSum362  =  0 
+            . 
+
+         /*
+         если встречается операция 104 (24-8) или 86 (31 8),
+         увеличиваем переменную ХХХB
+         */
+         IF    (loan-int.id-d  EQ 24
+            AND loan-int.id-k  EQ  8)
+             OR
+               (loan-int.id-d  EQ 31
+            AND loan-int.id-k  EQ  8)
+         THEN 
+            /* и  в этом дне нет операции 308(новое)*/
+            IF NOT CAN-FIND (FIRST bloan-int WHERE bloan-int.id-d  EQ 48
+                                               AND bloan-int.id-k  EQ 30 
+                                               AND bloan-int.mdate EQ loan-int.mdate)
+            THEN
+               ASSIGN
+               /*Если если  в одном дне 
+                встречаются операции 104 и 308, то
+                увеличиваем переменную ХХBPr на сумму =104, и  XХХB=0 -
+                производим перенос 8 параметра на просрочку на внебалансе
+                */ 
+                  xxxB = xxxB + loan-int.amt
+               .
+            ELSE
+               ASSIGN
+                  /*если  в одном дне встречаются операции 104 и 308, то
+                  увеличиваем переменную ХХBPr на сумму =104, и  XХХB=0 
+                  производим перенос 8 параметра на просрочку на внебалансе
+                  */
+                  xxBPr = xxBPr + loan-int.amt
+                  xxxB  = 0
+               .
+
+         /*
+         Если ХХХB больше нуля,
+         то вычисляем сумму ее гашения 
+         yyyB =  мин(100, ХХХB). 
+         */
+       
+         IF     loan-int.id-d  EQ 30
+            AND loan-int.id-k  EQ 29
+         THEN  
+           ASSIGN
+              OpSum100  = loan-int.amt-rub
+           .
+          IF xxxB GT 0 AND OpSum100 GT 0 THEN
+            ASSIGN
+               yyyB = yyyB + MIN(OpSum100,xxxB)
+               /*Новое31/08/14: После операции 100  ХХХB уменьшаем 
+                 на сумму погашения: ХХХB = ХХХB пред - YYYВ**
+               */
+               xxxB = xxxB - MIN(OpSum100,xxxB)
+               OpSum100 = 0
+            .
+         /*
+         встречается операция 323 (48 8),
+         увеличиваем переменную ХХBPr
+         */
+         IF     loan-int.id-d  EQ 48
+            AND loan-int.id-k  EQ  8
+         THEN 
+            xxBPr = xxBPr + loan-int.amt.
+         /*
+         если встречается операция 304 (48 29), то
+         увеличиваем переменную ХХBPr на сумму = XХХB-yyyB,
+         и  XХХB=0 - производим перенос 8 параметра
+         на просрочку на внебалансе.
+         */
+         IF     loan-int.id-d  EQ 48
+            AND loan-int.id-k  EQ 29
+         THEN 
+            ASSIGN
+               xxBPr = xxBPr + xxxB
+               xxxB  = 0
+            .
+         /*
+         Если XХBPr больше нуля,
+         то вычисляем сумму ее гашения
+          yyBPr =  мин(309, ХХBPr). 
+         */          
+         IF     loan-int.id-d  EQ 30
+            AND loan-int.id-k  EQ 48
+         THEN  
+           ASSIGN
+              OpSum309 = loan-int.amt-rub
+           .
+
+         /*После операции 309  ХХBPr уменьшаем
+           на сумму погашения: ХХBPr = ХХBPr пред - YYВPr
+         */
+
+         IF xxBPr GT 0 THEN
+            ASSIGN 
+               yyBPr = yyBPr + MIN(OpSum309,xxBPr)
+               xxBPr = xxBPr - MIN(OpSum309,xxBPr)
+               OpSum309 = 0
+            . 
+      END.
+      /*
+      Когда дошли до даты пересчета договора.
+      yyy+yyyB+yyPr+yyBPr на  эту сумму у нас сейчас идет переплата.
+      Надо увеличить непогашенный остаток на эту сумму.      
+      */
+      e1 = e1 - (yyy + yyyB + yyPr + yyBPr).
+      /*т.к. потом e1 = 0 - e1 я так понимаю тут минус*/
+   END. /*IF FGetSetting("РаздУчет" NOT CAN-DO(FGetSetting("ОверКлассТранз"*/
+
+   /* Вычитаем сумму параметров которые будут преобразованы в операции на следующий день */
+DEF VAR mC          AS INT64  NO-UNDO.
+DEF VAR mSumma32    AS DEC  NO-UNDO.
+DEF VAR mSumma24    AS DEC  NO-UNDO.
+DEF VAR mSummaParam AS DEC  NO-UNDO.
+DEF VAR mSumma      AS DEC  NO-UNDO.
+DEF VAR mParamExt   AS CHAR NO-UNDO.
+DEF VAR mAmtDiff    AS DEC  NO-UNDO.
+DEF VAR mAmtDiff24  AS DEC  NO-UNDO.
+
+   RUN STNDRT_PARAM_EX (loan.contract,
+                        loan.cont-code,
+                        32,
+                        mPayDate,
+                        loan.since,
+                 OUTPUT mSumma32,
+                 OUTPUT vDbSumDec,
+                 OUTPUT vCrSumDec).
+   RUN STNDRT_PARAM_EX (loan.contract,
+                        loan.cont-code,
+                        24,
+                        mPayDate,
+                        loan.since,
+                 OUTPUT mSumma24,
+                 OUTPUT vDbSumDec,
+                 OUTPUT vCrSumDec).
+
+   RUN inter_current  (BUFFER loan, 32, OUTPUT mAmtDiff) .
+   RUN inter_current  (BUFFER loan, 24, OUTPUT mAmtDiff24) .
+
+   mSumma32 = 0 - (mSumma32 + mSumma24 + mAmtDiff + mAmtDiff24).
+   IF mSumma32 GT 0 THEN
+   DO:
+      mSumma = 0.
+      /* коды параметров нужно вынести в настройку */
+      mParamExt = FGetSetting("НачШтр",?,"") + ",4,81,82,96,704".
+      DO mC = 1 TO EXTENT(pick-var) - 1:
+         IF LOOKUP(STRING(pick-var[mC]),mParamExt) <> 0 THEN NEXT.
+         FIND FIRST chowhe WHERE
+                    LOOKUP(STRING(chowhe.id-d),"32,24") GT 0
+            AND     chowhe.id-k EQ pick-var[mC]
+         NO-LOCK NO-ERROR.
+         IF NOT AVAIL chowhe OR GetXAttrValueEx("chowhe", STRING(chowhe.id-op), "УчОплПроц", "Да") NE "Нет" THEN NEXT.
+
+         RUN STNDRT_PARAM_EX (loan.contract,
+                              loan.cont-code,
+                              pick-var[mC],
+                              mPayDate,
+                              loan.since,
+                       OUTPUT mSummaParam,
+                       OUTPUT vDbSumDec,
+                       OUTPUT vCrSumDec).
+         RUN inter_current  (BUFFER loan, pick-var[mC], OUTPUT mAmtDiff) .
+         mSumma = mSumma + mSummaParam + mAmtDiff.
+      END.
+      e1 = e1 - MIN(mSumma32, mSumma).
+   END.
+      /* Вычитаем 480-ю операцию - Оплачено %% в счет будущих периодов */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 352
+      AND   loan-int.id-k  EQ 6
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 - loan-int.amt.
+   END.
+      /* Вычитаем 482-ю операцию - Отмена оплаты %% в счет будущих периодов */
+   FOR EACH loan-int {wh-t &f=loan-int &c="/*"}
+      AND   loan-int.id-d  EQ 352
+      AND   loan-int.id-k  EQ ?
+      AND   loan-int.mdate LE mPayDate
+   NO-LOCK:
+      e1 = e1 - loan-int.amt.
+   END.
+      /* Необходимо добавить  начисленные проценты на дату
+      ** начального решения, просроченные проценты */
+    DO i = 1 TO NUM-ENTRIES(vPar):
+       RUN STNDRT_PARAM_EX (loan.contract,
+                            loan.cont-code,
+                            ENTRY(i, vPar),
+                            vDateN,
+                            loan.since,
+                            OUTPUT vSumm,
+                            OUTPUT vDbSumDec,
+                            OUTPUT vCrSumDec).
+      e1 = e1 - vSumm.
+   END.
+   
+   &IF DEFINED (SUMM_PROC) NE 0 &THEN
+      RUN STNDRT_PARAM_EX (loan.contract,
+                            loan.cont-code,
+                            "633",
+                            mPayDate,
+                            loan.since,
+                            OUTPUT vSumm,
+                            OUTPUT vDbSumDec,
+                            OUTPUT vCrSumDec).
+      e1 = e1 - vSumm.
+   &ENDIF   
+      /* после этого мы посчитали сумму погашения % за вычетом каких-то специфических операций */
+   e1 = 0 - e1.
+&IF DEFINED (SUMM_PROC_HIST) EQ 0 &THEN
+
+   FOR EACH xerm-obl WHERE 
+            xerm-obl.contract   EQ loan.contract
+        AND xerm-obl.cont-code  EQ loan.cont-code
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+        AND xerm-obl.idnt       EQ term-obl.idnt 
+&ELSE 
+        AND xerm-obl.idnt       EQ 1
+&ENDIF
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+        AND xerm-obl.end-date   LE term-obl.end-date 
+&ELSE 
+        AND xerm-obl.dsc-beg-date   LE iEndDate 
+&ENDIF
+   NO-LOCK
+&IF DEFINED (SUMM_PROC) NE 0 &THEN
+   BY xerm-obl.end-date
+&ENDIF
+   :
+      ASSIGN
+         e1 = e1 + xerm-obl.amt
+&IF DEFINED (SUMM_PROC) NE 0 &THEN
+         e3 = e3 + xerm-obl.amt WHEN xerm-obl.dsc-beg-date GE iBegDate
+&ENDIF
+      .
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+         /* если сумма обязательств больше переданного обязательства, то считать дальше не нужно - обязательство полностью не погашено */
+      IF term-obl.amt LE e1 THEN
+      DO:
+         LEAVE.
+      END.
+&ENDIF
+   END.
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+   IF e1 LE 0 THEN
+      summ-t = 0.
+   ELSE
+      IF term-obl.amt GT e1 THEN
+         summ-t = e1.
+      ELSE
+         summ-t = term-obl.amt.
+&ELSE
+   oSumm = MIN (e1, e3).
+&ENDIF
+   RELEASE xerm-obl.
+
+&ELSE
+
+   FIND LAST term-obl-hist WHERE
+             term-obl-hist.contract  EQ loan.contract
+         AND term-obl-hist.cont-code EQ loan.cont-code
+&IF DEFINED (SUMM_PROC) EQ 0 &THEN
+         AND term-obl-hist.idnt      EQ term-obl.idnt 
+&ELSE 
+         AND term-obl-hist.idnt       EQ 1
+&ENDIF
+         AND term-obl-hist.since     LE iDatePlat
+   NO-LOCK NO-ERROR.
+
+   IF AVAIL term-obl-hist THEN
+   DO:
+      FOR EACH tobl-hist-amt WHERE 
+               tobl-hist-amt.tobl-id      EQ term-obl-hist.tobl-id
+           AND tobl-hist-amt.dsc-beg-date LE iEndDate 
+      NO-LOCK
+      BY tobl-hist-amt.end-date:
+         ASSIGN
+            e1 = e1 + tobl-hist-amt.amt
+            e3 = e3 + tobl-hist-amt.amt WHEN tobl-hist-amt.dsc-beg-date GE iBegDate
+         .
+      END.
+ 
+      oSumm = MIN (e1, e3).
+
+      RELEASE tobl-hist-amt.
+   END.
+
+&ENDIF
+
+END.
+/* $LINTENV ='common' */
+/* $LINTVSS ='$/ws3-dpl/common/bq/' */
+/* $LINTDATE='02/10/2015 16:39:24.312+04:00' */
+/* $LINTUSER='pase' */
+/* $LINTMODE='1' */
+/* $LINTFILE='summ-t1.i' */
+/*prosignL0PXnKte7693MUysTCBItg*/

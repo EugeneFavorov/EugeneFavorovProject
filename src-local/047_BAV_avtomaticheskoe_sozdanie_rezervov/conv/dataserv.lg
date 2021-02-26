@@ -1,0 +1,7 @@
+[17/01/11@14:57:51.152+0300] P-065416 T-2334856992 1 ORA    -- Executable was compiled on Feb 12 2015 at 03:49:23 (5067)
+[17/01/11@14:57:51.152+0300] P-065416 T-2334856992 1 ORA    -- Login to dataserver db as user qbis. (2689)
+[17/01/11@14:57:51.171+0300] P-065416 T-2334856992 1 ORA    -- Using shared library /opt/oracle/product/11.2.0.1/db_ent1/lib/libclntsh.so (oci 8.1) (14874)
+[17/01/11@14:57:51.171+0300] P-065416 T-2334856992 1 ORA    -- ORACLE_HOME set to '/opt/oracle/product/11.2.0.1/db_ent1' (14875)
+[17/01/11@14:57:52.248+0300] P-065416 T-2334856992 1 ORA    -- -Dsrv qt_debug: 0 (0x0 None) (6489)
+[17/01/11@14:57:52.248+0300] P-065416 T-2334856992 1 ORA    --   Cursor limit: 4000 (-c setting) (6490)
+[17/01/11@14:58:55.474+0300] P-065416 T-2334856992 1 ORA    -- Logoff from dataserver db as user qbis. (2690)

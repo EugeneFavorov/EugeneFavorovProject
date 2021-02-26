@@ -1,0 +1,111 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 05/11/2015 12:38:30 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+_i-pfroms:
+DO TRANSACTION NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PFR._pfrdoc._i-pfroms
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// ПФР. Клиентский перевод
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// _pfrdoc
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// mail-ext
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_сс_выводнаэкран>
+   /// Нет
+   /// </tr_сс_выводнаэкран>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   // Библиотека системных функций обмена.
+   LIBRARY pexch.
+
+   DO BEFORE:
+      CASH_INTERFACE("iwop")
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS opb ACTION Инициализация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op-status (константа)
+      @op-status = [Ф]
+      // РЕКВИЗИТ: contract-date (формула)
+      @contract-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-date (формула)
+      @doc-date = ДАТА()
+
+      // РЕКВИЗИТ: op-date (формула)
+      @op-date = ДАТА()
+
+      // РЕКВИЗИТ: ins-date (формула)
+      @ins-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-type (константа)
+      @doc-type = [01]
+      // РЕКВИЗИТ: order-pay (константа)
+      @order-pay = [5]
+      // РЕКВИЗИТ: name-rec (константа)
+      @name-rec = []
+      // РЕКВИЗИТ: acct-rec (константа)
+      @acct-rec = []
+      // РЕКВИЗИТ: doc-num (константа)
+      @doc-num = []
+      20:
+      DO TEMPLATE CLASS op-entry ACTION Инициализация ROLE op-entry:
+         // РЕКВИЗИТ: acct-db (константа)
+         @acct-db = [40702810800000100150]
+         // РЕКВИЗИТ: op-cod (константа)
+         @op-cod = [000000]
+         // РЕКВИЗИТ: acct-cat (константа)
+         @acct-cat = [b]
+         // РЕКВИЗИТ: currency (константа)
+         @currency = []
+         // РЕКВИЗИТ: type (константа)
+         @type = [ВН]
+
+      END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+      30:
+      DO TEMPLATE CLASS op-bank ACTION Инициализация ROLE op-bank:
+
+      END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS PPFR2 ACTION Импорт ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: Kind (константа)
+      @Kind = [ExchPFRDoc,ExchPFRDoc]
+      // РЕКВИЗИТ: ClassError (константа)
+      @ClassError = [ErrorPFR]
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ _i-pfroms - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

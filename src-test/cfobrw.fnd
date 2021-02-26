@@ -1,0 +1,19 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: cfobrw.FND
+      Comment: ЦФО - текущая запись.
+   Parameters:
+         Uses:
+      Used by:
+      Created: ayv
+	  Modified:   
+*/
+
+ASSIGN
+   mBranchID  = ENTRY (1, code.{&Codes}, ":")
+   mCFO       = ENTRY (2, code.{&Codes}, ":")
+   mStartDate = DATE (code.{&StartDate})
+   mEndDate   = DATE (code.{&EndDate})
+.
+str-recid = CAN-FIND(FIRST tmprecid WHERE tmprecid.id EQ RECID(code)).

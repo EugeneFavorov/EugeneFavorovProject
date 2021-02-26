@@ -1,0 +1,81 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: cfobrw.QRY
+      Comment: ЦФО - запросы
+   Parameters:
+         Uses:
+      Used by:
+      Created:  
+     Modified:  
+*/
+
+FUNCTION PREPARE-FIXED-WHERE RETURNS CHARACTER
+   (INPUT iTable AS CHAR,
+    INPUT iFixedWhere AS CHAR):
+
+   CASE iTable:
+      WHEN "code" THEN 
+      DO:
+         iFixedWhere = " code.class  EQ '" + in-class  + "'" +
+                   " AND code.parent EQ '" + in-parent + "'" .
+         IF mFltBranchID NE "" THEN
+            IF mFltCFO NE "" THEN
+               iFixedWhere = iFixedWhere + " AND code.{&Codes} MATCHES '" + mFltBranchID + ":" + mFltCFO + "'".
+            ELSE
+               iFixedWhere = iFixedWhere + " AND code.{&Codes} BEGINS '" + mFltBranchID + ":'" .
+         ELSE IF mFltCFO NE "" THEN
+            iFixedWhere = iFixedWhere + " AND code.{&Codes} MATCHES '*:" + mFltCFO + "'".
+         IF mFltStatus NE "" THEN
+			iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltStatus + "',code.{&Status})".
+         IF mFltShortName NE "" THEN
+            iFixedWhere = iFixedWhere + " AND code.{&ShortName} MATCHES '" + mFltShortName + "'".
+         IF mFltProdType NE "" THEN
+            iFixedWhere = iFixedWhere + " AND CAN-DO('" + mFltProdType + "',code.{&ProdType})".
+		 IF mFltStartDate1 NE ? THEN
+		    iFixedWhere = iFixedWhere + " AND DATE(code.{&StartDate}) GE " + STRING(DAY(mFltStartDate1)) 
+																	 + "/" + STRING(MONTH(mFltStartDate1))
+																	 + "/" + STRING(YEAR(mFltStartDate1)).
+		 IF mFltStartDate2 NE ? THEN
+		    iFixedWhere = iFixedWhere + " AND DATE(code.{&StartDate}) LE " + STRING(DAY(mFltStartDate2)) 
+																	 + "/" + STRING(MONTH(mFltStartDate2))
+																	 + "/" + STRING(YEAR(mFltStartDate2)).
+		 IF mFltEndDate1 NE ? THEN
+		    iFixedWhere = iFixedWhere + " AND DATE(code.{&EndDate}) GE " + STRING(DAY(mFltEndDate1)) 
+																	 + "/" + STRING(MONTH(mFltEndDate1))
+																	 + "/" + STRING(YEAR(mFltEndDate1)).
+		 IF mFltEndDate2 NE ? THEN
+		    iFixedWhere = iFixedWhere + " AND DATE(code.{&EndDate}) LE " + STRING(DAY(mFltEndDate2)) 
+																	 + "/" + STRING(MONTH(mFltEndDate2))
+																	 + "/" + STRING(YEAR(mFltEndDate2)).
+      END.
+      OTHERWISE .
+   END CASE.
+
+   IF iFixedWhere NE ""
+      THEN iFixedWhere = "WHERE " + iFixedWhere.
+
+   RETURN iFixedWhere.
+END FUNCTION.
+   
+FUNCTION UserSortForm RETURN CHARACTER (INPUT iSort AS CHAR):
+   DEFINE VARIABLE vSort AS CHARACTER  NO-UNDO.
+
+      IF n-frm EQ 1 
+           THEN vSort = "BY code.code".
+      ELSE IF n-frm EQ 2 
+           THEN vSort = "".
+      {additem3.i iSort vSort 32}.
+      RETURN iSort.
+   END FUNCTION.
+
+{qrdef.i
+   &buff-list        = "code"
+   &need-buff-list   = "code"
+   &Join-list        = "each"
+   &xSortBy          = "BY code.code"
+   &condition        = "true"
+}
+
+
+

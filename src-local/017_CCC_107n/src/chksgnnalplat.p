@@ -1,0 +1,333 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2016 ЗАО "Банковские информационные системы"
+     Filename: chksgnnalplat.p
+      Comment: Процедура проверки реквизитов плательщика и получателя для налоговых, таможенных
+               и бюджетных платежей
+   Parameters: iOp - документ, oOk - результат
+         Uses:
+      Used by:
+      Created: 
+     Modified:
+*/
+{globals.i}
+{intrface.get xclass}
+{intrface.get db2l}
+{intrface.get tmess}
+{intrface.get op}
+ DEFINE INPUT  PARAMETER iOp AS INT64   NO-UNDO.
+ DEFINE OUTPUT PARAMETER oOk AS LOGICAL NO-UNDO.
+
+{148n.i}
+
+ DEFINE VARIABLE mBalNalog AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mBalSmev  AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mKRDNP    AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mINNSend  AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mINNRec   AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mUIN      AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mPokST    AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mPokND    AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mKPPSend  AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mKPPRec   AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mErrTxt   AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mAcctSend AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mNameSend AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mAcctRec  AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mNameRec  AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mULFL     AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE mKBK      AS CHARACTER NO-UNDO.
+ 
+ DEFINE BUFFER bOp      FOR op.
+ DEFINE BUFFER bOpEntry FOR op-entry .
+
+  FIND FIRST bop WHERE 
+             bop.op = iOp 
+  NO-LOCK NO-ERROR.
+  IF NOT AVAIL bop THEN 
+     RETURN.
+
+  FIND FIRST bOpEntry OF bop NO-LOCK NO-ERROR.
+  IF NOT AVAIL bOpEntry THEN 
+     RETURN.
+
+  ASSIGN
+   mBalNalog = FGetSetting("ГНИ","bal-nalog","")
+   mBalSmev  = FGetSetting("ГНИ","bal-smev","")
+   mKRDNP    = FGetSetting("ГНИ","КРДНП","")
+  .
+  
+/*MESSAGE /*"mBalNalog = " mBalNalog ";" "mBalSmev = " mBalSmev ";"*/ "mKRDNP = " mKRDNP*/
+/*VIEW-AS ALERT-BOX.                                                                    */
+  
+/* Проверка плательщика */
+FUNCTION ChkULFL RETURN CHARACTER PRIVATE (INPUT iAcct  AS CHAR):
+   
+   DEFINE VARIABLE vULFL     AS CHARACTER NO-UNDO.
+   
+   DEFINE BUFFER bacct      FOR acct.
+
+	{find-act.i
+	    &bact   = bacct
+	    &acct   = iAcct
+	}
+   IF AVAILABLE bacct THEN
+   DO:
+
+      IF bacct.cust-cat EQ "Ю"     THEN vULFL = "ЮЛ".
+      IF bacct.cust-cat EQ "Ч"     THEN vULFL = "ФЛ".
+      IF bacct.acct BEGINS "40911" THEN vULFL = "ФЛ".
+      /* ФЛ - нерезидент */
+      IF bacct.cust-cat EQ "Ч" 
+         AND GetValueAttr(getCustClass(bacct.cust-cat),
+                          STRING(bacct.cust-id),"country-id") NE FGetSetting("КодРез",?,"RUS") THEN vULFL = "ФЛН".
+      /* ЮЛ - нерезидент */
+      IF bacct.cust-cat EQ "Ю" 
+         AND GetValueAttr(getCustClass(bacct.cust-cat),
+                          STRING(bacct.cust-id),"country-id") NE FGetSetting("КодРез",?,"RUS") THEN vULFL = "ЮЛН".
+   END.
+   RETURN vULFL.
+END FUNCTION.  
+  
+/* Проверка ИНН плательщика */
+FUNCTION ChkINNSend RETURN CHARACTER PRIVATE (INPUT iINNSend AS CHAR,
+                                              INPUT iAcctDb  AS CHAR,
+                                              INPUT iOpOp    AS INT64):
+ DEFINE VARIABLE vAcctSend AS CHARACTER NO-UNDO.
+ DEFINE VARIABLE vNameSend AS CHARACTER NO-UNDO.
+ DEFINE BUFFER bacct      FOR acct.
+ DEFINE BUFFER buf-op     FOR op.
+
+  FIND FIRST buf-op WHERE 
+             buf-op.op = iOpOp
+  NO-LOCK NO-ERROR.
+
+ {find-act.i
+     &bact   = bacct
+     &acct   = iAcctDb
+ }
+ IF AVAILABLE bacct THEN DO:
+
+     IF NOT {assigned iINNSend} AND
+        LOOKUP(bacct.cust-cat,"Ю,Б,Ч") > 0 THEN
+        iINNSend = getValueAttr(getCustClass(bacct.cust-cat),
+                                STRING(bacct.cust-id),
+                                "inn").
+     IF NOT {assigned iINNSend} THEN DO:
+       ASSIGN
+        vAcctSend = GetXAttrValueEx("op",STRING(buf-op.op),"acct-send","")
+        vNameSend = GetXAttrValueEx("op",STRING(buf-op.op),"name-send","").
+
+        IF {assigned vAcctSend} AND
+           {assigned vNameSend} THEN
+            UpdateSigns("op",
+                        STRING(buf-op.op),
+                        "inn-send",
+                        "0",
+                        isXAttrIndexed(buf-op.class-code, "inn-send")).
+        ELSE
+          RETURN "ИНН плательщика должен быть заполнен".
+     END.
+
+   /* Проверки */
+   IF (LENGTH(iINNSend) EQ 10 OR
+       LENGTH(iINNSend) EQ 12) AND
+      SUBSTR(iINNSend,1,2) EQ "00" THEN
+     RETURN SUBSTITUTE("Первые две цифры ИНН плательщика '&1' не должны быть равны 00",iINNSend).
+
+   /* ЮЛ - нерезидент */
+   IF bacct.cust-cat EQ "Ю" AND
+      getValueAttr(getCustClass(bacct.cust-cat),
+                   STRING(bacct.cust-id),
+                   "country-id") NE FGetSetting("КодРез", ?, "RUS") 
+      AND REPLACE(iINNSend,"0","") EQ ""
+      AND iINNSend NE "0"  THEN
+     RETURN SUBSTITUTE("Все цифры ИНН плательщика '&1' не могут быть нулями",iINNSend).
+ END.
+END FUNCTION.
+/* Проверка КПП плательщика */
+FUNCTION ChkKPPSend RETURN CHARACTER PRIVATE (INPUT iKPPSend AS CHAR):
+   IF iKPPSend NE "0" AND
+      (LENGTH(iKPPSend) NE 9 OR
+       SUBSTR(iKPPSend,1,2) EQ "00") THEN
+     RETURN SUBSTITUTE("Неверный формат реквизита КПП плательщика '&1'",iKPPSend).
+END FUNCTION.
+/* Проверка ИНН получателя */
+FUNCTION ChkINNRec RETURN CHARACTER PRIVATE (INPUT iINNRec AS CHAR):
+   IF LENGTH(iINNRec) NE 10 OR
+      SUBSTR(iINNRec,1,2) EQ "00" THEN
+     RETURN SUBSTITUTE("Неверный формат реквизита ИНН получателя '&1'",iINNRec).
+END FUNCTION.
+/* Проверка КПП получателя */
+FUNCTION ChkKPPRec RETURN CHARACTER PRIVATE (INPUT iKPPRec AS CHAR):
+   IF iKPPRec NE "0" AND
+      (LENGTH(iKPPRec)     NE 9 OR
+       SUBSTR(iKPPRec,1,2) EQ "00")
+   THEN
+     RETURN SUBSTITUTE("Неверный формат реквизита КПП получателя '&1'",iKPPRec).
+END FUNCTION.
+
+/*begin*/
+IF (CAN-DO(mBalNalog,bop.ben-acct) OR
+      CAN-DO(mBalSmev,bop.ben-acct)) AND
+      CAN-DO(mKRDNP,bop.doc-type) THEN DO:
+
+   ASSIGN
+      mULFL     = ChkULFL(bOpEntry.acct-db)
+      mKBK      = GetXattrValueEx("op",STRING(iOp), "КБК",    "0")
+      mUIN      = GetXattrValueEx("op",STRING(iOp), "УИН",    "0")
+      mPOKST    = GetXattrValueEx("op",STRING(iOp), "ПокСт",   "")
+      mPOKND    = GetXattrValueEx("op",STRING(iOp), "ПокНд",   "")
+      mKPPSend  = GetXAttrValueEx("op",STRING(bop.op),"kpp-send","")
+      mKPPRec   = GetXAttrValueEx("op",STRING(bop.op),"kpp-rec","")
+      mAcctSend = GetXAttrValueEx("op",STRING(bop.op),"acct-send","")
+      mNameSend = GetXAttrValueEx("op",STRING(bop.op),"name-send","")
+      mAcctRec  = GetXAttrValueEx("op",STRING(bop.op),"acct-rec","")
+      mNameRec  = GetXAttrValueEx("op",STRING(bop.op),"name-rec","")
+   .
+
+   /*
+      Если ПокСт (101) не заполнено или содержит "0",
+      либо при отключении контроля посредством НП ГНИ.ДопКонтр148,
+      никакие проверки не производятся
+   */
+
+   IF NOT isAssigned148n(mPokST) OR
+      FGetSetting("ГНИ", "ДопКонтр148", "Да") = "Нет"
+   THEN
+   DO:
+      {intrface.del}
+      RETURN.
+   END.
+    
+   IF {assigned mAcctSend} AND {assigned mNameSend} THEN
+      mINNSend = GetXAttrValueEx("op",STRING(bop.op),"inn-send","").
+   ELSE mINNSend = bop.inn.
+
+   IF {assigned mAcctRec} AND {assigned mNameRec} THEN
+      mINNRec = GetXAttrValueEx("op",STRING(bop.op),"inn-rec","").
+   ELSE mINNRec = bop.inn.
+
+   /* Проверка ИНН плательщика */
+   mErrTxt = ChkINNSend (INPUT mINNSend,
+                         INPUT bOpEntry.acct-db,
+                         INPUT bOp.op).
+   IF {assigned mErrTxt} THEN DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+   /* Проверка КПП плательщика */
+   mErrTxt = ChkKPPSend (mKPPSend).
+   IF {assigned mErrTxt} THEN DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+   /* Проверка ИНН получателя */
+   mErrTxt = ChkINNRec (mINNRec).
+   IF {assigned mErrTxt} THEN DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+   /* Проверка КПП получателя */
+   mErrTxt = ChkKPPRec (mKPPRec).
+   IF {assigned mErrTxt} THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+   /* Проверка УИН */   
+   mErrTxt = check148n-uin-kbk(mUIN,mKBK).
+   IF {assigned mErrTxt} THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+   /* Проверка КБК */   
+   mErrTxt = check148n-kbk(mKBK).
+   IF {assigned mErrTxt} THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1",mErrTxt).
+      oOk = YES.
+   END.
+
+   /* 108 параметр */   
+   IF CAN-DO("03,19,20,24",mPokST)
+      AND INDEX(mPokND,";") EQ 0 THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1","В 101 поле указан код для физ.лица " + mPokST + 
+        ", ИНН должен состоять из 12 (цифр), УИН 20-25, 108 поле не равно нулю но не более 15 знаков," + 
+        "~n по следующему параметру ХХ;ХХХХХХХХХХХХ.").
+      oOk = YES.
+      {intrface.del}
+      RETURN.  
+   END.
+   
+   /* 8 */   
+   IF mULFL BEGINS "ФЛ"
+      AND CAN-DO("09,14",mPokST)
+      AND mUIN = "0" 
+      AND NOT {assigned mInnSend} THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1","При заполнении поля (101) значением " + mPokST + 
+        ", поля УИН(22) значением Ноль,~nИНН плательщика должен быть заполнен!").
+      oOk = YES.
+      {intrface.del}
+      RETURN.  
+   END.
+   
+   /* Если поле (101) удовлетворяет списку НП Статус108_22, 
+     поле (22) mUIN и поле (108) mPokND заполнено значением 0, 
+     должен быть заполнен ИНН (12 разрядов) */
+/*   IF  /*mPokST   EQ "24"*/                                                                    */
+/*       CAN-DO(fGetSetting("ГНИ","Статус108_22",""),mPokST)                                     */
+/*   AND mUIN     EQ "0"                                                                         */
+/*   AND mPokND   EQ "0"                                                                         */
+/*   AND mInnSend EQ "0"                                                                         */
+/*   THEN DO:                                                                                    */
+/*      RUN Fill-SysMes IN h_tmess ("","","-1","При заполнении поля (101) значением " + mPokST + */
+/*      ", полей (22) УИН и (108) ПокНД значением ноль - ИНН плательщика должен быть заполнен!").*/
+/*      oOk = YES.                                                                               */
+/*      {intrface.del}                                                                           */
+/*      RETURN.                                                                                  */
+/*   END.                                                                                        */
+
+   /* Если поле (101) удовлетворяет списку НП Статус108_22, 
+      поле (22) mUIN и поле (108) mPokND заполнено значением 0, 
+      должен быть заполнен ИНН (12 разрядов) */
+/*   IF CAN-DO(fGetSetting("ГНИ","Статус108_22",""),mPokST)                                                    */
+/*      AND mUIN = "0" AND mPokND = "0" AND                                                                    */
+/*     (NOT {assigned mInnSend} OR LENGTH(mInnSend) NE 12) THEN                                                */
+/*   DO:                                                                                                       */
+/*      RUN Fill-SysMes IN h_tmess ("","","-1","При заполнении поля (101) значением " + mPokST +               */
+/*        ", полей (22) УИН и (108) ПокНД значением ноль ИНН плательщика должен быть заполнен (12 разрядов)!").*/
+/*      oOk = YES.                                                                                             */
+/*      {intrface.del}                                                                                         */
+/*      RETURN.                                                                                                */
+/*   END.                                                                                                      */
+   
+	/* 2 */   
+   IF CAN-DO(fGetSetting("ГНИ","СтатусИП",""),mPokST)
+      AND mUIN = "0" 
+      AND mPokND = "0" 
+      AND (NOT {assigned mInnSend} OR LENGTH(mInnSend) NE 12) THEN
+   DO:
+      RUN Fill-SysMes IN h_tmess ("","","-1","При заполнении поля (101) значением " + mPokST + 
+        ", полей УИН(22) и ПокНД(108) значением Ноль, ИНН плательщика должен быть заполнен (12 разрядов)!").
+      oOk = YES.
+      {intrface.del}
+      RETURN.  
+   END.
+
+END. /*IF (CAN-DO(mBalNalog,bop.ben-acct) OR
+      CAN-DO(mBalSmev,bop.ben-acct)) AND
+      CAN-DO(mKRDNP,bop.doc-type) THEN DO:*/
+
+{intrface.del}
+
+/* $LINTFILE='chksgnnalplat.p' */
+/* $LINTMODE='1' */
+/* $LINTENV ='2st' */
+/* $LINTVSS ='*' */
+/* $LINTUSER='krok' */
+/* $LINTDATE='31/03/2016 18:23:33.005+04:00' */
+/*prosignre/ZTUAghy4JoRcNxofJmA*/

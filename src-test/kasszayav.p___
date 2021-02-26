@@ -1,0 +1,436 @@
+/*
+               ОАО "Плюс Банк"
+    Copyright: 
+     Filename: kasszayav.p
+      Comment: Определяет комиссию по кассовому символу
+   Parameters: op-entry.op-entry
+                acct.acct
+                op.op-date  
+                op.op
+         Uses:
+      Used by:
+      Created: 07/04/2014 kau
+     Modified: 14/05/2014 kau Добавил учёт пакетов услуг.
+               30/09/2014 kau изменение тарифов изменял программу.
+               10/10/2014 kau изменение тарифов. сделал более универсальной. 
+                              Теперь в начале задаётся список условий тарифов. И по каждой отдельной ситуации программа рассматривает отдельно
+                              добавлена воможность выдачи без кассовой заявки. Пусть всё будет в одном месте.
+               29/10/2015 ayv Исправлен расчет для пакетов, неправильно расчитывалась комиссия для сумм, превышающих ограничения пакета.
+               06/07/2015 ayv Исправлена функция RaschKommParts, неправильно расчитывалась пониженная часть комиссии для пакетов(добавлена фиктивная сумма).
+*/
+
+
+
+
+
+
+{globals.i}
+{sh-defs.i}
+{ksh-defs.i NEW}
+
+DEF INPUT PARAM iParam AS CHAR NO-UNDO.
+
+DEF VAR cKSymbols       AS CHAR NO-UNDO. cKSymbols = '40,41,50'.    /*Кассовые символы у которых изъятие дешевле*/
+DEF VAR cSummMonthKS    AS DEC  NO-UNDO. cSummMonthKS = 0.          /*Сумма ограничение на изъятие в месяц по кассовым символам с пониженной ставкой*/ 
+/*DEF VAR cSummMonth      AS DEC  NO-UNDO. cSummMonth = 250000.       /*Сумма ограничение на изъятие в месяц*/*/
+DEF VAR cSummMonth      AS DEC  NO-UNDO. cSummMonth = 350000.     /*01.04.2016 Сумма ограничение на изъятие в месяц*/
+
+DEF VAR cAM_KS_KZ       AS DEC  NO-UNDO. cAM_KS_KZ    = 0.5.        /*С утра. По пониженному кассовому символу. По кассовой заявке. Лимит НЕ превышен*/
+DEF VAR cAM_KS_KZ_P     AS DEC  NO-UNDO. cAM_KS_KZ_P  = 0.5.        /*С утра. По пониженному кассовому символу. По кассовой заявке. Лимит превышен*/
+DEF VAR cAM_KS_NKZ      AS DEC  NO-UNDO. cAM_KS_NKZ   = 0.8.        /*С утра. По пониженному кассовому символу. Нет кассовой заявки. Лимит НЕ превышен*/
+DEF VAR cAM_KS_NKZ_P    AS DEC  NO-UNDO. cAM_KS_NKZ_P = 0.8.        /*С утра. По пониженному кассовому символу. Нет кассовой заявки. Лимит превышен*/ 
+
+DEF VAR cPM_KS_KZ       AS DEC  NO-UNDO. cPM_KS_KZ    = 2.5.        /*Вечером. По пониженному кассовому символу. По кассовой заявке. Лимит НЕ превышен*/
+DEF VAR cPM_KS_KZ_P     AS DEC  NO-UNDO. cPM_KS_KZ_P  = cPM_KS_KZ.  /*Вечером. По пониженному кассовому символу. По кассовой заявке. Лимит превышен*/
+DEF VAR cPM_KS_NKZ      AS DEC  NO-UNDO. cPM_KS_NKZ   = cPM_KS_KZ.  /*Вечером. По пониженному кассовому символу. Нет кассовой заявки. Лимит НЕ превышен*/
+DEF VAR cPM_KS_NKZ_P    AS DEC  NO-UNDO. cPM_KS_NKZ_P = cPM_KS_KZ.  /*Вечером. По пониженному кассовому символу. Нет кассовой заявки. Лимит превышен*/
+
+DEF VAR cAM_NKS_KZ      AS DEC  NO-UNDO. cAM_NKS_KZ    = 1.2.       /*С утра. Иные цели. По кассовой заявке. Лимит НЕ превышен*/
+DEF VAR cAM_NKS_KZ_P    AS DEC  NO-UNDO. cAM_NKS_KZ_P  = 10.        /*С утра. Иные цели. По кассовой заявке. Лимит превышен*/
+DEF VAR cAM_NKS_NKZ     AS DEC  NO-UNDO. cAM_NKS_NKZ   = 2.2.       /*С утра. Иные цели. Нет кассовой заявки. Лимит НЕ превышен*/
+DEF VAR cAM_NKS_NKZ_P   AS DEC  NO-UNDO. cAM_NKS_NKZ_P = 11.        /*С утра. Иные цели. Нет кассовой заявки. Лимит превышен*/
+
+DEF VAR cPM_NKS_KZ      AS DEC  NO-UNDO. cPM_NKS_KZ    = 2.5.       /*Вечером. Иные цели. По кассовой заявке. Лимит НЕ превышен*/
+DEF VAR cPM_NKS_KZ_P    AS DEC  NO-UNDO. cPM_NKS_KZ_P  = 12.        /*Вечером. Иные цели. По кассовой заявке. Лимит превышен*/
+DEF VAR cPM_NKS_NKZ     AS DEC  NO-UNDO. cPM_NKS_NKZ   = 2.5.       /*Вечером. Иные цели. Нет кассовой заявки. Лимит НЕ превышен*/
+DEF VAR cPM_NKS_NKZ_P   AS DEC  NO-UNDO. cPM_NKS_NKZ_P = 12.        /*Вечером. Иные цели. Нет кассовой заявки. Лимит превышен*/
+
+DEF VAR cTrZay          AS CHAR NO-UNDO. cTrZay = 'KASSZ'.          /*Транзакция создания кассовой заявки*/
+DEF VAR cTrZayString    AS CHAR NO-UNDO. cTrZayString = 'Создание кассовой заявки'.       /*Транзакция создания кассовой заявки*/
+
+DEF VAR cPackUslSta     AS DEC  NO-UNDO. cPackUslSta = 100000.      /*Лимит пакета услуг Стартовый*/
+DEF VAR cPackUslBaz     AS DEC  NO-UNDO. cPackUslBaz =  50000.      /*Лимит пакета услуг Базовый*/
+DEF VAR cPackUslOpt     AS DEC  NO-UNDO. cPackUslOpt = 200000.      /*Лимит пакета услуг Оптимальный*/
+DEF VAR cPackUslPre     AS DEC  NO-UNDO. cPackUslPre = 250000.      /*Лимит пакета услуг Премиум*/
+
+
+DEF VAR vKS         AS CHAR NO-UNDO.    /*Кассовый символ данной проводки*/
+DEF VAR vAcct       AS CHAR NO-UNDO.    /*Счет кассовой заявки*/
+DEF VAR vAmt        AS DEC  NO-UNDO.    /*Сумма данной проводки*/
+DEF VAR vUnAmt      AS DEC  NO-UNDO.    /*Сумма пакета без комиссии*/
+DEF VAR vOvAmt      AS DEC  NO-UNDO.    /*Сумма пакета c комиссией*/
+DEF VAR vOp-date    AS DATE NO-UNDO.    /*Опердень*/
+DEF VAR vStartMonth AS DATE NO-UNDO.    /*Начало месяца относительно опердня*/
+DEF VAR vOpOp       AS DEC  NO-UNDO.    /*op.op*/
+DEF VAR vOpEntry    AS DEC  NO-UNDO.    /*op-entry.op-entry*/
+
+DEF VAR vSummPacUs  AS DEC  INIT 0.00 NO-UNDO.   /*Сумма выданная по пакету услуг*/
+DEF VAR vSummKS     AS DEC  INIT 0.00 NO-UNDO.   /*Сумма изъятая в месяц по пониженным КС*/
+DEF VAR vSummNoKS   AS DEC  INIT 0.00 NO-UNDO.   /*Сумма изъятая в месяц по повышенным КС*/
+DEF VAR vSummKomm   AS DEC  INIT 0.00 NO-UNDO.   /*Если комиссию расчитываем в ручную, тогда заполняем сюда*/
+
+DEF VAR komm		AS DEC	NO-UNDO.   /*итоговая комиссия уходит в транзакцию. Перед уходом переводиться в рубли*/
+
+DEF VAR vCust-cat	AS CHAR	NO-UNDO.
+DEF VAR vCust-id	AS DEC	NO-UNDO.
+DEF VAR vProd		AS CHAR	NO-UNDO.   /*Название пакета услуг*/
+
+DEF VAR vNoKZ		AS LOG	NO-UNDO.   /*Флаг отсутсвия кассовой заявки*/
+
+FUNCTION RaschKommParts RETURN DEC 
+    ( INPUT MaxSummMonth AS DEC, INPUT RealSummMonth AS DEC, INPUT SummThithDoc AS DEC, INPUT SummFiDoc AS DEC, INPUT KommNorm AS DEC, INPUT KommBig AS DEC):
+    DEF VAR vRezult      AS DEC NO-UNDO.    
+    DEF VAR PackSumMonth AS DEC NO-UNDO.
+    /*Учитываем фиктивную сумму(для пакетов), чтобы правильно расчитать комиссию*/
+    PackSumMonth = RealSummMonth + SummFiDoc.
+    /*Расчитываем пониженную часть комиссии*/
+    vRezult = (MaxSummMonth - PackSumMonth) * KommNorm / 100.
+    /*Расчитываем повышенную часть комиссии*/
+    vRezult = vRezult + ((SummThithDoc - (MaxSummMonth - PackSumMonth)) * KommBig / 100).
+    RETURN vRezult.                                        
+END FUNCTION.
+
+
+IF NUM-ENTRIES(iParam) < 4 THEN 
+DO:
+MESSAGE "Недостаточно данных передано в процедуру kasszayav.p" VIEW-AS ALERT-BOX.
+RETURN.
+END.
+
+vOpEntry = DEC(ENTRY(1, iParam)).
+vAcct = ENTRY(2, iParam).
+vOp-date = DATE(ENTRY(3, iParam)).
+vOpOp = DEC(ENTRY(4, iParam)).
+/*IF MONTH(vOp-date) EQ 10 AND (YEAR(vOp-date) EQ 2014 OR YEAR(vOp-date) EQ 14)
+THEN vStartMonth = DATE("13/" + STRING(MONTH(vOp-date)) + '/' + STRING(YEAR(vOp-date))).
+ELSE*/ 
+vStartMonth = DATE("01/" + STRING(MONTH(vOp-date)) + '/' + STRING(YEAR(vOp-date))).
+
+vUnAmt = 0.
+vOvAmt = 0.
+
+FIND FIRST op-entry WHERE op-entry.op = vOpOp
+                AND op-entry.op-entry = vOpEntry
+                NO-LOCK NO-ERROR.
+IF AVAIL op-entry THEN 
+DO:
+    vKS = op-entry.symbol.
+    vAmt = op-entry.amt-rub.
+END.
+ELSE MESSAGE "Ошибка в поиске документа!" VIEW-AS ALERT-BOX.
+
+/*проставляем флаг наличия кассовой заявки*/
+FIND FIRST op WHERE op.op EQ vOpOp NO-LOCK.
+FIND FIRST op-kind WHERE op-kind.op-kind EQ op.op-kind NO-LOCK NO-ERROR.
+IF AVAIL op-kind AND (op-kind.op-kind EQ cTrZay OR op-kind.name-opkind EQ cTrZayString)
+THEN vNoKZ = FALSE.
+ELSE vNoKZ = TRUE.
+    
+/* Отсеиваем случай пакетов услуг*/
+FIND FIRST acct WHERE acct.acct EQ vAcct NO-LOCK.
+vCust-cat = acct.cust-cat.
+vCust-id  = acct.cust-id.
+IF vCust-cat EQ 'Ю'
+THEN DO:
+    FOR EACH tmpsigns WHERE tmpsigns.file-name = 'cust-corp'
+                      AND   tmpsigns.surrogate = STRING(vCust-id)
+                      AND   tmpsigns.since le vOp-date
+                      AND   tmpsigns.code = 'Пакет'
+             NO-LOCK BY tmpsigns.since DESC:
+        vProd = tmpsigns.xattr-value.
+        LEAVE.
+    END.
+ /*   vProd = GetXattrValueEx("cust-corp", STRING(vCust-id), "Пакет", "").*/
+END.
+IF vCust-cat EQ 'Ч'
+THEN DO:
+    FOR EACH tmpsigns WHERE tmpsigns.file-name = 'person'
+                      AND   tmpsigns.surrogate = STRING(vCust-id)
+                      AND   tmpsigns.since le vOp-date
+                      AND   tmpsigns.code = 'Пакет'
+             NO-LOCK BY tmpsigns.since DESC:
+        vProd = tmpsigns.xattr-value.
+        LEAVE.
+    END.
+/*	vProd = GetXattrValueEx("person", STRING(vCust-id), "Пакет", "").*/
+END.
+
+IF vProd NE ''
+THEN DO:
+	FOR EACH op-entry WHERE op-entry.op-date >= vStartMonth
+						AND op-entry.op-date <= vOp-date
+						AND op-entry.acct-db EQ vAcct
+						AND op-entry.acct-cr BEGINS '20202'
+                        AND op-entry.op-status BEGINS "√"
+	NO-LOCK:
+		vSummPacUs = vSummPacUs + op-entry.amt-rub.
+	END.
+
+	IF vProd EQ 'Стартовый+' THEN DO:
+        IF vSummPacUs >= cPackUslSta
+        THEN DO:
+            MESSAGE 'Клиент привысил лимит пакета в ' + STRING(cPackUslSta) VIEW-AS ALERT-BOX.
+        END.
+        ELSE IF vSummPacUs + vAmt <= cPackUslSta
+        	THEN DO:
+        		MESSAGE 'У клиента не превышен лимит пакета в ' + STRING(cPackUslSta) VIEW-AS ALERT-BOX.
+        		komm = 0.
+        		RUN SetSysConf IN h_base ("кассзаявнедоком", STRING(0)).
+        		RUN SetSysConf IN h_base ("кассзаявком", STRING(komm)).
+        		RUN SetSysConf IN h_base ("кассзаявнетден", STRING(vNoKZ)).
+        		RETURN.
+            END.
+            ELSE DO:
+                vOvAmt = vAmt + vSummPacUs - cPackUslSta.
+                vUnAmt = vAmt - vOvAmt.
+                vAmt   = vOvAmt.
+                MESSAGE 'Клиент превысил лимит пакета на ' + STRING(vAmt) VIEW-AS ALERT-BOX. 
+            END.
+	END.
+
+	IF vProd EQ 'Базовый+' THEN DO:
+        IF vSummPacUs >= cPackUslBaz
+        THEN DO:
+            MESSAGE 'Клиент привысил лимит пакета в ' + STRING(cPackUslBaz) VIEW-AS ALERT-BOX.
+        END.
+        ELSE IF vSummPacUs + vAmt <= cPackUslBaz
+        	THEN DO:
+        		MESSAGE 'У клиента не превышен лимит пакета в ' + STRING(cPackUslBaz) VIEW-AS ALERT-BOX.
+        		komm = 0.
+        		RUN SetSysConf IN h_base ("кассзаявнедоком",STRING(0)).
+        		RUN SetSysConf IN h_base ("кассзаявком",STRING(komm)).
+        		RUN SetSysConf IN h_base ("кассзаявнетден",STRING(vNoKZ)).
+        		RETURN.
+            END.
+            ELSE DO:
+                vOvAmt = vAmt + vSummPacUs - cPackUslBaz.
+                vUnAmt = vAmt - vOvAmt.
+                vAmt   = vOvAmt.
+                MESSAGE 'Клиент превысил лимит пакета на ' + STRING(vAmt) VIEW-AS ALERT-BOX. 
+            END.
+	END.
+
+	IF vProd EQ 'Оптимальный+' THEN DO:
+        IF vSummPacUs >= cPackUslOpt
+        THEN DO:
+            MESSAGE 'Клиент привысил лимит пакета в ' + STRING(cPackUslOpt) VIEW-AS ALERT-BOX.
+        END.
+        ELSE IF vSummPacUs + vAmt <= cPackUslOpt
+        	THEN DO:
+        		MESSAGE 'У клиента не превышен лимит пакета в ' + STRING(cPackUslOpt) VIEW-AS ALERT-BOX.
+        		komm = 0.
+        		RUN SetSysConf IN h_base ("кассзаявнедоком",STRING(0)).
+        		RUN SetSysConf IN h_base ("кассзаявком",STRING(komm)).
+        		RUN SetSysConf IN h_base ("кассзаявнетден",STRING(vNoKZ)).
+        		RETURN.
+            END.
+            ELSE DO:
+                vOvAmt = vAmt + vSummPacUs - cPackUslOpt.
+                vUnAmt = vAmt - vOvAmt.
+                vAmt   = vOvAmt.
+                MESSAGE 'Клиент превысил лимит пакета на ' + STRING(vAmt) VIEW-AS ALERT-BOX. 
+            END.
+	END.
+
+	IF vProd EQ 'Премиум+' THEN DO:
+        IF vSummPacUs >= cPackUslPre
+        THEN DO:
+            MESSAGE 'Клиент привысил лимит пакета в ' + STRING(cPackUslPre) VIEW-AS ALERT-BOX.
+        END.
+        ELSE IF vSummPacUs + vAmt <= cPackUslPre
+        	THEN DO:
+        		MESSAGE 'У клиента не превышен лимит пакета в ' + STRING(cPackUslPre) VIEW-AS ALERT-BOX.
+        		komm = 0.
+        		RUN SetSysConf IN h_base ("кассзаявнедоком",STRING(0)).
+        		RUN SetSysConf IN h_base ("кассзаявком",STRING(komm)).
+        		RUN SetSysConf IN h_base ("кассзаявнетден",STRING(vNoKZ)).
+        		RETURN.
+            END.
+            ELSE DO:
+                vOvAmt = vAmt + vSummPacUs - cPackUslPre.
+                vUnAmt = vAmt - vOvAmt.
+                vAmt   = vOvAmt.
+                MESSAGE 'Клиент превысил лимит пакета на ' + STRING(vAmt) VIEW-AS ALERT-BOX. 
+            END.
+	END.
+END.
+
+/* проверяем превышение лимита в месяц */
+FOR EACH op-entry WHERE op-entry.op-date <= vOp-date
+            AND op-entry.op-date >= vStartMonth
+            AND op-entry.acct-db EQ vAcct
+            AND STRING(op-entry.acct-cr) BEGINS '202'
+            AND (op-entry.op-status BEGINS "√" 
+                OR (op-entry.op EQ vOpOp
+                    AND op-entry.op-entry < vOpEntry)
+                )
+NO-LOCK:
+    FIND FIRST op WHERE op.op EQ op-entry.op NO-LOCK NO-ERROR.
+    IF CAN-DO(cKSymbols, op-entry.symbol)
+    THEN vSummKS = vSummKS + op-entry.amt-rub.
+    ELSE vSummNoKS = vSummNoKS + op-entry.amt-rub.
+END.
+
+/*
+1) наличие кассового символа
+2) am/pm 
+3) vNoKZ
+4) Лимит превышен? 
+*/
+IF CAN-DO(cKSymbols, vKS) 
+THEN DO:        /*Если кассовый символ со сниженной ставкой*/
+    IF TIME <= 57600 THEN DO:
+        IF NOT vNoKZ THEN /*Если по кассовой заявке*/
+        DO:
+            IF vSummKS + vAmt + vUnAmt >= cSummMonthKS
+            THEN 
+            DO:
+                IF vSummKS >= cSummMonthKS /*Если превышено давно*/
+                THEN komm = cAM_KS_KZ_P.          
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonthKS, vSummKS, vAmt, vUnAmt, cAM_KS_KZ, cAM_KS_KZ_P).                                   
+                END.
+            END.
+            ELSE komm = cAM_KS_KZ.
+        END.
+        ELSE /*Если без кассовой заявки*/ 
+        DO:
+            IF vSummKS + vAmt + vUnAmt >= cSummMonthKS
+            THEN 
+            DO:
+                IF vSummKS >= cSummMonthKS
+                THEN komm = cAM_KS_NKZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonthKS, vSummKS, vAmt, vUnAmt, cAM_KS_NKZ, cAM_KS_NKZ_P).                                   
+                END.
+            END.
+            ELSE komm = cAM_KS_NKZ.
+        END.
+    END.
+    ELSE /*Если вечером*/
+    DO:
+        IF NOT vNoKZ THEN /*Если по кассовой заявке*/
+        DO:
+            IF vSummKS + vAmt + vUnAmt >= cSummMonthKS
+            THEN 
+            DO:
+                IF vSummKS >= cSummMonthKS
+                THEN komm = cPM_KS_KZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonthKS, vSummKS, vAmt, vUnAmt, cPM_KS_KZ, cPM_KS_KZ_P).                                      
+                END.
+            END.
+            ELSE komm = cPM_KS_KZ.
+        END.
+        ELSE /*Если без кассовой заявки*/ 
+        DO:
+            IF vSummKS + vAmt + vUnAmt >= cSummMonthKS
+            THEN 
+            DO:
+                IF vSummKS >= cSummMonthKS
+                THEN komm = cPM_KS_NKZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonthKS, vSummKS, vAmt, vUnAmt, cPM_KS_NKZ, cPM_KS_NKZ_P).                                     
+                END.
+            END.
+            ELSE komm = cPM_KS_NKZ.
+        END.
+    END.
+END. 
+
+ELSE DO: /*Если кассовые символы с повышенной ставкой*/
+    IF TIME <= 57600 THEN DO:
+        IF NOT vNoKZ THEN /*Если по кассовой заявке*/
+        DO:
+            
+            IF vSummNoKS + vAmt + vUnAmt >= cSummMonth
+            THEN 
+            DO:
+                IF vSummNoKS >= cSummMonth
+                THEN komm = cAM_NKS_KZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonth, vSummNoKS, vAmt, vUnAmt, cAM_NKS_KZ, cAM_NKS_KZ_P).                                     
+                END.
+            END.
+            ELSE komm = cAM_NKS_KZ.
+        END.
+        ELSE /*Если без кассовой заявки*/ 
+        DO:
+            IF vSummNoKS + vAmt + vUnAmt >= cSummMonth
+            THEN 
+            DO:
+                IF vSummNoKS >= cSummMonth
+                THEN komm = cAM_NKS_NKZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonth, vSummNoKS, vAmt, vUnAmt, cAM_NKS_NKZ, cAM_NKS_NKZ_P).                                    
+                END.
+            END.
+            ELSE komm = cAM_NKS_NKZ.
+        END.
+    END.
+    ELSE /*Если вечером*/
+    DO:
+        IF NOT vNoKZ THEN /*Если по кассовой заявке*/
+        DO:
+            IF vSummNoKS + vAmt + vUnAmt >= cSummMonth
+            THEN 
+            DO:
+                IF vSummNoKS >= cSummMonth
+                THEN komm = cPM_NKS_KZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts(cSummMonth, vSummNoKS, vAmt, vUnAmt, cPM_NKS_KZ, cPM_NKS_KZ_P).
+                END.
+            END.
+            ELSE komm = cPM_NKS_KZ.
+        END.
+        ELSE /*Если без кассовой заявки*/ 
+        DO:
+            IF vSummNoKS + vAmt + vUnAmt >= cSummMonth
+            THEN 
+            DO:
+                IF vSummNoKS >= cSummMonth
+                THEN komm = cPM_NKS_NKZ_P.
+                ELSE                            /*Если превышено в данной проводке*/
+                DO:
+                    vSummKomm = RaschKommParts (cSummMonth, vSummNoKS, vAmt, vUnAmt, cPM_NKS_NKZ, cPM_NKS_NKZ_P).                                    
+                END.
+            END.
+            ELSE komm = cPM_NKS_NKZ.
+        END.
+    END.
+END.
+
+/*Высчитываем конечную сумму комиссии*/
+IF komm NE ? AND komm NE 0
+THEN komm = vAmt * komm / 100.
+ELSE komm = vSummKomm.
+
+/* 01.04.15 ayv */
+/* добавлена проверка на минимальную сумму комиссии (min 100)*/
+/* 1.заявки по пониженным КС до 16*/
+/* 2.заявки по повышенной КС до 16 без превышения лимита*/
+IF (komm < 100) AND (komm NE 0) AND 
+   ((CAN-DO(cKSymbols, vKS) AND TIME <= 57600) OR
+    (NOT CAN-DO(cKSymbols, vKS) AND TIME <= 57600 AND vSummNoKS + vAmt <= cSummMonth)) THEN komm = 100.
+
+/*пока временно оставим этот функционал а то они 100500 раз передумать могут с тарифами*/
+RUN SetSysConf IN h_base ("кассзаявнедоком",STRING(0)).
+RUN SetSysConf IN h_base ("кассзаявком",STRING(komm)).
+RUN SetSysConf IN h_base ("кассзаявнетден",STRING(vNoKZ)).

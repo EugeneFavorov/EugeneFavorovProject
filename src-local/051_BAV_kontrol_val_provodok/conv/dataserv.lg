@@ -1,0 +1,8 @@
+[17/01/19@08:20:24.814+0300] P-001131 T-1457157920 1 ORA    -- Executable was compiled on Nov  8 2013 at 19:21:08 (5067)
+[17/01/19@08:20:24.814+0300] P-001131 T-1457157920 1 ORA    -- Login to dataserver db as user qbis. (2689)
+[17/01/19@08:20:24.823+0300] P-001131 T-1457157920 1 ORA    -- Using shared library /opt/oracle/product/11gR1/lib/libclntsh.so (oci 8.1) (14874)
+[17/01/19@08:20:24.823+0300] P-001131 T-1457157920 1 ORA    -- ORACLE_HOME set to '/opt/oracle/product/11gR1' (14875)
+[17/01/19@08:20:24.901+0300] P-001131 T-1457157920 1 ORA    -- -Dsrv qt_debug: 0 (0x0 None) (6489)
+[17/01/19@08:20:24.901+0300] P-001131 T-1457157920 1 ORA    --   Cursor limit: 4000 (-c setting) (6490)
+[17/01/19@08:23:46.879+0300] P-001131 T-1457157920 1 ORA    -- SYSTEM ERROR: Memory violation. (49)
+[17/01/19@08:23:46.879+0300] P-001131 T-1457157920 1 ORA    -- ** Save file named core for analysis by Progress Software Corporation. (439)

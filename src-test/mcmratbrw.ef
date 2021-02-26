@@ -1,0 +1,16 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2010 ЗАО "Банковские информационные системы"
+     Filename: mcmratbrw.ef
+      Comment: <comment>
+   Parameters:
+         Uses:
+      Used by:
+      Created: 09.03.2010 15:23 Chumv   
+     Modified: 09.03.2010 15:23 Chumv   
+*/
+
+comm-rate.commission
+mZnak
+comm-rate.rate-comm FORMAT "->>>,>>>,>>>,>>>,>>9.99999"
+comm-rate.since

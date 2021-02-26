@@ -1,0 +1,6 @@
+ELSE
+   IF LASTKEY EQ 10 AND favail()
+      THEN do:
+	  pick-value = tt-user.id-user.
+	  LEAVE REFRESH.
+	  end.

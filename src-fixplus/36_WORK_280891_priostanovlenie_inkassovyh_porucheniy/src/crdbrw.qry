@@ -1,0 +1,61 @@
+&IF DEFINED(OQ) &THEN
+   FUNCTION PREPARE-FIXED-WHERE RETURN CHAR (INPUT iTable AS CHAR, INPUT iFixedWhere AS CHAR):
+      DEFINE VAR vInt  AS INT64 NO-UNDO.
+      DEFINE VAR vEnt  AS INT64 NO-UNDO.
+      DEFINE VAR vChar AS CHAR    NO-UNDO.
+      CASE iTable:
+         WHEN "kau" THEN DO:
+            DO vInt = 1 TO 3:
+               vEnt  = ?.
+               vEnt  = INT64(GetFltValEx("kau-sort-" + STRING(vInt) + "-ent","")) NO-ERROR.
+               vChar = GetFltValEx("kau-sort-" + STRING(vInt) + "-val","").
+               IF  vEnt  >= 1
+               AND vChar <> "*"
+               AND {assigned vChar} THEN DO:
+                  IF   NOT {assigned iFixedWhere}
+                  THEN iFixedWhere = "WHERE ".
+                  ELSE iFixedWhere = iFixedWhere + " AND ".
+                  iFixedWhere = iFixedWhere + " ENTRY(" + STRING(vEnt) + ",kau.sort) BEGINS """ + vChar + """".
+               END.
+            END.
+         END.
+      END CASE.
+      RETURN iFixedWhere.
+   END FUNCTION.
+
+   IF mBY THEN
+   DO:
+      mFixedWhere =    "WHERE YES "
+                  + " | WHERE op.op EQ INT64(ENTRY(1,kau.kau)) and op.op-date le " + string(gend-date) 
+                  + " | WHERE signs.file-name EQ 'op' AND signs.surrogate EQ STRING(op.op) AND signs.code EQ 'op-bal' "
+                  + " | WHERE opb.op EQ INT64(signs.xattr-value) " 
+/*                  + " | WHERE ttOp.op EQ op.op "*/.
+      {qrdef.i
+         &buff-list       = "kau op signs opb"
+         &need-buff-list  = "kau,op,signs,opb"
+         &Join-list       = "EACH,FIRST,FIRST,FIRST"
+         &fixed-where     = " mFixedWhere "
+         &SortBy          = "' BY INT64(opb.order-pay) BY opb.doc-date '"
+      }
+   END.
+   ELSE
+   DO:
+
+      mFixedWhere = "WHERE YES | WHERE op.op EQ INT64(ENTRY(1,kau.kau))".
+      {qrdef.i
+            &buff-list       = "kau op"
+            &need-buff-list  = "kau,op"
+            &Join-list       = "EACH,FIRST"
+            &fixed-where     = " mFixedWhere "
+            &SortBy          = "'BY kau.acct BY kau.currency BY kau.zero-bal BY kau.sort'"
+      }
+   END.
+&ENDIF
+
+&IF DEFINED(SQ) &THEN
+   PROCEDURE PostSelectQuery.
+      DEFINE VAR vZeroBal AS LOGICAL NO-UNDO.
+      vZeroBal = LOGICAL(GetFltValEx("zero-bal","?")) NO-ERROR.
+      h-frm[n-frm]:TITLE = "[ ëóÖí " + GetFltValEx("acct","") +  ":"  + " ÑéäìåÖçíõ çÄ äÄêíéíÖäÖ " + (IF vZeroBal <> ? THEN "" ELSE "(ÇëÖ) ") + "]".
+   END PROCEDURE.
+&ENDIF

@@ -1,0 +1,45 @@
+/*
+               Банковская интегрированная система БИСквит
+    Copyright: (C) 1992-2015 ЗАО "Банковские информационные системы"
+     Filename: dopcnclb.br1
+      Comment: Собственная форма просмотра классификатора 
+               "ДопКонтрКЛБ"
+   Parameters:
+         Uses:
+      Used by:
+      Created: 06.08.2015 IT    
+*/
+
+FORM
+   code.code
+      COLUMN-LABEL  "КОД ПАРАМЕТРА"
+      FORMAT "x(13)"
+      HELP "Уникальный идентификатор записи"
+   code.name
+      COLUMN-LABEL  "ПРОЦЕДУРА"
+      FORMAT "x(10)"
+      VIEW-AS FILL-IN SIZE 10 BY 1
+      HELP "Имя процедуры контроля"
+   code.misc[1]
+      COLUMN-LABEL "ПАРАМЕТРЫ"
+      FORMAT "x(13)"
+      VIEW-AS FILL-IN SIZE 13 BY 1
+      HELP "Параметры процедуры контроля"
+   code.misc[2]
+      COLUMN-LABEL "ФИЛЬТР"
+      FORMAT "x(13)"
+      VIEW-AS FILL-IN SIZE 13 BY 1
+      HELP "Стандартная настройка фильтра документов дня"
+   code.misc[3]
+      LABEL "КОД ОШ."
+      FORMAT "x(8)"
+      HELP "Код ошибки из классификатора 'mess-error'"
+   code.val
+      COLUMN-LABEL  "СОСТОЯНИЕ"
+      FORMAT "x(12)"
+      HELP "Действует/не действует"
+WITH FRAME browse1 TITLE COLOR bright-white "[ " + CAPS(in-title) + " ]" .
+
+
+
+

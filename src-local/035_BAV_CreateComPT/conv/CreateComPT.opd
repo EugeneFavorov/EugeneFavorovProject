@@ -1,0 +1,284 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0500BAV 02/11/2016 13:32:38 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+CreateComPT:
+DO TRANSACTION:
+   /// <tr_package>
+   /// texn.WideProc.CreateComPT
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Создание комиссий при оплате ПТ
+   /// </tr_name-opkind>
+
+   /// <tr_details>
+   /// Запускается при сверке с ДС об акцепте (оплата) или при оплате с Картотеки 1 при получении акцепта (070103)
+   /// </tr_details>
+
+   /// <tr_parent>
+   /// WideProc
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// BASE
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_NoBlockMsg>
+   /// Да
+   /// </tr_NoBlockMsg>
+
+   /// <tr_ProgressBar>
+   /// Да
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core21=Продолжить,core54=Продолжить,core59=yes
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Да
+   /// </tr_СС_ВыводНаЭкран>
+
+   // Библиотека функций парсера для лицевых и счетов 2-го порядка.
+   LIBRARY pacct.
+
+   // Библиотека функций для работы с картотеками.
+   LIBRARY pcrd.
+
+   // Библиотека функций парсера для документов
+   LIBRARY pop.
+
+   // Библиотека функций парсера для работы комиссиями
+   LIBRARY pcomm.
+
+   // Собственные парсеры
+   LIBRARY ut.
+
+   10:
+   DO TEMPLATE CLASS opb ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Платежное трабование
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         // Создавать ли документ комиссии
+         @flag1 = 1; // 1- создать, 0 - не создавать
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = search(@CurOp)
+
+      20:
+      DO TEMPLATE CLASS op-entry ACTION Поиск с ош. ROLE op-entry:
+         /// <tm_details>
+         /// Проводки
+         /// </tm_details>
+
+         // РЕКВИЗИТ: op (формула) #1
+         @op = search(@CurOp)
+
+
+      END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+      30:
+      DO TEMPLATE CLASS op-bank ACTION Поиск с ош. ROLE op-bank:
+         // РЕКВИЗИТ: op (формула) #1
+         @op = search(@CurOp)
+
+         // РЕКВИЗИТ: op-bank-type (формула) #2
+         @op-bank-type = search("")
+
+         // РЕКВИЗИТ: bank-code-type (формула) #3
+         @bank-code-type = search("МФО-9")
+
+
+         DO AFTER:
+            @flag1 = _if(DEFINED(__notfound),0,1)
+         END AFTER.
+
+      END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+
+      DO AFTER:
+         @__acct = @acct-db(20);
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   35:
+   DO TEMPLATE CLASS op-bank ACTION Нет действий ROLE Ввод данных:
+      /// <tm_details>
+      /// Тест филиалов
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @flag1
+      END BEFORE.
+
+
+      DO AFTER:
+         @flag1 = _if(CAN-DO("044525129,047106641,045209884,", @bank-code(30)), 0, 1)
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   35  - КОНЕЦ
+
+   40:
+   DO TEMPLATE CLASS opb ACTION Нет действий ROLE Ввод данных:
+      /// <tm_details>
+      /// Проверки, расчеты
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @flag1 = @flag1
+                * _if(CAN-DO("30102*,30223*1 *,30301*", @acct-cr(20))
+                    & CAN-DO("!ВН,!,*", @type(20))
+                    & CAN-DO("!401*,!402*,!403*,!404*,*", @ben-acct(10))
+                    & (БЮДЖ_ПЛАТЕЖ(@CurOp) <> "ДА"),1,0);
+         @flag1;
+      END BEFORE.
+
+
+      DO AFTER:
+         @ks       = КодСубъекта(@__acct);
+         @kodsub   = _if(@ks == "ФЛ", "Ч",
+                     _if(@ks == "ФЛП","И","Ю"));
+         @acct-inc = СправочникЗн("ДохРасх",
+                                  ФИЛИАЛ()+",810,"+@kodsub+",CreateCom,Д",
+                                  Дата(), нет);
+         @com      = "ЮЛБумДо16";
+         @curr     = @currency(20);
+         
+         if @curr == ""
+         then
+           @sum-val = 0;
+           @sum-rub = Ком(@amt-rub(20),КомПакетУсл(@com,@__acct,Дата(),0),
+                          @__acct,'');
+         else
+           @sum-val = КОМТАРИФПЛАН(@amt-cur(20),@com,@__acct,
+                                   @curr,"Расчет","*");
+           @sum-rub = ПЕРЕСЧЕТ(@sum-val, @curr, "");
+         endif;
+         
+         IF (@sum-rub == 0) THEN @flag1 = 0; ELSE; ENDIF;
+         
+         @doc-details = "Комиссия за перечисление денежных средств со счёта по "
+                      + "распоряжению клиента. Согласно тарифов Банка. Без НДС.";
+         IF can-do('40807',substr(@__acct,1,5))
+         THEN  @doc-details = "{VO80050} " + @doc-details;
+         ELSE; ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+   50:
+   DO TEMPLATE CLASS opb ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Комиссия
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @flag1
+      END BEFORE.
+
+      // РЕКВИЗИТ: doc-type (константа) #1
+      @doc-type = [017]
+      // РЕКВИЗИТ: doc-num (формула) #2
+      @doc-num = счетчик("мемордер")
+
+      // РЕКВИЗИТ: doc-date (формула) #3
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #4
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: op-date (формула) #5
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #6
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: order-pay (константа) #7
+      @order-pay = [5]
+      // РЕКВИЗИТ: op-status (константа) #8
+      @op-status = [√]
+      // РЕКВИЗИТ: op-kind (константа) #9
+      @op-kind = [CreateCom]
+      // РЕКВИЗИТ: details (формула) #10
+      @details = @doc-details
+
+      // РЕКВИЗИТ: op-transaction (формула) #11
+      @op-transaction = @op-transaction(10)
+
+      55:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry:
+         /// <tm_details>
+         /// Проводки
+         /// </tm_details>
+
+         // РЕКВИЗИТ: op-status (формула) #1
+         @op-status = @op-status(50)
+
+         // РЕКВИЗИТ: op-cod (константа) #2
+         @op-cod = [000000]
+         // РЕКВИЗИТ: op-date (формула) #3
+         @op-date = @op-date(50)
+
+         // РЕКВИЗИТ: acct-db (формула) #4
+         @acct-db = @__acct
+
+         // РЕКВИЗИТ: acct-cr (формула) #5
+         @acct-cr = @acct-inc
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @curr
+
+         // РЕКВИЗИТ: amt-cur (формула) #7
+         @amt-cur = @sum-val;
+
+         // РЕКВИЗИТ: amt-rub (формула) #8
+         @amt-rub = @sum-rub;
+
+         // РЕКВИЗИТ: type (константа) #9
+         @type = [ВН]
+         // РЕКВИЗИТ: op-transaction (формула) #10
+         @op-transaction = @op-transaction(50);
+
+
+      END TEMPLATE. // ШАБЛОН:   55  - КОНЕЦ
+
+
+      DO AFTER:
+         СОЗДАТЬ_СВЯЗЬ("op","КомГр",@op(50),@op(10),"")
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ CreateComPT - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

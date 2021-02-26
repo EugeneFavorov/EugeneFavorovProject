@@ -1,0 +1,35 @@
+
+
+PROGRESS stack trace as of Mon May 29 14:46:46 2017
+Command line arguments are
+/usr/dlc/bin/_progres /home2/bis/quit41d/db/bisquit -pf /home2/bis/quit41d/conf/bisquit-ora.pf 
+
+Startup parameters:
+-pf /usr/dlc/startup.pf,-cpinternal ibm866,-cpstream ibm866,-cpcoll Russian,-cpcase Basic,-d dmy,-numsep 44,-numdec 46,(end .pf),-db /home2/bis/quit41d/db/bisquit,-pf /home2/bis/quit41d/conf/bisquit-ora.pf,-pf /home2/bis/quit41d/conf/bisquit.pf,-ld bisquit,-D 200,-p bislogin.p,-nb 256,-yy 1964,-inp 17000,-rereadnolock,-d dmy,-lng Russian,-cpcase Basic,-cpcoll Russian,-cpinternal ibm866,-cpstream ibm866,-cpterm ibm866,-s 800,-l 2000,-TM 32,-TB 31,-mmax 30000,-Bt 8192,-noshvarfix,-nolkctr,-L 200000,-n 1000,-B 8000,-rand 2,-omsize 1400,-spin 10000,-T /tmp,-IOEverywhere 1,-sw,(end .pf),-U qbis,-P ******,-n 1000,-db qbis,-dt ORACLE,-Dsrv qt_cache_size,65535,QT_BYTE,-U qbis,-znotrim,-c 4000,(end .pf)
+
+#1   [0x9e70ed] uttraceback+0x144  from /usr/dlc/bin/_progres
+#2   [0x9e9803] uttrace+0x13c  from /usr/dlc/bin/_progres
+#3   [0x9e96a7] utcore+0x103  from /usr/dlc/bin/_progres
+#4   [0x458ba6] drexit+0x39a  from /usr/dlc/bin/_progres
+#5   [0x4be749] drSigFatal+0x85  from /usr/dlc/bin/_progres
+#6   [0x35b535d0] __restore_rt+0x0  from /lib64/libpthread.so.0
+#7   [0x9f330f] _printfx+0x390  from /usr/dlc/bin/_progres
+#8   [0x9f2f77] fprintfxdll+0x1e  from /usr/dlc/bin/_progres
+#9   [0x9ded04] fprintfx+0x9d  from /usr/dlc/bin/_progres
+#10  [0x9bf722] oracstat+0x280  from /usr/dlc/bin/_progres
+#11  [0x9ba4ed] orbdisc+0x74  from /usr/dlc/bin/_progres
+#12  [0x9b9015] oclscurs+0x62  from /usr/dlc/bin/_progres
+#13  [0x9b55b4] orarend+0x6d  from /usr/dlc/bin/_progres
+#14  [0x69f974] oradlg+0x43  from /usr/dlc/bin/_progres
+#15  [0x45b5e1] fddlg+0xae  from /usr/dlc/bin/_progres
+#16  [0x7d2b02] scdlg+0xa9  from /usr/dlc/bin/_progres
+#17  [0x4a1c5f] rnrq_4gloop+0x2a  from /usr/dlc/bin/_progres
+#18  [0x79a09a] rninterpret+0x3b  from /usr/dlc/bin/_progres
+#19  [0x4a18f1] rnrq+0x101  from /usr/dlc/bin/_progres
+#20  [0x45187f] main+0x428  from /usr/dlc/bin/_progres
+#21  [0x34c4dbc6] __libc_start_main+0xe6  from /lib64/libc.so.6
+
+** ABL Stack Trace **
+
+** Persistent procedures/Classes **
+

@@ -1,0 +1,74 @@
+DISPLAY
+&IF DEFINED(in-el) NE 0 &THEN /* для электронного инкассового поручения */
+{{&in-el} &in-print=YES}
+&ENDIF
+   op.ins-date
+	NameOrder
+        NumberForm
+	op.doc-num
+	AmtStr
+        PayType
+   Detail
+        PlCAcct
+	PlLAcct
+	PlMFO
+	PlName[1]
+	PlName[2]
+	PlName[3]
+	PlName[4]
+	PlRKC[1]
+	PlRKC[2]
+	PoAcct
+	PoBankName
+	PoCAcct
+	PoMFO
+	PoName[1]
+	PoName[2]
+	PoName[3]
+	PoName[4]
+	PoRKC[1]
+	PoRKC[2]
+   mUIN1
+   mUIN2
+   mUIN3
+   TRIM(Rub) @ Rub
+	doc-type.digital WHEN AVAIL doc-type @ op.doc-type
+	op.doc-type WHEN NOT AVAIL doc-type @ op.doc-type
+   /* op.due-date */
+   ""    WHEN CAN-DO("00,0,",op.order-pay)  @ op.order-pay
+   SUBSTRING(op.order-pay,2,1) WHEN SUBSTRING(op.order-pay,1,1) EQ "0"
+                                    AND NOT CAN-DO("00,0,",op.order-pay)  @ op.order-pay
+        op.order-pay WHEN SUBSTRING(op.order-pay,1,1) NE "0"
+                       AND NOT CAN-DO("00,0,",op.order-pay)  @ op.order-pay
+	theDate
+&IF DEFINED(NEW_1256) NE 0 &THEN /*Новые поля для печати TT0015703 */
+   PlINN
+   PlKPP
+   PoINN
+   PoKPP
+   mKBK
+   mOKATO
+   mPokOp
+   mPokNP
+   mPokND
+   mPokDD
+   mPokTP
+   mPokST
+   mSpisPl
+&ENDIF
+   mDateMarcRec
+   mSposobPoluch
+WITH FRAME out-doc.
+
+
+DISP
+   mDateCart
+   mPrnStr-El-Doc[1]
+   mPrnStr-El-Doc[2]
+   mPrnStr-El-Doc[3]
+   mPrnStr-El-Doc[4]
+   mPrnStr-El-Doc[5]
+   mPrnStr-El-Doc[6]
+   mPrnStr-El-Doc[7]
+WITH FRAME plattreb-end.
+DOWN WITH FRAME plattreb-end.

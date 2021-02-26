@@ -1,0 +1,491 @@
+&GLOBAL-DEFINE LOAN_WHERE ~
+   'CAN-DO(""' + class_avail + '"", loan.class-code) '
+
+PROCEDURE PostSelectQuery.
+    mBySort = IF GetFltVal ("BySort") EQ "1"
+              THEN "BY loan.doc-ref"
+              ELSE "BY ENTRY(1,loan.doc-ref,' ') BY loan.open-date BY loan.open-time".
+   ASSIGN
+      mGrRiska  = IsFieldChange ("gr-riska")
+      mAcctPos  = IsFieldChange ("acct-pos*")
+      mAcctCur  = IsFieldChange ("acct-cur*")
+      mAcctUser = IsFieldChange ("acct-user")
+      mIsChSc31 = IsFieldChange ("sc-31")
+   .
+   IF mIsChSc31 THEN
+   DO:
+      ASSIGN
+         mSc31     = GetFltVal("sc-31")
+         mIsRange = NO
+      .
+      FIND FIRST flt-attr WHERE flt-attr.attr-code = "sc-31" NO-LOCK NO-ERROR. 
+      IF AVAIL flt-attr THEN
+         mIsRange = flt-attr.attr-flt-range.
+
+      IF mIsRange THEN
+      DO:
+         mlist-class = Ls-Class(flt-attr.attr-class).
+         RELEASE xattr.
+         DO mnum-class = 1 TO NUM-ENTRIES(mlist-class):
+            FIND FIRST xattr WHERE
+                       xattr.class-code  EQ ENTRY (mnum-class, mlist-class)
+                 AND   xattr.xattr-code  EQ mSc31
+                 NO-LOCK NO-ERROR.
+            IF AVAIL xattr
+               THEN LEAVE.
+         END.   
+         ASSIGN
+            mRangeType = ""
+            mRangeType = xattr.data-type WHEN AVAIL xattr
+         .
+      END.
+      ASSIGN
+         mIsChSv31   = IsFieldChange("sv-31")
+         mIsChSv31#2 = NO
+         mIsChSv31#2 = IsFieldChange("sv-31#2") WHEN mIsRange
+      .
+      ASSIGN
+         mSv31    = GetFltVal("sv-31")    WHEN mIsChSv31
+         mSv31#2  = GetFltVal("sv-31#2")  WHEN mIsChSv31#2
+      .
+   END.
+                        /* Очистим временную таблицу с правами на объекты подчин. */
+   RUN ResetTTRights.
+                        /* Удалим константу, чтобы перечитать список подчиненных */
+   &UNDEFINE FirstCheckUser
+   {checkusr}           /* Перечитываем переменные */
+   {brwsubright.str }   /* Перечитываем временную таблицу */
+END PROCEDURE.
+
+FUNCTION PREPARE-FIXED-WHERE RETURN CHAR (
+   INPUT iTable      AS CHAR,
+   INPUT iFixedWhere AS CHAR
+): 
+   DEF VAR vLinkId         AS INT64  NO-UNDO.   /* идентификатор связи */
+   DEF VAR vLinkCode       AS CHAR   NO-UNDO.   /* *** значения */
+   DEF VAR vSourceId       AS CHAR   NO-UNDO.   /* *** соответствующих */
+   DEF VAR vTargetId       AS CHAR   NO-UNDO.   /* *** полей фильтра */
+   DEF VAR vLinkDirection  AS CHAR   NO-UNDO.
+   DEF VAR vLinkObjectId   AS CHAR   NO-UNDO.
+   DEF VAR vClassList      AS CHAR   NO-UNDO.   /* список классов */
+   DEF VAR vi              AS INT64  NO-UNDO. /* счетчик цикла */
+   DEF VAR vClassBrowse    AS CHAR   NO-UNDO.   /* класс браузера */
+   DEF VAR vSpisOper       AS CHAR   NO-UNDO.   /* список операций  */
+   DEF VAR vSpisN          AS INT64  NO-UNDO.
+   CASE iTable:
+   WHEN "loan"
+   THEN DO: /* Обработка даты закрытия. */
+      CASE GetFltVal("loanClose"):
+                        /* Отображать только закрытые договоры. */
+         WHEN "YES"
+         THEN DO:
+            {cldate.obj
+               &FILE       = "loan"
+               &date-field = "close-date"
+               &ClosePlane = "Yes"
+               &loanaction = "GetFltVal('loanaction')"
+            }
+         END.
+                        /* Отображать только открытые договоры. */
+         WHEN "NO"
+            THEN iFixedWhere = iFixedWhere + " AND loan.close-date EQ ? ".
+                        /* Определение даты закрытия стандартным образом. */
+         OTHERWISE
+         DO:
+            {cldate.obj &FILE = "loan" &date-field = "close-date"}
+         END.
+      END CASE.
+      CASE GetFltVal("vExTTr"):
+         WHEN "S" THEN iFixedWhere = iFixedWhere + " AND loan.cont-type NE 'Течение' ".
+         WHEN "T" THEN iFixedWhere = iFixedWhere + " AND NUM-ENTRIES(loan.cont-code, ' ') EQ 1 ".
+      END CASE.
+   END.
+   WHEN "loan-acct"
+   THEN
+   DO:
+      /* Если изменились поля фильтра для фильтрации по остаткам,
+      ** а поля роль счета и счет не указаны,
+      ** то предустанавливаем поле роль счета. */
+      IF       IsFieldChange ("acct-pos1,acct-pos2,acct-cur1,acct-cur2,acct-user")
+         AND   NOT IsFieldChange ("acct-type")
+         AND   NOT IsFieldChange ("acct")
+      THEN iFixedWhere =   iFixedWhere +
+                              " AND loan-acct.acct-type EQ loan.contract".
+      IF IsFieldChange ("acct-cur1,acct-cur2") THEN
+          iFixedWhere = iFixedWhere + " AND loan-acct.currency NE ''".
+   END.
+
+   WHEN "term-obl-1"
+   THEN DO:
+      CASE GetFltVal("vTermPayPerc"):
+         WHEN "П" THEN 
+            iFixedWhere = iFixedWhere + " AND term-obl-1.end-date LE ^D^ AND term-obl-1.dsc-beg-date GE ^D^ ".
+         WHEN "Д" THEN 
+            iFixedWhere = iFixedWhere + " AND term-obl-1.end-date LE ^D^ AND term-obl-1.dsc-beg-date EQ ^D^ ".
+      END CASE.
+
+      CASE GetFltVal("vPersSi-Od"):
+         WHEN "Д" THEN 
+            iFixedWhere = REPLACE(iFixedWhere, "^D^", STRING(gend-date)).
+         WHEN "Ф" THEN 
+            IF GetFltVal("fdate") NE "*" THEN 
+               CASE GetFltVal("vTermPayPerc"):
+                  WHEN "П" THEN 
+                  DO:
+                     /* если анализируется период, то меняем обе даты  */
+                     iFixedWhere = REPLACE(iFixedWhere, "GE ^D^", 
+                                                     STRING(IsAttrFld ("fdate", "operation")) + " " + STRING(GetFltVal("fdate"))).
+                     iFixedWhere = REPLACE(iFixedWhere, "LE ^D^", 
+                                                     STRING(IsAttrFld ("fdate", "operation")) + " " + STRING(GetFltVal("fdate"))).
+                  END.
+                  WHEN "Д" THEN 
+                  DO:
+                     /* т.к. анализируется последний день платежного периода, то условие меняем только по dsc-beg-date */
+                     iFixedWhere = REPLACE(iFixedWhere, "EQ ^D^", 
+                                                  STRING(IsAttrFld ("fdate", "operation")) + " " + STRING(GetFltVal("fdate"))).
+                     iFixedWhere = REPLACE(iFixedWhere, "^D^", STRING(GetFltVal("fdate"))).
+                  END.
+               END CASE.
+            ELSE 
+               iFixedWhere = REPLACE(iFixedWhere, "^D^", "loan.since").
+         OTHERWISE 
+            iFixedWhere = REPLACE(iFixedWhere, "^D^", "loan.since").
+      END CASE.
+   END.
+ 
+   WHEN "term-obl-3"
+   THEN DO:
+      CASE GetFltVal("vTermPayDebt"):
+         WHEN "П" THEN 
+            iFixedWhere = iFixedWhere + " AND term-obl-3.end-date LE ^D^ AND term-obl-3.dsc-beg-date GE ^D^ ".
+         WHEN "Д" THEN 
+            iFixedWhere = iFixedWhere + " AND term-obl-3.end-date LE ^D^ AND term-obl-3.dsc-beg-date EQ ^D^ ".
+      END CASE.
+
+      CASE GetFltVal("vDebtSi-Od"):
+         WHEN "Д" THEN 
+            iFixedWhere = REPLACE(iFixedWhere, "^D^", STRING(gend-date)).
+         WHEN "Ф" THEN 
+            IF GetFltVal("fdateo") NE "*" THEN 
+               CASE GetFltVal("vTermPayDebt"):
+                  WHEN "П" THEN 
+                  DO:
+                     /* если анализируется период, то меняем обе даты  */
+                     iFixedWhere = REPLACE(iFixedWhere, "GE ^D^", 
+                                                     STRING(IsAttrFld ("fdateo", "operation")) + " " + STRING(GetFltVal("fdateo"))).
+                     iFixedWhere = REPLACE(iFixedWhere, "LE ^D^", 
+                                                     STRING(IsAttrFld ("fdateo", "operation")) + " " + STRING(GetFltVal("fdateo"))).
+                  END.
+                  WHEN "Д" THEN 
+                  DO:
+                     /* т.к. анализируется последний день платежного периода, то условие меняем только по dsc-beg-date */
+                     iFixedWhere = REPLACE(iFixedWhere, "EQ ^D^", 
+                                                  STRING(IsAttrFld ("fdateo", "operation")) + " " + STRING(GetFltVal("fdateo"))).
+                     iFixedWhere = REPLACE(iFixedWhere, "^D^", STRING(GetFltVal("fdateo"))).
+                  END.
+               END CASE.
+            ELSE 
+               iFixedWhere = REPLACE(iFixedWhere, "^D^", "loan.since").
+         OTHERWISE 
+            iFixedWhere = REPLACE(iFixedWhere, "^D^", "loan.since").
+      END CASE.
+
+   END.
+   WHEN "term-obl-128"
+   THEN DO:
+         /* Обработка параметра фильтра "В транзакциях на дату" */
+      IF GetFltValEx("chg-op-date", "N") EQ "Y" THEN
+      DO:
+         RUN SetFltField("Tend-date", STRING(gEnd-date)).
+         ENTRY(LOOKUP("Tend-date", flt-code, CHR(1)), flt-value, CHR(1)) = STRING(gEnd-date)
+            NO-ERROR.
+      END.
+      IF       IsFieldChange ("lnk-cont-code")
+         AND   GetFltVal ("lnk-cont-code")   NE "?"
+         THEN iFixedWhere  =  iFixedWhere +  " AND "  +
+                              DYNAMIC-FUNCTION ("GetDynWhr" IN h_dynqr,
+                                 "term-obl-128",
+                                 "lnk-cont-code",
+                                 GetFltVal ("lnk-cont-code") + CHR (1) + CHR (1),
+                                 "CHARACTER").
+      IF IsFieldChange ("Tend-date")
+         THEN iFixedWhere =  iFixedWhere   +  " AND "  +
+                           DYNAMIC-FUNCTION ("GetDynWhr" IN h_dynqr,
+                              "term-obl-128",
+                              "end-date",
+                              GetFltVal ("Tend-date") + CHR (1) + IsAttrFld ("Tend-date", "operation") + CHR (1),
+                              "DATE") +  " AND " +
+                              "(term-obl-128.sop-date GE "  + GetFltVal ("Tend-date") + 
+                              " OR term-obl-128.sop-date EQ ?)".
+      IF  GetFltVal ("lnk-cont-code")   NE "?" AND
+      NOT ( GetFltVal ("lnk-cont-code") EQ "*"  AND
+            GetFltVal ("Tend-date")     EQ "*"  AND
+            GetFltVal ("chg-op-date")   EQ "N" )
+         THEN iFixedWhere  =  REPLACE (iFixedWhere, "OUTER-JOIN", "").
+   END. 
+   WHEN "comm-rate" THEN
+   DO:
+      IF CAN-DO ("окончания договора,состояния договора", GetFltVal("mRateSince"))
+         THEN iFixedWhere =   iFixedWhere +
+                              " AND comm-rate.since LE " +
+                              IF GetFltVal("mRateSince") EQ "состояния договора"
+                                 THEN "loan.since"
+                                 ELSE "loan.end-date".
+   END.
+   WHEN "CondBuf"
+   THEN DO:
+      IF GetFltVal ("lnk-cont-code")   EQ "?"
+      THEN DO:
+         iFixedWhere = iFixedWhere + " AND (NOT AVAIL term-obl-128".
+         IF IsFieldChange ("Tend-date")
+            THEN iFixedWhere =   iFixedWhere + " OR " +
+                                 "term-obl-128.sop-date LT " + GetFltVal ("Tend-date").
+         iFixedWhere = iFixedWhere + ") ".
+      END.
+
+      IF IsFieldChange("excl-acct-type") THEN
+         iFixedWhere = iFixedWhere + " AND NOT AVAIL excl-loan-acct ".
+                        /* Фильтрация по процентной ставке. */
+      IF IsFieldChange ("rate-comm1")  THEN
+         iFixedWhere =  iFixedWhere + " AND " + 
+                        DYNAMIC-FUNCTION ("GetDynWhr" IN h_dynqr,
+                           "comm-rate",
+                           "rate-comm",
+                           GetFltVal ("rate-comm1") + CHR (1) + IsAttrFld ("rate-comm1","operation")+ CHR (1),
+                           "DECIMAL").
+      IF IsFieldChange ("rate-comm2")  THEN
+         iFixedWhere =  iFixedWhere + " AND " +
+                        DYNAMIC-FUNCTION ("GetDynWhr" IN h_dynqr,
+                           "comm-rate",
+                           "rate-comm",
+                           GetFltVal ("rate-comm2") + CHR (1) + IsAttrFld ("rate-comm2","operation")+ CHR (1),
+                           "DECIMAL").
+   END.
+   WHEN "links"
+   THEN DO:
+      ASSIGN
+         vLinkCode      = GetFltVal("link-code")
+         vLinkObjectId  = GetFltVal("link-object-id")
+         vLinkDirection = GetFltVal("link-direction")
+      NO-ERROR.
+
+      ASSIGN
+         vClassBrowse   = GetFltVal ("mClassBrowse")  /* класс, от которого запущен браузер */
+         vClassList     = LS-Class (vClassBrowse)     /* список его потомков */
+      .
+
+      /* поиск xlink'а в списке классов по коду связи */
+      BLK:
+      DO vi = 1 TO NUM-ENTRIES(vClassList):
+         FIND FIRST xlink WHERE xlink.link-code  EQ vLinkCode
+                            AND xlink.class-code EQ ENTRY(vi,vClassList)
+         NO-LOCK NO-ERROR.
+         IF AVAIL xlink THEN
+         DO:
+            vLinkId = xlink.link-id.
+            LEAVE BLK.
+         END.
+      END.
+         
+      IF     CAN-DO("S,?",vLinkDirection)
+         AND (vLinkCode     NE "*"
+           OR vLinkObjectId NE "*")
+      THEN
+         iFixedWhere = iFixedWhere + (IF vLinkCode      NE "*" THEN " (links.link-id EQ " + STRING(vLinkId) + " AND " 
+                                                               ELSE " ( ")
+                                   + (IF vLinkObjectId  NE "*" THEN " links.source-id EQ '" + vLinkObjectId + "' AND "
+                                                               ELSE " ")
+                                   + " links.target-id EQ loan.contract + ',' + loan.cont-code " + " )".
+      
+      IF     CAN-DO("T,?",vLinkDirection)
+         AND (vLinkCode     NE "*"
+           OR vLinkObjectId NE "*")
+      THEN
+         iFixedWhere = iFixedWhere + (IF vLinkDirection EQ "?" THEN " OR " ELSE " ")
+                                   + (IF vLinkCode      NE "*" THEN " (links.link-id EQ " + STRING(vLinkId) + " AND " 
+                                                               ELSE " ( ")
+                                   + (IF vLinkObjectId  NE "*" THEN " links.target-id EQ '" + vLinkObjectId + "' AND "
+                                                               ELSE " ")
+                                   + " links.source-id EQ loan.contract + ',' + loan.cont-code " + " )".
+   END.
+   WHEN "ttRights" THEN DO:
+      iFixedWhere = " WHERE ttRights.user-id EQ loan.user-id AND ttRights.freading ".      
+   END. 
+   WHEN "loan-int"
+   THEN DO:
+      vSpisOper = GetFltVal("mOper") .
+      IF NOT {assigned vSpisOper} THEN
+      ASSIGN vSpisOper = "*".
+      vSpisN    = NUM-ENTRIES(vSpisOper) .
+      IF vSpisOper <> '*' OR
+         GetFltVal("mDate1") <> '' OR
+         GetFltVal("mDate2") <> ''
+      THEN DO:
+         iFixedWhere  =  REPLACE (iFixedWhere, "OUTER-JOIN", "") . 
+         IF vSpisOper <> '*' THEN DO: /*Список операций возможен через запятую */
+           DO vI = 1 TO vSpisN :
+              IF vI = 1  THEN iFixedWhere = iFixedWhere + " AND (" .
+              FIND FIRST chowhe WHERE chowhe.id-op =  INT(ENTRY(vI,vSpisOper)) NO-LOCK NO-ERROR.
+              IF AVAIL chowhe THEN DO:
+                  iFixedWhere = iFixedWhere  + " ( loan-int.id-k  = " +  QUOTER ( chowhe.id-k)  +
+                                           " AND   loan-int.id-d  = " +  QUOTER ( chowhe.id-d) + " ) OR " .
+              END.
+              ELSE iFixedWhere = iFixedWhere  + " FALSE OR " .
+           END.
+           iFixedWhere = TRIM(iFixedWhere ,"OR ") + ") ". 
+           /* откусывание последнего OR с пробелом и завершение набора условий по списку операций */
+         END.
+      END.
+   END.
+   END CASE.
+   RETURN iFixedWhere.
+END FUNCTION.
+
+/* в подразделении "Банк в целом" (тип подразделения: 00) 
+по всем филиалам, с маской по номеру договора, вырезается
+@ с кодом филиала пользователя (0138679)  */
+FUNCTION PREPARE-WHERE RETURN CHAR (
+   INPUT iTable AS CHAR,
+   INPUT iWhere AS CHAR
+):
+   DEF VAR vCount          AS INT64    NO-UNDO.  
+   DEF VAR vMess           AS CHAR     NO-UNDO.  
+   DEF VAR vFilial         AS CHAR     NO-UNDO.  
+   DEF VAR vIfcont         AS CHAR     NO-UNDO.  
+   DEF VAR vBegFil         AS INT64    NO-UNDO.  
+   DEF VAR vEndFil         AS INT64    NO-UNDO.  
+   DEF VAR vEntry          AS CHAR     NO-UNDO.  
+   IF shModeMulty  THEN                   /* только для подразделения "Банк в целом" */  
+   DO:
+      /*Заменяю в Квери все < AND > на символ CHR(1), */
+      /*что бы можно было получить условие по loan.cont-code отдельной строкой*/
+      vMess = REPLACE(iWhere," AND ",CHR(1)). 
+
+     /* По всем элементам условия в запросе */     
+      DO  vCount = 1 TO NUM-ENTRIES(vMess,CHR(1)):
+
+         vIfcont = ENTRY(vCount,vMess,CHR(1)).
+         /* Ищем элемент с "loan.cont-code" */
+
+         IF INDEX(vIfcont,"loan.cont-code") GT 0 THEN
+         DO: 
+             /*Сохраняем исходное условие*/
+             vEntry = vIfcont.
+             
+            /*Проверяем на присутствие в запросе филиала*/
+            vBegFil = INDEX(vIfcont,"@").
+            
+            DO WHILE vBegFil GT 0 :
+
+               vEndFil = LENGTH(vIfcont).
+               
+               /*Для каждого кода филиала ищем его окончание в строке*/
+               /*Считаем что оканчиватся может на символы <,><"><'> */
+               /*Ищем ближайший символ справа*/
+         
+               /*Проверка на окончание филиала по<,> (для CAN-DO)*/
+               IF INDEX(vIfcont,",",vBegFil + 1) GT 0 AND 
+                  INDEX(vIfcont,",",vBegFil + 1) LT vEndFil 
+                  THEN  vEndFil = INDEX(vIfcont,",",vBegFil + 1).
+
+               /*Проверка на окончание филиала по<"> (для MATCHES и EQ)*/
+               IF INDEX(vIfcont,"'",vBegFil + 1) GT 0 AND 
+                  INDEX(vIfcont,"'",vBegFil + 1) LT vEndFil 
+                  THEN  vEndFil = INDEX(vIfcont,"'",vBegFil + 1).
+
+               /*Проверка на окончание филиала по<'> (для MATCHES и EQ)*/
+               IF INDEX(vIfcont,'"',vBegFil + 1) GT 0 AND 
+                  INDEX(vIfcont,'"',vBegFil + 1) LT vEndFil 
+                  THEN  vEndFil = INDEX(vIfcont,'"',vBegFil + 1).
+               
+               /*Получаем строковое значение кода филиала по его началу и окончанию*/
+               vFilial = SUBSTRING(vIfcont,vBegFil,vEndFil - vBegFil).
+
+              /*Заменяем значение филиала на пусто, если ищем по маске с <*> */
+              IF SUBSTRING(vFilial,LENGTH(vFilial),1) EQ '*' 
+                 THEN vIfcont = REPLACE(vIfcont,vFilial,""). 
+
+              vBegFil = INDEX(vIfcont,"@",vBegFil + 1).
+            END.
+            /* Заменяем условие по loan.cont-code измененным*/
+            vMess = REPLACE(vMess,vEntry,vIfcont).
+
+         END.
+      END.  
+      /*Восстанавливаю квери*/
+      iWhere = REPLACE(vMess,CHR(1)," AND ").
+
+   END.
+   RETURN iWhere.
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-term-obl-1 RETURNS LOGICAL:
+   RETURN GetFltVal("vTermPayPerc") EQ "*".
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-term-obl-3 RETURNS LOGICAL:
+   RETURN GetFltVal("vTermPayDebt") EQ "*".
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-term-obl-128 RETURNS LOGICAL:
+   RETURN NOT IsBookMarkChange (8).
+END FUNCTION.
+
+/* DEF BUFFER excl-loan-acct FOR loan-acct. */
+FUNCTION Use-Outer-Join-excl-loan-acct RETURNS LOGICAL:
+   RETURN NOT IsFieldChange("excl-acct-type").
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-CondBuf RETURNS LOGICAL:
+   RETURN      (     GetFltValEx ("lnk-cont-code", "*") NE "?"
+               AND   Use-Outer-Join-excl-loan-acct ()
+               )
+                        /* Фильтрация по значение %ставки. */
+            AND   NOT IsFieldChange ("rate-comm1")
+            AND   NOT IsFieldChange ("rate-comm2")
+   .
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-links RETURNS LOGICAL:
+   RETURN NOT IsFieldChange("link-code") AND NOT IsFieldChange("link-object-id").
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-loan-int RETURNS LOGICAL:
+   RETURN GetFltVal("mOper") EQ "*".
+END FUNCTION.
+
+FUNCTION Use-Outer-Join-bloan-cond RETURNS LOGICAL:
+   RETURN GetFltVal("sc-31") EQ "*".
+END FUNCTION.
+
+{qrdef.i
+   &buff-list        = "loan ttRights loan-acct excl-loan-acct term-obl-1 term-obl-3 term-obl-128 loan-cond links comm-rate comm-cond loan-int CondBuf"
+   &need-buff-list   = "loan,ttRights,loan-acct,excl-loan-acct,term-obl-1,term-obl-3,term-obl-128,loan-cond,links,comm-rate,comm-cond,loan-int,CondBuf"
+   &Join-list        = "EACH,FIRST,LAST,LAST,FIRST,FIRST,LAST,FIRST,FIRST,LAST,FIRST,FIRST,FIRST"
+   &OUTER-JOIN-BUFF  = "loan-acct,excl-loan-acct,term-obl-1,term-obl-3,term-obl-128,loan-cond,links,comm-rate,comm-cond,loan-int,CondBuf"
+   &Fixed-Where      = "' WHERE ' + {&LOAN_WHERE}                                                              +
+                        '|'                                                                                    +
+                        '|OF LOAN WHERE loan-acct.since LE loan.since '                                        +
+                        '|OUTER-JOIN OF loan WHERE excl-loan-acct.since LE loan.since'                         +
+                        '|OF LOAN WHERE term-obl-1.idnt EQ 1 '                                                 +
+                        '|OF LOAN WHERE term-obl-3.idnt EQ 3 '                                                 +
+                        '|OUTER-JOIN OF LOAN WHERE term-obl-128.idnt EQ 128 '                                  +
+                        '|WHERE loan-cond.contract eq loan.contract '                                          +
+                        ' and loan-cond.cont-code eq loan.cont-code '                                          +
+                        '| WHERE '                                                                             +
+                        '| WHERE comm-rate.kau  EQ loan.contract + "","" + loan.cont-code '                    +
+                        '| WHERE comm-cond.contract eq loan.contract '                                         +
+                         ' and comm-cond.cont-code eq loan.cont-code '                                         +
+                        '| WHERE loan-int.contract eq loan.contract and loan-int.cont-code eq loan.cont-code ' +
+                        '| WHERE TRUE '"
+   &Fields-Mandatory = "contract,"
+   &Fields-Ignore    = "close-date"
+   &SortBy           = "mBySort"
+}
+/* $LINTENV ='common' */
+/* $LINTVSS ='$/ws3-dpl/common/bq/' */
+/* $LINTDATE='08/09/2015 18:49:22.522+04:00' */
+/* $LINTUSER='pase' */
+/* $LINTMODE='1' */
+/* $LINTFILE='loan_cd.qry' */
+/*prosignhEMlGqa+zBE6WWQ3Gx5BYw*/

@@ -1,0 +1,61 @@
+/* !!!!! ДЛЯ РАБОТЫ ОБЯЗАТЕЛЬНЫ op-cash.i/def (для определения кассового документа) !!!!! */
+
+DEFINE BUFFER code     FOR code.
+DEFINE BUFFER code1     FOR code.
+DEFINE VARIABLE mDbCr AS CHARACTER NO-UNDO.
+/* классификатор elhran */
+DEF TEMP-TABLE elhran NO-UNDO
+	FIELD branch-cr AS CHAR
+	FIELD branch-db AS CHAR
+	FIELD acct-cr   AS CHAR
+	FIELD acct-db   AS CHAR
+	FIELD doctype   AS CHAR
+	FIELD currency  AS CHAR
+	FIELD paramt    AS CHAR
+	FIELD op-kind   AS CHAR
+	FIELD details   AS CHAR
+.
+
+DEF VAR isElH  AS LOG   		NO-UNDO.
+DEF VAR isAuto AS LOG           NO-UNDO.
+DEF VAR vPar   AS CHAR  INIT '' NO-UNDO. /* параметры документа */
+DEF VAR vCnt   AS INT64 		NO-UNDO. /* счетчик */
+
+DEF VAR vTmpStr AS CHAR INIT '' NO-UNDO.
+
+&IF DEFINED(AcBuf)=0 &THEN
+	
+	&GLOBAL-DEFINE AcBuf
+
+	DEF BUFFER b-acctcr FOR acct.
+	DEF BUFFER b-acctdb FOR acct.
+	DEF BUFFER b-ope    FOR op-entry.
+
+	DEF VAR vACR AS CHAR NO-UNDO. /* для сохранения op-entry.acct-cr */
+	DEF VAR vADB AS CHAR NO-UNDO. /* для сохранения op-entry.acct-db */
+
+&ENDIF
+
+/* code -> elhran */
+FOR EACH code WHERE code.class EQ 'elhran' 
+			  AND   code.parent EQ 'elhran'
+			  /* проверка на даты */
+			  AND   DATE(code.misc[6]) LE end-date /* !! обязательно передавать дату формирования !! */
+			  AND  (DATE(code.misc[7]) GE end-date
+			  OR    DATE(code.misc[7]) EQ ?)
+	NO-LOCK:
+
+	CREATE elhran.
+	ASSIGN
+		elhran.branch-db = code.description[1]
+		elhran.branch-cr = code.description[2]
+		elhran.acct-cr   = code.misc[1] 
+		elhran.acct-db   = code.misc[2]
+		elhran.doctype   = code.misc[3]
+		elhran.currency  = code.misc[4]
+		elhran.paramt    = code.misc[5]
+		elhran.op-kind   = code.misc[8]
+		elhran.details   = code.description[3]
+	.
+
+END.

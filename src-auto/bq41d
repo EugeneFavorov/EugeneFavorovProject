@@ -1,0 +1,154 @@
+#!/bin/sh
+#
+# @(#) Универсальный скрипт БИСквит 4.1.6.  Copyright (C) 1994-1999 BIS Ltd.
+#
+# bq41d - setting module - модуль настроек
+#
+# Справка по командам:
+# bq41d help   информация на русском языке
+# bq41d -?     help message in english
+#
+# Written by Andy Orehov,     September 1994.
+# Edited by Dmitry Lapenkov,  March 1995 - April 1999.
+#
+# Copyright (C) 1994-2004 ЗАО "Банковские Информационные Системы"
+#
+#------------------------------------------------------------------------------
+
+BQNAME="bq41d"		# Имя этого скрипта (basename $0)
+BQVER="ver.4.1d"	# Версия БИСквит
+BQVER1="41d"		# Краткая версия БИСквит
+
+AfterImagingEnabled="no"	# Включать журналирование (yes/no) ?
+IserverEnabled="yes"		# auto start iserver
+SchedulerEnabled="yes"		# Запускать Планировщик (yes/no) ?
+BISmarkEnabled="no"		# Запускать подсистему БИСмарк
+				# (клиент-банк) (yes/no) ?
+
+DLC="/usr/dlc"	# Домашний каталог PROGRESS
+
+BQ="/home2/bis/quit41d"	# Домашний каталог БИСквит
+BQDB="$BQ/db/bisquit"		# БД БИСквит
+
+[ "$AfterImagingEnabled" = "yes" ]  &&  BQAI="${BQDB}.ai"
+
+BQBISPL="$BQ/bqbis.pl"		# Обязательная библиотека процедур БИСквит
+BQPL="$BQ/bq${BQVER1}.pl"	# Библиотека процедур БИСквит
+BQPF="$BQ/conf/bisquit-ora.pf"	# Файл стартовых параметров БИСквит
+BQBKUPDIR="$BQ/backup"		# Каталог для архивов БД БИСквит
+
+BQCOLOR_DEF=""			# Палитра по умолчанию: inverse, cyan, norton etc
+
+: ${BQCOLOR:="$BQCOLOR_DEF"}	# если BQCOLOR не определен - использовать BQCOLOR_DEF
+
+BQScript="$BQ/bin/bq.sh"	# Основной скрипт
+  if [ ! -f "$BQScript" ]; then
+     echo "** $BQNAME - module \"$BQScript\" not found - cannot continue"
+     echo "** $BQNAME - модуль \"$BQScript\" не найден - не могу продолжить"
+     exit
+  fi
+
+BQDBA="bis"			# Главный администратор системы БИСквит
+BQADMINS="bis"			# Список администраторов системы БИСквит
+BQSU="yes"			# Запускать сервер от имени BQDBA (yes/no) ?
+
+# Начиная с bq.sh версии 4.2.1, переменные BQUSER, BQHOME больше не используются
+# Директория для размещения временных подкаталогов псевдо-user'ов (default="/tmp")
+#BQUWorkDir="/tmp"	# <- для гарантированной очистки при загрузке сервера
+#BQUWorkDir="."		# <- если требуется использовать user's home, как и прежде
+export BQUWorkDir
+
+BQNWPRINT="no"		# Печатать через очередь Novell NetWare ?
+BQNWSRV="mars1"		# Имя сервера Novell NetWare (if any)
+BQNWUSER="bis"		# Пользователи БИСквит (в NetWare)
+
+BQSchedUser="serv0400"	# Имя псевдопользователя планировщика
+BQSchedUser2="serv0000"	# Имя псевдопользователя планировщика
+
+if [ "$BISmarkEnabled" = "yes" ]; then
+   BQMailUser="bank"	# Имя почтового псевдопользователя
+#   TZ=${TZ:-"MSK-3MSD,M3.5.0,M10.5.0"}  # Time Zone (здесь: для Москвы)
+fi
+
+#BQTCPService="${BQNAME}"	# BISQuit TCP service name - закомментируйте
+				# эту строку для отказа от режима КЛИЕНТ-СЕРВЕР
+				# - останется только режим HOST-TERMINAL.
+
+RunAPW="no"		# Запускать Async Page Writer ? (yes/no)
+BQNAPW="1"		# Сколько именно AP Writer'ов ?
+RunBIW="no"		# Запускать Before-Image Writer ? (yes/no)
+RunWDOG="yes"		# Запускать Watch Dog ? (yes/no)
+RunAIW="no"		# Запускать After-Image Writer ? (yes/no)
+BQNusers="500"		# Максимальное число пользователей БИСквит
+			# (+4+broker+promon+apw(s)+biw+watchdog[+aiw])
+BQNdbbufs="16384"	# Буфер кэша БД (в блоках БД)
+BQNlocks="200000"	# Общее число блокировок в БД
+BQParams=""		# Дополнительные параметры запуска сервера.
+
+if [ -z "`pwd | grep /home/bq41d`" -a $# = 0 -a "`uname -n`" = "bis-work" ]; then
+    # контроль свободного места на диске
+    /home2/bis/quit41d/bin/chk_df.pl
+    if [ -z "`find /db/backup/1 -name ora.tgz -ctime -1`" ]; then
+        echo "нет архива бд за текущий день"
+        read -p "нажмите !!! ENTER !!! для продолжения."
+    fi
+fi
+
+if [ "`uname -n`" != "bis-work2" ]; then
+    BQCOLOR="cyan"
+fi
+
+if  [ $# = 0 ]; then
+#su () { /home2/bis/quit41d/bin/bq-sudo "$@"; }
+#export -f su
+PATH=/home2/bis/quit41d/bin/sudo:$PATH
+export PATH
+fi
+# при запуске из crontab не устанавливаются переменные окружения
+test -z "$HOSTNAME" && HOSTNAME=`/bin/uname -n 2> /dev/null`
+export HOSTNAME
+
+#------------------------------------------------------------------------------
+#XREF_DIR=$BQ/xref
+BASE_SRC=$BQ/src138all
+
+#BQS=$BASE_SRC
+
+#временные переменные для исходников по кредитам.
+SRC_CRED=$BQ/src-cred
+R_CRED=$BQ/r-cred
+
+#BISLicCacheOff=YES
+#export BISLicCacheOff
+
+#PROPATH=.,$BQ/_ora,$BQ/src-test,$BQ/src-local,$BQ/src-fix111,$BQ/src-fix110,$BQ/src109all,$BQBISPL,$BQPL
+#PROPATH=.,$BQ/_ora,$BQ/src-test,$BQ/src-local,$BQ/src-fix111,$BQ/src-fix110,$BQ/r109all,$BQ/src109all,$BQBISPL,$BQPL
+PROPATH=.,$BQ/_ora,$BQ/src-auto,$BQ/src-test,$BQ/src-440,$BQ/r-local,$BQ/src-local,$BQ/servrep,$BQ/r-fixplus,$BQ/src-fixplus,$BQ/r-fix147,$BQ/src-fix147,$BQ/r-fix146,$BQ/src-fix146,$BQ/r-fix145,$BQ/src-fix145,$BQ/r-fix144,$BQ/src-fix144,$BQ/r-fix143,$BQ/src-fix143,$BQ/r142all,$BQ/src142all,$BQBISPL,$BQPL
+#PROPATH=.,$BQ/_ora,$BQ/src-test,$BQ/src-440,$BQ/src-local,$BQ/servrep,$BQ/src-fixplus,$BQ/src-fix145,$BQ/src-fix144,$BQ/src-fix143,$BQ/src-fix142,$BQ/src-fix141,$BQ/src-fix140,$BQ/src-fix139,$BQ/src138all,$BQBISPL,$BQPL
+
+export BQNAME BQVER
+export AfterImagingEnabled IserverEnabled SchedulerEnabled BISmarkEnabled
+export DLC PROPATH
+export BQ BQDB BQAI
+export BQBISPL BQPL BQPF
+export BQBKUPDIR
+export BQCOLOR
+export BQSU BQDBA BQADMINS
+export BQUWorkDir BQSchedUser BQSchedUser2
+export BQTCPService
+export RunAPW BQNAPW RunBIW RunWDOG RunAIW
+export BQNusers BQNdbbufs BQNlocks BQParams
+export BQNWPRINT BQNWSRV BQNWUSER
+export BASE_SRC XREF_DIR  # NUM_EXT EXTENDED_SRC
+
+ORACLE_HOME=/opt/oracle/product/11.2.0.1/db_ent1;          export ORACLE_HOME
+ORA_NLS33=$ORACLE_HOME/nls/data;                export ORA_NLS33
+ORACLE_TERM=ansi;                               export ORACLE_TERM
+ORACLE_SID=QBIS;                                export ORACLE_SID
+NLS_LANG=American_America.ru8pc866;             export NLS_LANG
+
+[ "$BISmarkEnabled" = "yes" ]  &&  export BQMailUser TZ
+
+#------------------------------------------------------------------------------
+
+exec $BQScript "bq_pid_$$" "$0" "$@"

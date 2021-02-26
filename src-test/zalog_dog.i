@@ -1,0 +1,37 @@
+/*
+PUT UNFORMATTED
+"1"
+";"
+"2"
+";"
+"3"
+";"
+"4"
+";"
+"5"
+";"
+"6"
+";"
+"7"
+";"
+"8"
+";"
+"9"
+SKIP.
+*/
+PUT UNFORMATTED
+"DOG_ID"
+";"
+"WARE_SUMMA"
+";"
+"CUR"
+";"
+"VID_WARE"
+";"
+";"
+";"
+";"
+"SUBJ_ID"
+";"
+"SP"
+SKIP.

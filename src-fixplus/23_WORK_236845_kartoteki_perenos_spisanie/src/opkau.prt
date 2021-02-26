@@ -1,0 +1,18 @@
+/*
+               KSV Editor
+    Copyright: (C) 2000-2006 Serguey Klimoff (bulklodd)
+     Filename: OPKAU.PRT
+      Comment: <comment>
+   Parameters:
+         Uses:
+      Used by:
+      Created: 13.02.2009 15:19 SAMI    
+     Modified: 13.02.2009 15:19 SAMI     <comment>
+*/
+
+ELSE IF LASTKEY = KEYCODE("CTRL-G") THEN DO:
+   IF NOT CAN-FIND(FIRST tmprecid) THEN RUN CreateTmpRecid.
+   RUN nav-menu.p ("ÑéäìåÖçíõ", work-parent, 7).
+   RUN DeleteTmpRecid.
+   NEXT REFRESH.
+END.

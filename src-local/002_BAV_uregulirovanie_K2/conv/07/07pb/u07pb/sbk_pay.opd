@@ -1,0 +1,780 @@
+[OpKindList 4.1d] // Экспорт данных произвел 0000BAV 20/04/2016 12:06:23 БД "-db /home2/bis/quit41d/db/bisquit,-ld bisquit,-L 200000,-n 500,-B 8000,-omsize 1400,-spin 10000,-U qbis,-P,-n 500"
+// ***************************************************************************
+sbk_pay:
+DO TRANSACTION EXECUTABLE:
+   /// <tr_package>
+   /// 07.07PB.u07PB.sbk_pay
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// PB: Создание документов оплаты
+   /// </tr_name-opkind>
+
+   /// <tr_details>
+   /// Создание документов при оплате с картотеки
+   /// </tr_details>
+
+   /// <tr_parent>
+   /// u07PB
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// base
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_NoBlockMsg>
+   /// Да
+   /// </tr_NoBlockMsg>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   /// <tr_СС_АвтоОтвет>
+   /// core20=Продолжить,core21=Продолжить,core23=Продолжить,core55=Отменить,core59=yes
+   /// </tr_СС_АвтоОтвет>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_СС_ВыводПрткл>
+   /// Нет
+   /// </tr_СС_ВыводПрткл>
+
+   /// <tr_СС_УровеньОтладк>
+   /// 1
+   /// </tr_СС_УровеньОтладк>
+
+   // Библиотека функций парсера для лицевых и счетов 2-го порядка.
+   LIBRARY pacct.
+
+   // Библиотека функций для работы с картотеками.
+   LIBRARY pcrd.
+
+   // Библиотека функций парсера для документов
+   LIBRARY pop.
+
+   DO BEFORE:
+      // При вызове транзакции д.б.определены переменные:
+      // @iSrcCrt   - счет картотеки
+      // @iCrtType  - тип картотеки: К1, К2, КБС
+      // @iAcct     - р/с
+      // @iCurrency - валюта р/с и картотек (совпадают)
+      // @iKau      - КАУ: <op>,<op-entry>
+      // @iSumma    - сумма к оплате
+      // @partial   - частичная оплата (yes/no)
+      // @inalog    - статус = "5(налог)" (yes/no)
+      // @iUser     - пользователь, создающий проводки
+      // @iLog      - лог
+      
+      @acctdb   = ?;
+      @acctcr   = ?;
+      @count    = 0;
+      @__do     = 1;
+   END BEFORE.
+
+   10:
+   DO TEMPLATE CLASS opo ACTION Поиск ROLE Ввод данных:
+      /// <tm_details>
+      /// Документ постановки на картотеку
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         // Остаток на л/с, доступный для оплаты
+         // IF @iCurrency == ""
+         // THEN @Ost = ОСТАТОК_РУБ(@iAcct,@iCurrency,ДАТА(),П);
+         // ELSE @Ost = ОСТАТОК_ВАЛ(@iAcct,@iCurrency,ДАТА(),П);
+         // ENDIF
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(ENTRY(1, @iKau))
+
+
+      DO AFTER:
+         @Oplata  = 'yes';
+         @iRsvCrt = '';
+         ТРАНЗАКЦИЯ(sbk_kau);
+         
+         IF (@op-bal == ?)
+         THEN @__op-ish = "";
+         ELSE @__op-ish = @op-bal;
+         ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS op-entry ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Проводка постановки на картотеку
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(ENTRY(1, @iKau))
+
+      // РЕКВИЗИТ: op-entry (формула) #2
+      @op-entry = SEARCH(ENTRY(2, @iKau))
+
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+   30:
+   DO TEMPLATE CLASS opb ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Исходный документ
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@__op-ish)
+
+
+      DO AFTER:
+         // Если нет исходного документа, то не продолжаем
+         IF DEFINED(__notfound) THEN
+           // e-mail
+           @__do     = 0;
+           @__dobank = 0;
+         ELSE
+           @__nalog  = БЮДЖ_ПЛАТЕЖ(@__op-ish);
+         ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+   40:
+   DO TEMPLATE CLASS op-entry ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Исходная проводка
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@__op-ish)
+
+      // РЕКВИЗИТ: op-entry (формула) #2
+      @op-entry = SEARCH(1)
+
+
+      DO AFTER:
+         // Если нет проводки, то сумма проводки - с ДР на исх.документе
+         IF DEFINED(__notfound,40) THEN (
+           IF @iCurrency == ''
+           THEN @amtbal = @amt-rub(30) // ДР на документе
+           ELSE @amtbal = @amt-cur(30)
+           ENDIF;
+           @__opcod = "000000"
+         ) ELSE (
+           IF @iCurrency == ''
+           THEN @amtbal = @amt-rub(40) // Сумма проводки
+           ELSE @amtbal = @amt-cur(40)
+           ENDIF;
+           @__opcod = @op-cod(40)
+         ) ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   40  - КОНЕЦ
+
+   50:
+   DO TEMPLATE CLASS doc-type ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Код исх.расч.-ден.документа
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+         
+         // @amt-rub(20)   - сумма проводки постановки на Картотеку
+         // @amtbal        - сумма исходного документа
+         // @oBalance      - баланс картотеки
+         
+         // IF @iCurrency == '' THEN (
+         //   IF (@amt-rub(20) <> @oBalance) THEN
+         //     @partial = 'yes'
+         //   ELSE (
+         //     IF @amt-rub(20) <> @amtbal THEN 
+         //       @partial = 'yes';
+         //       @count   = 1;
+         //     ELSE
+         //       @partial = 'no'
+         //     ENDIF
+         //   ) ENDIF
+         // ) ELSE (
+         //   IF (@amt-cur(20) <> @oBalance) THEN
+         //     @partial = 'yes'
+         //   ELSE (
+         //     IF @amt-cur(20) <> @amtbal THEN 
+         //       @partial = 'yes';
+         //       @count = 1;
+         //     ELSE
+         //       @partial = 'no'
+         //     ENDIF
+         //   ) ENDIF
+         // ) ENDIF;
+      END BEFORE.
+
+      // РЕКВИЗИТ: doc-type (формула) #1
+      @doc-type = SEARCH(@doc-type(30))
+
+
+   END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+   60:
+   DO TEMPLATE CLASS acctb ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Дб оплаты
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct =
+      DO:
+         SEARCH(
+           IF @acctbal(30) <> ?
+           THEN @acctbal(30)    // ДР исходного док.
+           ELSE (
+             IF DEFINED('__notfound',40)
+             THEN ''
+             ELSE @acct-db(40)  // Дб исходной проводки
+             ENDIF
+           ) ENDIF
+         )
+      END.
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH(@iCurrency)
+
+
+      DO AFTER:
+         // @acctdb  - счет Дб для проводки оплаты
+         
+         IF DEFINED(__notfound) THEN
+           @acctdb = @iAcct;
+         ELSE (
+           IF @close-date <> ? THEN (
+             IF @close-date > Дата()
+             THEN @acctdb = @acct 
+             ELSE @acctdb = ?
+             ENDIF
+           ) ELSE @acctdb = @acct
+           ENDIF
+         ) ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   60  - КОНЕЦ
+
+   70:
+   DO TEMPLATE CLASS acctb ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// Кр оплаты
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct (формула) #1
+      @acct =
+      DO:
+         SEARCH(
+           IF @acctcorr(30) <> ? THEN
+             @acctcorr(30)      // ДР на исх.док
+           ELSE (
+             IF DEFINED('__notfound',40)
+             THEN ''
+             ELSE @acct-cr(40)  // Кр исх.проводки
+             ENDIF
+           ) ENDIF
+         )
+      END.
+
+      // РЕКВИЗИТ: currency (формула) #2
+      @currency = SEARCH(@iCurrency)
+
+
+      DO AFTER:
+         // @acctcr  - счет Кр для проводки оплаты
+         
+         IF DEFINED(__notfound) THEN
+           @acctcr = ?
+         ELSE (
+           IF @close-date <> ? THEN (
+             IF @close-date > Дата()
+             THEN @acctcr = @acct
+             ELSE @acctcr = ?
+             ENDIF
+           ) ELSE @acctcr = @acct
+           ENDIF
+         ) ENDIF;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   70  - КОНЕЦ
+
+   80:
+   DO TEMPLATE CLASS Filter ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Кол-во списаний с картотеки
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @oSumm = 0;
+         _if(@partial, @__do, 0);
+      END BEFORE.
+
+      // РЕКВИЗИТ: buffers (константа) #1
+      @buffers = [op-entry]
+      // РЕКВИЗИТ: tables (константа) #2
+      @tables = [op-entry]
+      // РЕКВИЗИТ: where (формула) #3
+      @where =
+      DO:
+         "
+                                    FOR EACH op-entry
+                                      WHERE op-entry.acct-db   BEGINS '99999'
+                                        AND op-entry.kau-cr    EQ '" + @iKau + "'
+                                        AND op-entry.op-status GE 'Ф'
+                                      NO-LOCK
+                                    "
+      END.
+
+
+      DO AFTER:
+         @count = INT(@num-results) + 1;
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   80  - КОНЕЦ
+
+   90:
+   DO TEMPLATE CLASS op-bank ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_details>
+      /// op-bank исх.документа
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@__op-ish)
+
+
+      DO AFTER:
+         @__dobank = _if(DEFINED(__notfound), 0, 1)
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   90  - КОНЕЦ
+
+   95:
+   DO TEMPLATE CLASS banks-code ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__dobank
+      END BEFORE.
+
+      // РЕКВИЗИТ: bank-code-type (формула) #1
+      @bank-code-type = SEARCH(@bank-code-type(90))
+
+      // РЕКВИЗИТ: bank-code (формула) #2
+      @bank-code = SEARCH(@bank-code(90))
+
+
+      DO AFTER:
+         @__dobank = _if(DEFINED(__notfound), 0, 1)
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   95  - КОНЕЦ
+
+   100:
+   DO TEMPLATE CLASS banks ACTION Поиск с ош. ROLE Ввод данных:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__dobank
+      END BEFORE.
+
+      // РЕКВИЗИТ: bank-id (формула) #1
+      @bank-id = SEARCH(@bank-id(95))
+
+
+      DO AFTER:
+         @__dobank = _if(DEFINED(__notfound), 0, 1)
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   100  - КОНЕЦ
+
+   110:
+   DO TEMPLATE CLASS opb ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Оплата
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         _if((@acctcr <> ?) & (@acctdb <> ?), @__do, 0);
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (формула) #1
+      @acct-cat = @acct-cat(30)
+
+      // РЕКВИЗИТ: details (формула) #2
+      @details = @details(30)
+
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = @doc-num(10)
+
+      // РЕКВИЗИТ: doc-type (формула) #4
+      @doc-type = _if(@partial,"016",@doc-type(30))
+
+      // РЕКВИЗИТ: op-status (формула) #5
+      @op-status =
+      DO:
+         _if((@doc-type == "017") ||
+             (@doc-type == "016" & BEGINS(@acctcr, "47423")),
+             "√", "ФБК")
+      END.
+
+      // РЕКВИЗИТ: doc-date (формула) #6
+      @doc-date = _if(@partial, Дата(), @doc-date(30))
+
+      // РЕКВИЗИТ: op-date (формула) #7
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #8
+      @ins-date = _if(@partial,Дата(),@doc-date(30))
+
+      // РЕКВИЗИТ: due-date (формула) #9
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: ben-acct (формула) #10
+      @ben-acct = @ben-acct(30)
+
+      // РЕКВИЗИТ: name-ben (формула) #11
+      @name-ben = @name-ben(30)
+
+      // РЕКВИЗИТ: inn (формула) #12
+      @inn = @inn(30)
+
+      // РЕКВИЗИТ: order-pay (формула) #13
+      @order-pay = _if(@inalog,"3",@order-pay(30))
+
+      // РЕКВИЗИТ: user-id (формула) #14
+      @user-id = @iUser
+
+      120:
+      DO TEMPLATE CLASS op-bank ACTION Создание ROLE op-bank:
+         DO BEFORE:
+            @__dobank
+         END BEFORE.
+
+         // РЕКВИЗИТ: bank-code (формула) #1
+         @bank-code = @bank-code(90)
+
+         // РЕКВИЗИТ: bank-code-type (формула) #2
+         @bank-code-type = @bank-code-type(90)
+
+         // РЕКВИЗИТ: bank-name (формула) #3
+         @bank-name = @name(100) + " " + @town-type(100) + " " + @town(100)
+
+         // РЕКВИЗИТ: corr-acct (формула) #4
+         @corr-acct = @corr-acct(90)
+
+         // РЕКВИЗИТ: op-bank-type (формула) #5
+         @op-bank-type = @op-bank-type(90)
+
+
+      END TEMPLATE. // ШАБЛОН:   120  - КОНЕЦ
+
+      130:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (формула) #1
+         @acct-cat = @acct-cat(30)
+
+         // РЕКВИЗИТ: acct-db (формула) #2
+         @acct-db = @acctdb
+
+         // РЕКВИЗИТ: acct-cr (формула) #3
+         @acct-cr = @acctcr
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur =
+         DO:
+            _if(@iCurrency == "", 0, @iSumma)
+                                                
+                                                // @oCurr-bal
+         END.
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub =
+         DO:
+            _if(@iCurrency == "", @iSumma,
+                                                    ПЕРЕСЧЕТ(@iSumma, @iCurrency, ""))
+                                                // @oBalance
+         END.
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: op-cod (формула) #7
+         @op-cod = @__opcod
+
+         // РЕКВИЗИТ: type (формула) #8
+         @type =
+         DO:
+            // ТехнПлат(_if(DEFINED(__notfound,90), '', @bank-code(90)),
+                                                //          _if(DEFINED(__notfound,90), '', @bank-code-type(90)),
+                                                //          @op-kind(30),
+                                                //          _if(@partial == 'no', @doc-type(30), '016'), "НЕ")
+                                                "НЕ"
+         END.
+
+
+         DO AFTER:
+            @__mess = "      Создана проводка "
+                    + @acct-db + " -> "
+                    + @acct-cr + " (" + @amt-rub + ")";
+            ТРАНЗАКЦИЯ("sbLogIt");
+         END AFTER.
+
+      END TEMPLATE. // ШАБЛОН:   130  - КОНЕЦ
+
+
+      DO AFTER:
+         @__op-opl = @op;
+         КОПИР_ДР("opb",@__op-ish,@__op-opl);
+      END AFTER.
+
+   END TEMPLATE. // ШАБЛОН:   110  - КОНЕЦ
+
+   140:
+   DO TEMPLATE CLASS opb ACTION Модификация ROLE Ввод данных:
+      /// <tm_details>
+      /// ДР на Оплате
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         _if((@acctcr <> ?) & (@acctdb <> ?), @__do, 0);
+      END BEFORE.
+
+      // РЕКВИЗИТ: op (формула) #1
+      @op = SEARCH(@__op-opl)
+
+      // РЕКВИЗИТ: НомДок (формула) #3
+      @НомДок = _if(@partial, @doc-num(30), "")
+
+      // РЕКВИЗИТ: ДатаПлДок (формула) #4
+      @ДатаПлДок = _if(@partial, _if(@doc-date(30) <> ?, @doc-date(30), ""), "")
+
+      // РЕКВИЗИТ: ШифрПЛ (формула) #5
+      @ШифрПЛ = _if(@partial, _if(DEFINED(__notfound,50),"", @digital(50)), "")
+
+      // РЕКВИЗИТ: НомЧПл (формула) #6
+      @НомЧПл = _if(@partial, @count, "")
+
+      // РЕКВИЗИТ: ОстПл (формула) #7
+      @ОстПл = _if(@partial, @newBalance, '')
+
+      // РЕКВИЗИТ: amt-rub (константа) #8
+      @amt-rub = []
+      // РЕКВИЗИТ: acctbal (константа) #9
+      @acctbal = []
+      // РЕКВИЗИТ: acctcorr (константа) #10
+      @acctcorr = []
+      // РЕКВИЗИТ: op-doc-part (формула) #11
+      @op-doc-part = _if(@partial,@op(30),"")
+
+      // РЕКВИЗИТ: УИН (формула) #15
+      @УИН = @УИН(30)
+
+      // РЕКВИЗИТ: УИП (формула) #16
+      @УИП =
+      DO:
+         _if((@УИП(30) <> ?) & (@УИП(30) <> ""), "1"
+           + НАСТРОЙКА("БанкМФО")
+           + FORMAT(ПОДРАЗДЕЛЕНИЕ(), "999999", "INT64")
+           + FORMAT(DAY(ДАТА()),  "99", "INT64")
+           + FORMAT(MONTH(ДАТА()),"99", "INT64")
+           + SUBSTR(YEAR(ДАТА()), 3)
+           + FORMAT(@__op-opl,"9999999999","INT64"),
+           "")
+      END.
+
+      // РЕКВИЗИТ: order-pay (формула) #17
+      @order-pay = _if(@inalog,@order-pay(30),@order-pay)
+
+
+   END TEMPLATE. // ШАБЛОН:   140  - КОНЕЦ
+
+   150:
+   DO TEMPLATE CLASS opo ACTION Создание ROLE Ввод данных:
+      /// <tm_details>
+      /// Снятие с картотеки
+      /// </tm_details>
+
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      DO BEFORE:
+         @__do
+      END BEFORE.
+
+      // РЕКВИЗИТ: acct-cat (константа) #1
+      @acct-cat = [o]
+      // РЕКВИЗИТ: details (формула) #2
+      @details =
+      DO:
+         "Списание с Картотеки "
+                  + _if(@iCrtType == "К1", "1. ",
+                    _if(@iCrtType == "К2", "2. ", "блокированных счетов. "))
+                  + @details(30)
+      END.
+
+      // РЕКВИЗИТ: doc-num (формула) #3
+      @doc-num = @doc-num(30)
+
+      // РЕКВИЗИТ: doc-type (константа) #4
+      @doc-type = [ВБК]
+      // РЕКВИЗИТ: op-status (константа) #5
+      @op-status = [√]
+      // РЕКВИЗИТ: op-bal (формула) #6
+      @op-bal = @op-bal(10)
+
+      // РЕКВИЗИТ: doc-date (формула) #7
+      @doc-date = Дата()
+
+      // РЕКВИЗИТ: doc-num (формула) #8
+      @doc-num = @doc-num(10)
+
+      // РЕКВИЗИТ: op-date (формула) #9
+      @op-date = Дата()
+
+      // РЕКВИЗИТ: ins-date (формула) #10
+      @ins-date = Дата()
+
+      // РЕКВИЗИТ: due-date (формула) #11
+      @due-date = Дата()
+
+      // РЕКВИЗИТ: class-code (константа) #12
+      @class-code = [opo]
+      // РЕКВИЗИТ: op-bal (формула) #13
+      @op-bal = @op-bal(10)
+
+      // РЕКВИЗИТ: user-id (формула) #14
+      @user-id = @iUser
+
+      160:
+      DO TEMPLATE CLASS op-entry ACTION Создание ROLE op-entry1:
+         // РЕКВИЗИТ: acct-cat (константа) #1
+         @acct-cat = [o]
+         // РЕКВИЗИТ: acct-cr (формула) #2
+         @acct-cr = @iSrcCrt
+
+         // РЕКВИЗИТ: acct-db (формула) #3
+         @acct-db = НАСТРОЙКА(ВбСчетКорА,'',99999810000000000001)
+
+         // РЕКВИЗИТ: amt-cur (формула) #4
+         @amt-cur =
+         DO:
+            _if(@iCurrency == "", 0, @iSumma)
+                                                
+                                                // @oCurr-bal
+         END.
+
+         // РЕКВИЗИТ: amt-rub (формула) #5
+         @amt-rub =
+         DO:
+            _if(@iCurrency == "", @iSumma,
+                                                    ПЕРЕСЧЕТ(@iSumma, @iCurrency, ""))
+                                                // @oBalance
+         END.
+
+         // РЕКВИЗИТ: currency (формула) #6
+         @currency = @iCurrency
+
+         // РЕКВИЗИТ: kau-cr (формула) #7
+         @kau-cr = @iKau
+
+         // РЕКВИЗИТ: op-cod (константа) #8
+         @op-cod = [000000]
+
+         DO AFTER:
+            @__mess = "      Создана проводка "
+                    + SUBSTR(@acct-db,1,20) + " -> "
+                    + SUBSTR(@acct-cr,1,20) + "(" + @amt-rub + ")";
+            ТРАНЗАКЦИЯ("sbLogIt");
+         END AFTER.
+
+      END TEMPLATE. // ШАБЛОН:   160  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   150  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ sbk_pay - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

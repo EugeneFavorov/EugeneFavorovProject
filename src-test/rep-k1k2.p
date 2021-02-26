@@ -1,0 +1,996 @@
+/*
+               Банковская интегрированная система QBIS
+    Copyright: (C) 1992-2014 ЗАО "Банковские информационные системы"
+     Filename: rep-k1k2.p
+      Comment: <comment>
+   Parameters:
+         Uses:
+      Used by:
+      Created: 24.06.2014 09:14 ccc
+     Modified: 24.06.2014 09:14 ccc      <comment>
+*/
+
+/* ***************************  Parameters  *************************** */
+DEFINE INPUT PARAMETER iParams AS CHARACTER NO-UNDO.
+/*DEFINE VARIABLE iParams AS CHARACTER NO-UNDO.*/
+/* ************************  Global Definitions  ********************** */
+{globals.i}             /*Глобальные переменные сессии.*/
+{parsin.def}
+{sh-defs.i}
+{done}
+{intrface.get tmess}    /*Инструменты обработки сообщений.*/
+{intrface.get op}
+{intrface.get xclass}
+{intrface.get blkob}
+{intrface.get netw}     /* Отправка в bispc */
+{wordwrap.def}
+/* ************************  Local Definitions  *********************** */
+DEFINE BUFFER b-acct FOR acct.
+DEFINE BUFFER o-acct FOR acct.
+DEFINE BUFFER b-op   FOR op.
+DEFINE BUFFER o-op   FOR op.
+DEFINE BUFFER b-op-entry FOR op-entry.
+DEFINE BUFFER o-op-entry FOR op-entry.
+
+DEFINE VARIABLE iMode        AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE iMaskAcct    AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE iMaskContr   AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE iStatus      AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE iOAcct       AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mFoundK1     AS LOGICAL     NO-UNDO.
+DEFINE VARIABLE mFoundK2     AS LOGICAL     NO-UNDO.
+DEFINE VARIABLE mBOst        AS DECIMAL     NO-UNDO.
+DEFINE VARIABLE mOOst        AS DECIMAL     NO-UNDO.
+DEFINE VARIABLE mDate        AS DATE        NO-UNDO.
+DEFINE VARIABLE mPrDate      AS DATE        NO-UNDO.
+DEFINE VARIABLE mK1AcctLst   AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mK2AcctLst   AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mK1Acct      AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mK2Acct      AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mShortName   AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mDateTime    AS DATETIME    NO-UNDO.
+DEFINE VARIABLE mBlock       AS CHARACTER   EXTENT 6 NO-UNDO.
+DEFINE VARIABLE mBlockList   AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mBlockSumm   AS DECIMAL     NO-UNDO.
+DEFINE VARIABLE mBlockSumm1  AS DECIMAL     NO-UNDO.
+DEFINE VARIABLE mBlockSumm2  AS DECIMAL     NO-UNDO.
+DEFINE VARIABLE vName        AS CHARACTER   EXTENT 5 NO-UNDO.
+DEFINE VARIABLE vWBlock      AS CHARACTER   EXTENT 5 NO-UNDO.
+DEFINE VARIABLE mInt         AS INT64       NO-UNDO.
+DEFINE VARIABLE mInt1        AS INT64       NO-UNDO.
+DEFINE VARIABLE mInt2        AS INT64       NO-UNDO.
+DEFINE VARIABLE mIntAll      AS INT64       NO-UNDO.
+DEFINE VARIABLE mCnt         AS INT64       NO-UNDO.
+DEFINE VARIABLE mCntAll      AS INT64       NO-UNDO.
+DEFINE VARIABLE mBarMessage  AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mAmtRub1     AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mDateIns     AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mFileName    AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mInsDate     AS CHARACTER   NO-UNDO.
+DEFINE VARIABLE mGroup       AS CHARACTER   NO-UNDO.
+
+DEFINE TEMP-TABLE tt-acct    NO-UNDO
+   FIELD r-type              AS INT64            /**/
+   FIELD cli-id              AS INT64            /**/
+   FIELD cli-cat             AS CHARACTER
+   FIELD cli-name            AS CHARACTER
+   FIELD b-filial            AS CHARACTER
+   FIELD b-group             AS CHARACTER
+   FIELD b-acct              AS CHARACTER
+   FIELD b-cur               AS CHARACTER
+   FIELD b-ost               AS DECIMAL
+   FIELD b-o-date            AS DATE
+   FIELD b-c-date            AS DATE
+   FIELD b-block             AS CHARACTER
+   FIELD b-blsum             AS DECIMAL
+   FIELD o-filial            AS CHARACTER
+   FIELD o-acct              AS CHARACTER
+   FIELD o-cur               AS CHARACTER
+   FIELD o-ost               AS DECIMAL
+.
+DEFINE TEMP-TABLE tt-doc     NO-UNDO
+   FIELD rid                 AS RECID
+   FIELD r-type              AS INT64            /**/
+   FIELD cli-id              AS INT64            /**/
+   FIELD cli-cat             AS CHARACTER
+   FIELD cli-name            AS CHARACTER
+   FIELD o-filial            AS CHARACTER
+   FIELD o-acct              AS CHARACTER
+   FIELD o-cur               AS CHARACTER
+   FIELD b-filial            AS CHARACTER
+   FIELD b-acct              AS CHARACTER
+   FIELD b-cur               AS CHARACTER
+   FIELD b-block             AS CHARACTER
+   FIELD b-blsum             AS CHARACTER
+   FIELD doc-num             AS CHARACTER
+   FIELD doc-date            AS DATE
+   FIELD ins-date            AS DATE
+   FIELD doc-sum             AS DECIMAL
+   FIELD amt-rub             AS DECIMAL
+   FIELD balance             AS DECIMAL
+   FIELD details             AS CHARACTER
+   FIELD order-pay           AS CHARACTER
+   FIELD doc-type            AS CHARACTER
+   FIELD priost              AS CHARACTER
+.
+/* ***************************  Main Block  *************************** */
+
+
+/*
+iParams = "КартБл"
+iParams = "Карт2"
+*/
+
+ASSIGN
+   iMaskAcct = "405*,406*,407*,40802*,40807*,40821*"
+   iStatus   = CHR(251)
+   iOAcct    = (IF iParams EQ "Карт2"  THEN "90902*" ELSE
+               (IF iParams EQ "КартБл" THEN "90901*" ELSE ""))
+   mGroup    = "*".
+
+PAUSE 0.
+IF (shFilial EQ "0500")
+THEN DO:
+   RUN g-prompt.p ("char", "Группы ", "x(100)", "*", "Введите группы счетов (F1 - выбор)", 50, ",", "F1=pb_getgroup.p",?,?,OUTPUT mGroup).
+   IF (mGroup EQ ?) THEN RETURN.
+END.
+
+ETIME(YES).
+MESSAGE "Формирование отчета..".
+
+DEFINE STREAM out-stream.
+
+MAIN-BLOCK:
+DO
+   ON ERROR   UNDO MAIN-BLOCK, LEAVE MAIN-BLOCK
+   ON END-KEY UNDO MAIN-BLOCK, LEAVE MAIN-BLOCK:
+   /* БС по маске и филиалу */
+
+   FOR EACH b-acct
+      WHERE b-acct.acct-cat  EQ 'b'
+        AND b-acct.filial-id EQ shFilial
+        AND CAN-DO(iMaskAcct,b-acct.acct)
+        AND CAN-DO("Б,Ч,Ю",b-acct.cust-cat)
+/*      AND b-acct.acct EQ "40802810851660010002     @0500" */
+/*      AND b-acct.acct EQ "40702810004000002491     @0000" */
+/*      AND b-acct.acct EQ "40702810904000102491     @0000" */
+      NO-LOCK:
+
+      /* Отбираем только указанные группы */
+      IF NOT CAN-DO(mGroup, GetXAttrValue("acct", b-acct.acct + "," + b-acct.currency, "groupOABS")) THEN NEXT.
+
+      /*Часть 1*/
+      IF (   b-acct.close-date EQ ?
+          OR b-acct.close-date GT gend-date) THEN
+      DO:
+         RUN acct-pos IN h_base (b-acct.acct,
+                                 b-acct.currency,
+                                 gend-date,
+                                 gend-date,
+                                 iStatus).
+         mBOst = (- 1) * (IF b-acct.currency EQ "" THEN  sh-bal ELSE sh-val).
+
+         ASSIGN
+            mShortName = "".
+
+         CASE b-acct.cust-cat:
+         WHEN "Ю" THEN
+         DO:
+            FIND cust-corp WHERE cust-corp.cust-id = b-acct.cust-id NO-LOCK NO-ERROR.
+            IF AVAIL cust-corp THEN
+               ASSIGN
+                  mShortName = IF TRIM(cust-corp.name-short) EQ "" THEN
+                                  STRING(b-acct.cust-id) + " " + TRIM(cust-corp.name-corp) ELSE
+                                  STRING(b-acct.cust-id) + " " + TRIM(cust-corp.name-short).
+         END.
+         WHEN "Ч" THEN
+         DO:
+            FIND FIRST person WHERE person.person-id = b-acct.cust-id NO-LOCK NO-ERROR.
+            IF AVAIL person THEN
+               ASSIGN
+                  mShortName = STRING(b-acct.cust-id) + " " + TRIM(person.name-last) + " "
+                             + TRIM(person.first-names).
+         END.
+         WHEN "Б" THEN
+         DO:
+            FIND banks WHERE banks.bank-id = b-acct.cust-id NO-LOCK NO-ERROR.
+            IF AVAIL banks THEN
+               ASSIGN
+                  mShortName = IF TRIM(banks.short-name) EQ "" THEN
+                                   STRING(b-acct.cust-id) + " " + TRIM(banks.name) ELSE
+                                   STRING(b-acct.cust-id) + " " + TRIM(cust-corp.name-short).
+         END.
+         END CASE.
+         mShortName = TRIM(REPLACE(mShortName,"?","")).
+         IF mShortName EQ "" THEN mShortName = "Не найдено название".
+
+
+/*         IF mBOst * (- 1) LE 0 THEN NEXT.*/
+
+/*         ASSIGN         */
+/*            mInt1   = 0 */
+/*            mInt2   = 0 */
+/*            mIntAll = 0.*/
+
+         /* ВБС клиента БС */
+         FOR EACH o-acct WHERE
+                  o-acct.acct-cat  EQ 'o'
+            AND   o-acct.filial-id EQ shFilial
+            AND   o-acct.cust-cat  EQ b-acct.cust-cat
+            AND   o-acct.cust-id   EQ b-acct.cust-id
+            AND   CAN-DO(iOAcct,o-acct.acct)
+            AND   o-acct.contract  EQ iParams
+            NO-LOCK:
+
+            RUN acct-pos IN h_base (o-acct.acct,
+                                    o-acct.currency,
+                                    gend-date,
+                                    gend-date,
+                                    iStatus).
+            mOOst = IF o-acct.currency EQ "" THEN sh-bal ELSE sh-val.
+
+/*            IF mOOst LE 0 THEN NEXT.*/
+
+            /* Если нет еще такого в tt-acct */
+            FIND FIRST tt-acct WHERE
+                  (tt-acct.r-type   EQ 0
+               OR  tt-acct.r-type   EQ 1)
+               AND tt-acct.o-filial EQ o-acct.filial-id
+               AND tt-acct.o-acct   EQ DelFilFromAcct(o-acct.acct)
+               AND tt-acct.b-acct   EQ DelFilFromAcct(b-acct.acct)
+            NO-LOCK NO-ERROR.
+            IF NOT AVAIL(tt-acct) THEN
+            DO:
+               CREATE tt-acct.
+               ASSIGN
+                  tt-acct.r-type   = 0
+                  tt-acct.cli-id   = b-acct.cust-id
+                  tt-acct.cli-cat  = b-acct.cust-cat
+                  tt-acct.cli-name = mShortName
+                  tt-acct.o-filial = o-acct.filial-id
+                  tt-acct.o-acct   = DelFilFromAcct(o-acct.acct)
+                  tt-acct.o-cur    = o-acct.currency
+                  tt-acct.o-ost    = mOOst
+                  tt-acct.b-filial = b-acct.filial-id
+                  tt-acct.b-group  = GetXAttrValue("acct", b-acct.acct + "," + b-acct.currency, "groupOABS")
+                  tt-acct.b-acct   = DelFilFromAcct(b-acct.acct)
+                  tt-acct.b-cur    = b-acct.currency
+                  tt-acct.b-ost    = mBOst
+                  tt-acct.b-o-date = b-acct.open-date
+                  tt-acct.b-c-date = b-acct.close-date.
+            END.
+            /*Если счета связаны    по ДР КартБВнСчет или Карт2ВнСчет то tt-acct.r-type = 0 */
+            /*Если счета не связаны по ДР КартБВнСчет или Карт2ВнСчет то tt-acct.r-type = 1 */
+            IF iParams EQ "КартБл" THEN
+            DO:
+               ASSIGN
+                  mFoundK1 = NO.
+               FOR EACH signs WHERE
+                        signs.code        EQ "КартБВнСчет"
+                  AND   signs.file-name   EQ "acct"
+                  AND   signs.code-value  EQ o-acct.acct + "," + o-acct.cur
+                  AND   signs.surrogate   EQ b-acct.acct + "," + b-acct.cur
+               NO-LOCK:
+                  mFoundK1 = YES.
+                  LEAVE.
+               END.
+               IF mFoundK1 EQ NO THEN
+               ASSIGN
+                  tt-acct.r-type = 1.
+            END.
+            IF iParams EQ "Карт2" THEN
+            DO:
+               ASSIGN
+                  mFoundK2 = NO.
+               FOR EACH signs WHERE
+                        signs.code        EQ "Карт2ВнСчет"
+                  AND   signs.file-name   EQ "acct"
+                  AND   signs.xattr-value EQ o-acct.acct + "," + o-acct.cur
+                  AND   signs.surrogate   EQ b-acct.acct + "," + b-acct.cur
+               NO-LOCK:
+                  mFoundK2 = YES.
+                  LEAVE.
+               END.
+               IF mFoundK2 EQ NO THEN
+               ASSIGN
+                  tt-acct.r-type = 1.
+            END.
+         END. /*FOR EACH o-acct*/
+      END.
+      /*Часть 2*/
+      /*Если счет закрыт раньше gend-date, а на ВБС есть остаток то tt-acct.r-type = 2 */
+      ELSE IF b-acct.close-date LE gend-date THEN
+      DO:
+         IF iParams EQ "КартБл" THEN
+         DO:
+            mK1AcctLst = GetXAttrValueEx("acct",b-acct.acct + "," + b-acct.currency,"КартБВнСчет","").
+            DO mInt = 1 TO NUM-ENTRIES(mK1AcctLst):
+               mK1Acct = ENTRY(mInt,mK1AcctLst).
+               {find-act.i
+                    &bact = o-acct
+                    &acct = mK1Acct
+                }
+               IF AVAIL(o-acct) THEN
+               DO:
+                  RUN acct-pos IN h_base (o-acct.acct,
+                                          o-acct.currency,
+                                          gend-date,
+                                          gend-date,
+                                          iStatus).
+                  mOOst = IF o-acct.currency EQ "" THEN sh-bal ELSE sh-val.
+                  IF mOOst NE 0 THEN
+                  DO:
+                     FIND FIRST tt-acct WHERE
+                            tt-acct.r-type   EQ 2
+                        AND tt-acct.o-acct   EQ DelFilFromAcct(o-acct.acct)
+                        AND tt-acct.o-filial EQ o-acct.filial-id
+                     NO-LOCK NO-ERROR.
+                     IF NOT AVAIL(tt-acct) THEN
+                     DO:
+                        CREATE tt-acct.
+                        ASSIGN
+                           tt-acct.r-type   = 2
+                           tt-acct.cli-id   = b-acct.cust-id
+                           tt-acct.cli-cat  = b-acct.cust-cat
+                           tt-acct.cli-name = mShortName
+                           tt-acct.b-filial = b-acct.filial-id
+                           tt-acct.b-group  = GetXAttrValue("acct", b-acct.acct + "," + b-acct.currency, "groupOABS")
+                           tt-acct.b-acct   = DelFilFromAcct(b-acct.acct)
+                           tt-acct.b-cur    = b-acct.currency
+                           tt-acct.b-o-date = b-acct.open-date
+                           tt-acct.b-c-date = b-acct.close-date
+                           tt-acct.o-filial = o-acct.filial-id
+                           tt-acct.o-acct   = DelFilFromAcct(o-acct.acct)
+                           tt-acct.o-cur    = o-acct.currency
+                           tt-acct.o-ost    = mOOst.
+                     END.
+                  END.
+               END.
+            END.
+         END.
+         IF iParams EQ "Карт2" THEN
+         DO:
+            mK2AcctLst = GetXAttrValueEx("acct",b-acct.acct + "," + b-acct.currency,"Карт2ВнСчет","").
+            DO mInt = 1 TO NUM-ENTRIES(mK2AcctLst):
+               mK2Acct = ENTRY(mInt,mK2AcctLst).
+               {find-act.i
+                    &bact = o-acct
+                    &acct = mK2Acct
+                }
+               IF AVAIL(o-acct) THEN
+               DO:
+                  RUN acct-pos IN h_base (o-acct.acct,
+                                          o-acct.currency,
+                                          gend-date,
+                                          gend-date,
+                                          iStatus).
+                  mOOst = IF o-acct.currency EQ "" THEN sh-bal ELSE sh-val.
+                  IF mOOst NE 0 THEN
+                  DO:
+                     FIND FIRST tt-acct WHERE
+                            tt-acct.r-type  EQ 2
+                        AND tt-acct.o-acct   EQ DelFilFromAcct(o-acct.acct)
+                        AND tt-acct.o-filial EQ o-acct.filial-id
+                     NO-LOCK NO-ERROR.
+                     IF NOT AVAIL(tt-acct) THEN
+                     DO:
+                        CREATE tt-acct.
+                        ASSIGN
+                           tt-acct.r-type   = 2
+                           tt-acct.cli-id   = b-acct.cust-id
+                           tt-acct.cli-cat  = b-acct.cust-cat
+                           tt-acct.cli-name = mShortName
+                           tt-acct.b-filial = b-acct.filial-id
+                           tt-acct.b-group  = GetXAttrValue("acct", b-acct.acct + "," + b-acct.currency, "groupOABS")
+                           tt-acct.b-acct   = DelFilFromAcct(b-acct.acct)
+                           tt-acct.b-cur    = b-acct.currency
+                           tt-acct.b-o-date = b-acct.open-date
+                           tt-acct.b-c-date = b-acct.close-date
+                           tt-acct.o-filial = o-acct.filial-id
+                           tt-acct.o-acct   = DelFilFromAcct(o-acct.acct)
+                           tt-acct.o-cur    = o-acct.currency
+                           tt-acct.o-ost    = mOOst.
+                     END.
+                  END.
+               END.
+            END.
+         END.
+      END.
+   END. /*FOR EACH b-acct*/
+
+/*   {setdest.i &filename = "'rep-k1k2.txt'"}*/
+
+   /*Блокировки на счете*/
+   FOR EACH tt-acct EXCLUSIVE-LOCK:
+/*      PUT UNFORMATTED  tt-acct.b-acct "  " fill("=",30) SKIP.*/
+      /*BREAK BY tt-acct.b-acct*/
+      /*IF FIRST-OF(tt-acct.b-acct) THEN
+      DO:*/
+         mDateTime  = DATETIME(gend-date,24 * 60 * 60 * 1000 - 1) NO-ERROR.
+         mBlockList = "".
+         mBlock     = "".
+         mBlockSumm = 0.
+/*         PUT UNFORMATTED                                                                                                                                                                    */
+/*            tt-acct.b-acct ";"                                                                                                                                                              */
+/*            "-1" GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date) ";"                                                                                   */
+/*            "" GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"",gend-date) - GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date) ";"*/
+/*         SKIP.                                                                                                                                                                              */
+         mBlockList = BlockAcct(AddFilToAcct(tt-acct.b-acct,shFilial) + "," + tt-acct.b-cur,mDateTime).
+         IF GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date) NE 0 THEN
+            mBlock[1]  = "БлокСумм Арест: " + STRING(GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date)).
+         mBlockSumm = mBlockSumm + GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date).
+         IF GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"",gend-date)
+            - GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date) NE 0 THEN
+            mBlock[2]  = "БлокСумм 1,2,3: " + STRING(GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"",gend-date)
+                                                - GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date)).
+         mBlockSumm = mBlockSumm + GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"",gend-date) - GetBlockPosition(AddFilToAcct(tt-acct.b-acct,shFilial),tt-acct.b-cur,"-1",gend-date).
+         DO mInt = 1 TO NUM-ENTRIES(mBlockList):
+            IF ENTRY(mInt,mBlockList) EQ "БлокДб" THEN
+               mBlock[3] = "БлокДб".
+         END.
+         DO mInt = 1 TO NUM-ENTRIES(mBlockList):
+            IF ENTRY(mInt,mBlockList) EQ "Банкрот" THEN
+               mBlock[4] = "Банкрот".
+         END.
+         DO mInt = 1 TO NUM-ENTRIES(mBlockList):
+            IF ENTRY(mInt,mBlockList) EQ "КонкПр" THEN
+               mBlock[5] = "КонкПр".
+         END.
+         DO mInt = 1 TO NUM-ENTRIES(mBlockList):
+            IF ENTRY(mInt,mBlockList) EQ "БлокТамож" THEN
+               mBlock[6] = "БлокТамож".
+         END.
+/*         PUT UNFORMATTED  "mBlock[1] " mBlock[1] ";" "mBlock[2] " mBlock[2] ";" "mBlock[3] " mBlock[3] ";" SKIP.*/
+      /*END.*/
+      ASSIGN
+         tt-acct.b-block = TRIM(mBlock[1] + ";" + mBlock[2] + ";" + mBlock[3] + ";" + mBlock[4] + ";" + mBlock[5] + ";" + mBlock[6],";")
+         tt-acct.b-block = REPLACE(tt-acct.b-block,";;;",";")
+         tt-acct.b-block = REPLACE(tt-acct.b-block,";;",";")
+         tt-acct.b-blsum = - 1 * mBlockSumm.
+   END.
+
+   /*
+   /*Поиск документов*/
+   FOR EACH tt-acct WHERE
+         tt-acct.r-type EQ 1
+      OR tt-acct.r-type EQ 2
+      NO-LOCK:
+      FOR EACH kau WHERE kau.acct   EQ tt-acct.o-acct
+         AND   kau.currency         EQ tt-acct.o-cur
+         AND   kau.zero-bal         EQ NO
+      NO-LOCK,
+      FIRST op WHERE op.op EQ INT64(ENTRY(1,kau.kau))
+      NO-LOCK:
+
+         ASSIGN
+            mShortName = "".
+
+         CASE  tt-acct.cli-cat:
+         WHEN "Ю" THEN DO:
+            FIND cust-corp WHERE cust-corp.cust-id = tt-acct.cli-id NO-LOCK NO-ERROR.
+            IF AVAIL cust-corp THEN
+               ASSIGN
+                  mShortName = TRIM(cust-corp.cust-stat) + " "
+                             + (IF TRIM(cust-corp.name-short) EQ "" THEN
+                                   TRIM(cust-corp.name-corp) ELSE
+                                   TRIM(cust-corp.name-short)).
+         END.
+         WHEN "Ч" THEN DO:
+            FIND FIRST person WHERE person.person-id = tt-acct.cli-id NO-LOCK NO-ERROR.
+            IF AVAIL person THEN
+               ASSIGN
+                  mShortName = TRIM(person.name-last) + " "
+                             + TRIM(person.first-names).
+         END.
+         WHEN "Б" THEN DO:
+            FIND banks WHERE banks.bank-id = tt-acct.cli-id NO-LOCK NO-ERROR.
+            IF AVAIL banks THEN
+               ASSIGN
+                  mShortName = IF TRIM(banks.short-name) EQ "" THEN
+                                   TRIM(banks.name) ELSE
+                                   TRIM(cust-corp.name-short).
+         END.
+         END CASE.
+         mShortName = TRIM(REPLACE(mShortName, "?", "")).
+
+         IF AVAIL(kau)
+            AND kau.balance NE 0 THEN
+         DO:
+            CREATE tt-doc.
+            ASSIGN
+               tt-doc.r-type   = tt-acct.r-type
+               tt-doc.cli-id   = tt-acct.cli-id
+               tt-doc.cli-cat  = tt-acct.cli-cat
+               tt-doc.cli-name = mShortName
+               tt-doc.o-acct   = tt-acct.o-acct
+               tt-doc.o-cur    = tt-acct.o-cur
+               tt-doc.b-acct   = tt-acct.b-acct
+               tt-doc.b-cur    = tt-acct.b-cur
+               tt-doc.doc-num  = op.doc-num
+               tt-doc.doc-date = op.doc-date
+               tt-doc.balance  = kau.balance
+               tt-doc.priost   = GetXAttrValue("op", STRING(op.op), "ПриостСпис")
+               tt-doc.details  = (IF  tt-acct.r-type EQ 1 THEN "Не найден расчетный счет клиента" ELSE
+                                 (IF  tt-acct.r-type EQ 2 THEN "Расчетный счет клиента закрыт" ELSE  "")).
+         END.
+      END.
+   END.
+   */
+
+   /*
+   /*Часть 3*/
+   FOR EACH tt-acct WHERE
+      CAN-DO(iMaskAcct,tt-acct.b-acct)
+      AND   tt-acct.r-type EQ 0
+   NO-LOCK:
+      FOR EACH signs WHERE
+               signs.code      EQ "ПриостСпис"
+         AND   signs.file-name EQ "op"
+      NO-LOCK:
+
+         IF signs.code-value NE "ДА" THEN NEXT.
+
+         FIND FIRST o-op WHERE o-op.op EQ INT64(signs.surrogate) NO-LOCK NO-ERROR.
+         IF AVAIL(o-op) THEN
+         DO:
+            FIND FIRST o-op-entry OF o-op NO-LOCK NO-ERROR.
+            IF AVAIL(o-op-entry)
+               AND   o-op-entry.acct-db EQ tt-acct.o-acct THEN
+            DO:
+               {find-act.i
+                   &bact = o-acct
+                   &acct = o-op-entry.acct-db
+               }
+               IF AVAIL(o-acct)
+                  AND  o-acct.acct-cat EQ "o"
+                  AND  CAN-DO("Б,Ч,Ю",o-acct.cust-cat) THEN
+               DO:
+                  FOR EACH kau WHERE kau.acct EQ o-acct.acct
+                     AND   kau.currency            EQ o-acct.currency
+                     AND   kau.zero-bal            EQ NO
+                     AND   INT64(ENTRY(1,kau.kau)) EQ o-op.op
+                  NO-LOCK:
+                     LEAVE.
+                  END.
+
+                  ASSIGN
+                     mShortName = "".
+
+                  CASE  o-acct.cust-cat:
+                  WHEN "Ю" THEN DO:
+                     FIND cust-corp WHERE cust-corp.cust-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL cust-corp THEN
+                        ASSIGN
+                           mShortName = TRIM(cust-corp.cust-stat) + " "
+                                      + (IF TRIM(cust-corp.name-short) EQ "" THEN
+                                            TRIM(cust-corp.name-corp) ELSE
+                                            TRIM(cust-corp.name-short)).
+                  END.
+                  WHEN "Ч" THEN DO:
+                     FIND FIRST person WHERE person.person-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL person THEN
+                        ASSIGN
+                           mShortName = TRIM(person.name-last) + " "
+                                      + TRIM(person.first-names).
+                  END.
+                  WHEN "Б" THEN DO:
+                     FIND banks WHERE banks.bank-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL banks THEN
+                        ASSIGN
+                           mShortName = IF TRIM(banks.short-name) EQ "" THEN
+                                            TRIM(banks.name) ELSE
+                                            TRIM(cust-corp.name-short).
+                  END.
+                  END CASE.
+                  mShortName = TRIM(REPLACE(mShortName, "?", "")).
+
+                  IF AVAIL(kau) THEN
+                  DO:
+                     FIND FIRST tt-doc WHERE
+                              tt-doc.cli-id   EQ o-acct.cust-id
+                        AND   tt-doc.cli-cat  EQ o-acct.cust-cat
+                        AND   tt-doc.o-acct   EQ o-acct.acct
+                        AND   tt-doc.doc-num  EQ o-op.doc-num
+                        AND   tt-doc.doc-date EQ o-op.doc-date
+                        NO-LOCK NO-ERROR.
+                     IF NOT AVAIL(tt-doc) THEN
+                     DO:
+                        ASSIGN
+                           tt-acct.r-type  = 3.
+                        CREATE tt-doc.
+                        ASSIGN
+                           tt-doc.r-type   = 3
+                           tt-doc.cli-id   = o-acct.cust-id
+                           tt-doc.cli-cat  = o-acct.cust-cat
+                           tt-doc.cli-name = mShortName
+                           tt-doc.b-acct   = tt-acct.b-acct
+                           tt-doc.b-cur    = tt-acct.b-cur
+                           tt-doc.o-acct   = o-acct.acct
+                           tt-doc.o-cur    = o-acct.currency
+                           tt-doc.doc-num  = o-op.doc-num
+                           tt-doc.doc-date = o-op.doc-date
+                           tt-doc.balance  = (IF AVAIL(kau) THEN kau.balance ELSE 0)
+                           tt-doc.priost   = "Да"
+                           tt-doc.details  = "По документу приостановлено списание".
+                     END.
+                  END.
+               END.
+            END.
+         END.
+      END.
+   END.
+   */
+
+   /*
+   /*Часть 4*/
+   FOR EACH tt-acct WHERE
+      CAN-DO(iMaskAcct,tt-acct.b-acct)
+      AND  (tt-acct.r-type EQ 0
+      OR    tt-acct.r-type EQ 3)
+   NO-LOCK:
+      FOR EACH signs WHERE
+               signs.code      EQ "op-bal"
+         AND   signs.file-name EQ "op"
+      NO-LOCK:
+         FIND FIRST o-op WHERE o-op.op EQ INT64(signs.surrogate)  NO-LOCK NO-ERROR.
+         FIND FIRST b-op WHERE b-op.op EQ INT64(signs.code-value) NO-LOCK NO-ERROR.
+
+         IF AVAIL(o-op)
+            AND NOT AVAIL(b-op) THEN
+         DO:
+            FIND FIRST o-op-entry OF o-op NO-LOCK NO-ERROR.
+            IF AVAIL(o-op-entry) THEN
+            DO:
+               {find-act.i
+                   &bact = o-acct
+                   &acct = o-op-entry.acct-db
+               }
+               IF AVAIL(o-acct)
+                  AND  o-acct.acct-cat EQ "o"
+                  AND  CAN-DO("Б,Ч,Ю",o-acct.cust-cat)
+                  AND  o-acct.acct     EQ tt-acct.o-acct
+                  AND  o-acct.currency EQ tt-acct.o-cur
+               THEN
+               DO:
+                  FOR EACH kau WHERE kau.acct      EQ o-acct.acct
+                     AND   kau.currency            EQ o-acct.currency
+                     AND   kau.zero-bal            EQ NO
+                     AND   INT64(ENTRY(1,kau.kau)) EQ o-op.op
+                  NO-LOCK:
+                     LEAVE.
+                  END.
+
+                  ASSIGN
+                     mShortName = "".
+
+                  CASE o-acct.cust-cat:
+                  WHEN "Ю" THEN DO:
+                     FIND cust-corp WHERE cust-corp.cust-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL cust-corp THEN
+                        ASSIGN
+                           mShortName = TRIM(cust-corp.cust-stat) + " "
+                                      + (IF TRIM(cust-corp.name-short) EQ "" THEN
+                                            TRIM(cust-corp.name-corp) ELSE
+                                            TRIM(cust-corp.name-short)).
+                  END.
+                  WHEN "Ч" THEN DO:
+                     FIND FIRST person WHERE person.person-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL person THEN
+                        ASSIGN
+                           mShortName = TRIM(person.name-last) + " "
+                                      + TRIM(person.first-names).
+                  END.
+                  WHEN "Б" THEN DO:
+                     FIND banks WHERE banks.bank-id = o-acct.cust-id NO-LOCK NO-ERROR.
+                     IF AVAIL banks THEN
+                        ASSIGN
+                           mShortName = IF TRIM(banks.short-name) EQ "" THEN
+                                            TRIM(banks.name) ELSE
+                                            TRIM(cust-corp.name-short).
+                  END.
+                  END CASE.
+                  mShortName = TRIM(REPLACE(mShortName, "?", "")).
+
+                  IF AVAIL(kau)
+                     AND kau.balance NE 0 THEN
+                  DO:
+                     FIND FIRST tt-doc WHERE
+                              tt-doc.cli-id   EQ o-acct.cust-id
+                        AND   tt-doc.cli-cat  EQ o-acct.cust-cat
+                        AND   tt-doc.o-acct   EQ o-acct.acct
+                        AND   tt-doc.doc-num  EQ o-op.doc-num
+                        AND   tt-doc.doc-date EQ o-op.doc-date
+                        NO-LOCK NO-ERROR.
+                     IF NOT AVAIL(tt-doc) THEN
+                     DO:
+                        ASSIGN
+                           tt-acct.r-type = IF tt-acct.r-type EQ 0 THEN 4 ELSE tt-acct.r-type.
+                        CREATE tt-doc.
+                        ASSIGN
+                           tt-doc.r-type   = 4
+                           tt-doc.cli-id   = o-acct.cust-id
+                           tt-doc.cli-cat  = o-acct.cust-cat
+                           tt-doc.cli-name = mShortName
+                           tt-doc.b-acct   = tt-acct.b-acct
+                           tt-doc.b-cur    = tt-acct.b-cur
+                           tt-doc.o-acct   = o-acct.acct
+                           tt-doc.o-cur    = o-acct.currency
+                           tt-doc.doc-num  = o-op.doc-num
+                           tt-doc.doc-date = o-op.doc-date
+                           tt-doc.balance  = (IF AVAIL(kau) THEN kau.balance ELSE 0)
+                           tt-doc.priost   = GetXAttrValue("op", STRING(o-op.op), "ПриостСпис")
+                           tt-doc.details  = "Нет реквизитов первоначального документа"
+                           .
+                     END.
+                  END.
+               END.
+            END.
+         END.
+      END. /*FOR EACH signs*/
+   END. /*Часть 4*/
+   */
+
+   /*Часть 5*/
+   /* Поиск документов по аналитике */
+   FOR EACH tt-acct WHERE
+      CAN-DO(iMaskAcct,tt-acct.b-acct)
+      AND  tt-acct.r-type EQ 0
+      EXCLUSIVE-LOCK:
+      FOR EACH kau WHERE
+             kau.acct EQ AddFilToAcct(tt-acct.o-acct,shFilial)
+         AND kau.currency EQ tt-acct.o-cur
+         AND kau.zero-bal EQ NO NO-LOCK,
+         FIRST o-op WHERE
+            o-op.op EQ INT64(ENTRY(1,kau.kau))
+         NO-LOCK:
+
+         FOR EACH signs WHERE
+                  signs.code      EQ "op-bal"
+            AND   signs.file-name EQ "op"
+            AND   signs.surrogate EQ STRING(o-op.op)
+            NO-LOCK:
+
+            FIND FIRST b-op WHERE
+               b-op.op EQ INT64(signs.code-value)
+            NO-LOCK NO-ERROR.
+            IF AVAIL(b-op) THEN
+            DO:
+               FIND FIRST b-op-entry OF b-op NO-LOCK NO-ERROR.
+               ASSIGN
+/*                mAmtRub1 = GetXAttrValueEx("op",STRING(b-op.op),"amt-rub","")
+                  mDateIns = GetXAttrValueEx("op",STRING(b-op.op),"ДатаПомещенияВКарт","").
+*/                mDateIns = ENTRY(2,kau.sort).
+                  mDateIns = SUBSTRING(mDateIns,9,2) + "." + SUBSTRING(mDateIns,6,2) + "." + SUBSTRING(mDateIns,1,4).
+                  mAmtRub1 = TRIM(ENTRY(3,kau.sort)).
+
+               CREATE tt-doc.
+               ASSIGN
+                  tt-doc.rid       = RECID(tt-acct)
+                  tt-doc.doc-num   = b-op.doc-num    /*STRING(b-op.op)*/
+                  tt-doc.doc-date  = b-op.doc-date
+                  tt-doc.ins-date  = DATE(mDateIns)  /*ins-date*/
+                  tt-doc.doc-sum   = DECIMAL(mAmtRub1)
+                  tt-doc.balance   = (IF AVAIL(kau)        THEN kau.balance        ELSE 0)
+                  tt-doc.amt-rub   = (IF AVAIL(b-op-entry) THEN b-op-entry.amt-rub ELSE 0)
+                  tt-doc.order-pay = b-op.order-pay
+                  tt-doc.doc-type  = b-op.doc-type
+                  tt-doc.priost    = GetXAttrValue("op", STRING(o-op.op), "ПриостСпис")
+                  .
+            END.
+         END.
+      END.
+   END. /*Часть 5*/
+
+/*   {setdest.i &filename = "'rep-k1k2.txt'"}*/
+
+   /*
+   mInt1 = 0.
+
+   FOR EACH tt-acct NO-LOCK:
+      mInt1 = mInt1 + 1.
+      PUT UNFORMATTED
+         STRING(mInt1,"99999") ";==="
+         tt-acct.r-type ";"
+         tt-acct.cli-id ";"
+         tt-acct.cli-cat ";"
+         DelFilFromAcct(tt-acct.b-acct) ";"
+         tt-acct.b-cur ";"
+         tt-acct.b-ost ";"
+         tt-acct.b-c-date ";"
+         DelFilFromAcct(tt-acct.o-acct) ";"
+         tt-acct.o-cur ";"
+         tt-acct.o-ost ";"
+         tt-acct.b-block ";"
+         tt-acct.cli-name
+      SKIP.
+
+      FOR EACH  tt-doc WHERE
+         tt-doc.rid EQ RECID(tt-acct)
+         NO-LOCK:
+         PUT UNFORMATTED
+
+            tt-doc.rid ";"
+            tt-doc.doc-num ";"
+            tt-doc.doc-date ";"
+            tt-doc.ins-dat ";"
+            tt-doc.doc-sum ";"
+            tt-doc.amt-rub ";"
+            tt-doc.cli-name "===;"
+         SKIP.
+      END.
+   END.
+   */
+
+/*   PUT UNFORMATTED ETIME " msec" SKIP.     */
+/*                                           */
+/*   {preview.i &filename = "'rep-k1k2.txt'"}*/
+
+
+   mFileName = "./" +
+      STRING(YEAR(TODAY),"9999") + "-" +
+      STRING(MONTH(TODAY),"99") + "-" +
+      STRING(DAY(TODAY),"99") + "-" + TRIM(STRING(TIME,"hh:mm:ss")) + "-" + "rep-k1k2.xml".
+   mFileName = REPLACE(mFileName,":","").
+
+   OUTPUT STREAM out-stream TO VALUE(mFileName)
+          UNBUFFERED CONVERT TARGET "UTF-8" SOURCE "IBM866".
+
+   {rep-k1k2-h.i}
+
+   mInt1 = 0.
+   FOR EACH tt-acct
+      WHERE tt-acct.r-type EQ 0
+   NO-LOCK
+   BREAK BY tt-acct.b-group
+         BY tt-acct.cli-cat + TRIM(STRING(tt-acct.cli-id)) + tt-acct.b-acct + tt-acct.o-acct:
+
+      IF tt-acct.o-ost EQ 0 THEN NEXT.
+
+      IF FIRST-OF(tt-acct.cli-cat + TRIM(STRING(tt-acct.cli-id)) + tt-acct.b-acct + tt-acct.o-acct)
+         /*AND FIRST-OF(tt-acct.o-acct)*/ THEN
+      DO:
+         mInt1 = mInt1 + 1.
+         PUT STREAM out-stream UNFORMATTED '   <Row>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + STRING(mInt1)    + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"><Data ss:Type="String">' + tt-acct.cli-name + '</Data></Cell>' SKIP.
+         IF (shFilial EQ "0500") THEN
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.b-group  + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.b-acct   + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.b-ost,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.o-acct   + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.o-ost,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"><Data ss:Type="String">' + ENTRY(1,tt-acct.b-block,CHR(1)) + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.b-blsum,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+         PUT STREAM out-stream UNFORMATTED '   </Row>' SKIP.
+      END.
+
+      FOR EACH tt-doc WHERE
+         tt-doc.rid EQ RECID(tt-acct)
+         NO-LOCK:
+            mInsDate = IF tt-doc.ins-dat EQ ? THEN "-" ELSE STRING(tt-doc.ins-dat,"99.99.9999").
+            PUT STREAM out-stream UNFORMATTED '   <Row>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            IF (shFilial EQ "0500") THEN
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            IF (tt-doc.priost EQ "Да") THEN DO:
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.doc-type)  + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.doc-num)   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.order-pay) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s76"><Data ss:Type="Number">' + TRIM(STRING(tt-doc.doc-sum,">>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s77"><Data ss:Type="String">' + mInsDate + '</Data></Cell>' SKIP.
+            END. ELSE DO:
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.doc-type)  + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.doc-num)   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.order-pay) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-doc.doc-sum,">>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s71"><Data ss:Type="String">' + mInsDate + '</Data></Cell>' SKIP.
+            END.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '   </Row>' SKIP.
+      END.
+   END.
+
+   mInt2 = 0.
+   FOR EACH tt-acct WHERE
+      tt-acct.r-type EQ 2
+      NO-LOCK:
+      mInt2 = mInt2 + 1.
+   END.
+   IF mInt2 GT 0 THEN
+   DO:
+      mInt2 = 0.
+      FOR EACH tt-acct WHERE
+         tt-acct.r-type EQ 2
+         NO-LOCK
+         BREAK BY tt-acct.b-group
+               BY tt-acct.cli-cat + TRIM(STRING(tt-acct.cli-id)) + tt-acct.b-acct + tt-acct.o-acct:
+
+         IF tt-acct.o-ost EQ 0 THEN NEXT.
+
+         IF FIRST-OF(tt-acct.cli-cat + TRIM(STRING(tt-acct.cli-id)) + tt-acct.b-acct + tt-acct.o-acct)
+            /*AND FIRST-OF(tt-acct.o-acct)*/ THEN
+         DO:
+            mInt2 = mInt2 + 1.
+            PUT STREAM out-stream UNFORMATTED '   <Row>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + STRING(mInt2)    + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"><Data ss:Type="String">' + tt-acct.cli-name + '</Data></Cell>' SKIP.
+            IF (shFilial EQ "0500") THEN
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.b-group  + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.b-acct   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.b-ost,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s67"><Data ss:Type="String">' + tt-acct.o-acct   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.o-ost,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"><Data ss:Type="String">' + ENTRY(1,tt-acct.b-block,CHR(1)) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-acct.b-blsum,"->>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '   </Row>' SKIP.
+         END.
+
+         FOR EACH tt-doc WHERE
+            tt-doc.rid EQ RECID(tt-acct)
+            NO-LOCK:
+            mInsDate = IF tt-doc.ins-dat EQ ? THEN "-" ELSE STRING(tt-doc.ins-dat,"99.99.9999").
+            PUT STREAM out-stream UNFORMATTED '   <Row>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            IF (shFilial EQ "0500") THEN
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            IF (tt-doc.priost EQ "Да") THEN DO:
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.doc-type)  + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.doc-num)   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s75"><Data ss:Type="String">' + TRIM(tt-doc.order-pay) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s76"><Data ss:Type="Number">' + TRIM(STRING(tt-doc.doc-sum,">>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s77"><Data ss:Type="String">' + mInsDate + '</Data></Cell>' SKIP.
+            END. ELSE DO:
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.doc-type)  + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.doc-num)   + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s70"><Data ss:Type="String">' + TRIM(tt-doc.order-pay) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s69"><Data ss:Type="Number">' + TRIM(STRING(tt-doc.doc-sum,">>>>>>>>>>>9.99")) + '</Data></Cell>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s71"><Data ss:Type="String">' + mInsDate + '</Data></Cell>' SKIP.
+            END.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '    <Cell ss:StyleID="s68"/>' SKIP.
+            PUT STREAM out-stream UNFORMATTED '   </Row>' SKIP.
+         END.
+      END.
+   END.
+
+   {rep-k1k2-f.i}
+
+   OUTPUT STREAM out-stream CLOSE.
+
+   IF mInt1 NE 0 OR mInt2 NE 0
+   THEN
+   DO:
+      MESSAGE "Отчет готов.".
+      /* Перед отправкой протокола проверим, запущен ли bispc */
+      DEFINE VARIABLE mRet        AS CHARACTER    NO-UNDO INIT "".
+      DO WHILE (mRet EQ ""):
+         RUN IsUserServReady IN h_netw ("", OUTPUT mRet).
+         IF (mRet EQ "")
+         THEN MESSAGE "Запустите программу bispc и нажмите ОК" VIEW-AS ALERT-BOX.
+      END.
+      RUN sndbispc ("file=" + mFileName + ";class=bq").
+   END.
+   ELSE MESSAGE "Нет данных для отчета.".
+END. /* MAIN-BLOCK: */
+RETURN.

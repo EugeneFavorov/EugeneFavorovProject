@@ -1,0 +1,19 @@
+else if lastkey = 13 and AVAILABLE schedule then do:
+  pick-value = "yes".
+  {message &text="|Запустить задачу прямо сейчас?" &alert-box=question &buttons=yes-no}
+  if pick-value = "yes" then do:
+    run run-once.p (RECID(schedule)).
+  end.
+  next ACTION.
+end.
+else if lastkey = 10 and AVAILABLE schedule then do:
+     pick-value = string(schedule.{&rfld}).
+     leave REFRESH.
+end.
+/* $LINTFILE='schedule.ret' */
+/* $LINTMODE='1' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTUSER='soav' */
+/* $LINTDATE='23/03/2016 10:40:18.853+04:00' */
+/*prosignGGUpfNxfiF2u3rzIOZZ3Iw*/

@@ -1,0 +1,93 @@
+[OpKindList 4.1d] // Экспорт данных произвел KMBIS 31/05/2015 23:32:48 БД "-db /home2/bis/quit41d/db-spb/bisquit,-ld bisquit,-Mm 16384,-spin 5000"
+// ***************************************************************************
+i-rapvn:
+DO TRANSACTION NO-TRANSACTION:
+   /// <tr_package>
+   /// EXCH-PSYS.EXCH-RAPID.X-RAPIDPlat.i-rapvn
+   /// </tr_package>
+
+   /// <tr_name-opkind>
+   /// Рапида: Внутренний платеж
+   /// </tr_name-opkind>
+
+   /// <tr_parent>
+   /// X-RAPIDPlat
+   /// </tr_parent>
+
+   /// <tr_module>
+   /// MAIL-EXT
+   /// </tr_module>
+
+   /// <tr_proc>
+   /// g-trans
+   /// </tr_proc>
+
+   /// <tr_СС_ВыводНаЭкран>
+   /// Нет
+   /// </tr_СС_ВыводНаЭкран>
+
+   /// <tr_DisplayForms>
+   /// Нет
+   /// </tr_DisplayForms>
+
+   /// <tr_ProgressBar>
+   /// Нет
+   /// </tr_ProgressBar>
+
+   10:
+   DO TEMPLATE CLASS opb ACTION Инициализация ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: op-status (константа)
+      @op-status = [Ф]
+      // РЕКВИЗИТ: doc-type (константа)
+      @doc-type = [01]
+      // РЕКВИЗИТ: order-pay (константа)
+      @order-pay = [5]
+      // РЕКВИЗИТ: name-send (константа)
+      @name-send = []
+      // РЕКВИЗИТ: name-rec (константа)
+      @name-rec = []
+      // РЕКВИЗИТ: op-date (формула)
+      @op-date = ДАТА()
+
+      // РЕКВИЗИТ: contract-date (формула)
+      @contract-date = ДАТА()
+
+      // РЕКВИЗИТ: doc-date (формула)
+      @doc-date = ДАТА()
+
+      30:
+      DO TEMPLATE CLASS op-entry ACTION Инициализация ROLE op-entry:
+
+      END TEMPLATE. // ШАБЛОН:   30  - КОНЕЦ
+
+      50:
+      DO TEMPLATE CLASS op-bank ACTION Инициализация ROLE op-bank:
+
+      END TEMPLATE. // ШАБЛОН:   50  - КОНЕЦ
+
+
+   END TEMPLATE. // ШАБЛОН:   10  - КОНЕЦ
+
+   20:
+   DO TEMPLATE CLASS PRapidOpCr ACTION Импорт ROLE Ввод данных NO-TRANSACTION:
+      /// <tm_AttrOptimized>
+      /// Нет
+      /// </tm_AttrOptimized>
+
+      // РЕКВИЗИТ: Kind (константа)
+      @Kind = [EXCHRapidRee,EXCHRapidRee]
+      // РЕКВИЗИТ: ClassError (константа)
+      @ClassError = [ErrorPSys]
+
+   END TEMPLATE. // ШАБЛОН:   20  - КОНЕЦ
+
+END TRANSACTION. // ТРАНЗАКЦИЯ i-rapvn - КОНЕЦ 
+// ***************************************************************************
+
+
+
+

@@ -1,0 +1,12 @@
+sv-DataRez    = DATE(GetXattrValueEx("code",code.class + "," + code.code,"RezolutionData","")). 
+sv-DataAdd    = DATE(GetXattrValueEx("code",code.class + "," + code.code,"AddData","")).
+sv-DataCls    = DATE(GetXattrValueEx("code",code.class + "," + code.code,"CloseDate","")).
+mBirthDay     = DATE(GetXattrValueEx("code",code.class + "," + code.code,"birthday","")).
+mBirthPlace   = TRIM(GetXattrValueEx("code",code.class + "," + code.code,"birthplace","")). 
+/* $LINTFILE='cl-stoplst-brw.cv' */
+/* $LINTMODE='1' */
+/* $LINTENV ='1ut' */
+/* $LINTVSS ='$/ws2-tst/bq/' */
+/* $LINTUSER='anba' */
+/* $LINTDATE='07/06/2016 08:27:28.823+03:00' */
+/*prosignv+G5FfTNx9Amz+BGYYeBNw*/
