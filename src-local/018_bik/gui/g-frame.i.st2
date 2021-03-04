@@ -1,9 +1,0 @@
-
-         in-doc-ref      WHEN in-doc-ref   EQ ''
-         /* in-cont-code when in-cont-code eq ''*/
-         vContractDate   WHEN /*in-cont-code*/ in-doc-ref EQ '' OR
-                              op-templ.op-templ eq 1
-         in-cont-cur
-            WHEN in-cont-cur = '' OR in-cont-cur = ?  
-
-        

@@ -1,8 +1,0 @@
-/*
-ELSE
-*/
-   IF LASTKEY EQ 10 AND favail()
-      THEN do:
-	  pick-value = tt-notif.notif.
-	  LEAVE REFRESH.
-	  end.

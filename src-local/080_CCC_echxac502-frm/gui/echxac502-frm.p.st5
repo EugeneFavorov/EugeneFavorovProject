@@ -1,8 +1,0 @@
- 
-            vPrIz FORMAT "X(35)" LABEL "ˆ‡€Š ˆ‡Œ." 
-            vINN vKPP vOGRN
-            vNAME VIEW-AS FILL-IN SIZE 60 BY 1
-            vDATE
-         WITH FRAME vfrm1 SIDE-LABEL ROW 8 TITLE COLOR brigth-white 
-            "[ …Š‚ˆ‡ˆ’› Žƒ€ˆ‡€–ˆˆ „Ž ‚…‘…ˆŸ ˆ‡Œ……ˆ‰ ]" 1 COL OVERLAY 
-            CENTERED

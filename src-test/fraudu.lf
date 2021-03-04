@@ -1,6 +1,0 @@
-{&nowith} DataLine.Sym3 @ {comment}  */ DataLine.Sym3
-{&nowith} DataLine.Sym1 @ {comment}  */ DataLine.Sym1
-{&nowith} DataLine.Sym2 @ {comment}  */ DataLine.Sym2
-{&nowith} DataLine.Sym4 @ {comment}  */ DataLine.Sym4
-{&nowith} GetEntries(1,DataLine.Txt,"~n","") @ {comment}  */ Txt[1]
-

@@ -1,2 +1,0 @@
-PAUSE 0.
-RUN r-codvl.p ("", ?, "code", iClass + "," + code.code, {&MOD_VIEW}, 4).
